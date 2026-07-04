@@ -1,0 +1,9 @@
+{
+  "name": "syndicate-block",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Co-op VS tycoon game — Syndicate Block",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0"
+  }
+}

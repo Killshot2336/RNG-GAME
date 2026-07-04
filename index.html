@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SYNDICATE BLOCK — Co-Op VS Tycoon</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#00ff66;--accent-dim:rgba(0,255,102,.25);--panel:rgba(12,18,14,.82);
+  --glass:rgba(8,14,10,.65);--border:rgba(0,255,102,.35);--text:#e8fff0;--muted:#7a9a82;
+  --font-mono:'Courier New',Consolas,monospace;--font-ui:system-ui,-apple-system,sans-serif;
+  --shake-intensity:0px;--tilt-x:0deg;--tilt-y:0deg;--sheen-x:50%;--sheen-y:50%
+}
+html,body{height:100%;overflow:hidden;background:#060a08;color:var(--text);font-family:var(--font-ui)}
+body.theme-aden{--accent:#00ff66;--accent-dim:rgba(0,255,102,.25);--border:rgba(0,255,102,.35);--panel:rgba(12,18,14,.82);--glass:rgba(8,14,10,.65)}
+body.theme-edward{--accent:#ffaa00;--accent-dim:rgba(255,170,0,.25);--border:rgba(255,170,0,.4);--panel:rgba(18,14,8,.85);--glass:rgba(14,10,6,.7);font-family:var(--font-mono)}
+body.theme-jamie{--accent:#ff2200;--accent-dim:rgba(255,34,0,.25);--border:rgba(255,34,0,.4);--panel:rgba(20,8,8,.85);--glass:rgba(16,6,6,.72)}
+body.minimal-view *{animation:none!important;transition-duration:.08s!important}
+body.minimal-view .bg-canvas,.body.minimal-view .parallax-layer,.body.minimal-view .floating-orb{display:none!important}
+body.minimal-view .card-3d{transform:none!important}
+body.minimal-view .card-sheen{display:none!important}
+body.update-frozen .nav-btn,.body.update-frozen .action-btn,.body.update-frozen .tab-btn{pointer-events:none;opacity:.4}
+body.buster-active .main-content{pointer-events:none;filter:blur(2px)}
+#app{position:relative;width:100%;height:100%;display:flex;flex-direction:column;transform:translate(var(--shake-intensity),calc(var(--shake-intensity)*-.6));transition:transform .05s}
+.bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.parallax-layer{position:absolute;inset:-20%;background:radial-gradient(ellipse at 30% 20%,var(--accent-dim) 0%,transparent 50%),radial-gradient(ellipse at 70% 80%,rgba(0,0,0,.6) 0%,transparent 60%);animation:gradientShift 18s ease-in-out infinite alternate;will-change:transform}
+.floating-orb{position:absolute;border-radius:50%;filter:blur(60px);opacity:.35;animation:floatOrb 12s ease-in-out infinite}
+.orb-1{width:280px;height:280px;background:var(--accent);top:10%;left:5%;animation-delay:0s}
+.orb-2{width:200px;height:200px;background:var(--accent-dim);bottom:15%;right:10%;animation-delay:-4s}
+@keyframes gradientShift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-3%,2%) scale(1.05)}}
+@keyframes floatOrb{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-20px)}}
+header.global-header{position:relative;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--glass);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo-block{display:flex;align-items:center;gap:10px}
+.logo-block svg{width:36px;height:36px;filter:drop-shadow(0 0 8px var(--accent))}
+.logo-text{font-size:1.1rem;font-weight:800;letter-spacing:.12em;color:var(--accent);text-shadow:0 0 12px var(--accent-dim)}
+.header-center{display:flex;flex-direction:column;align-items:center;gap:4px}
+.countdown-timer{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-family:var(--font-mono);font-size:.85rem}
+.countdown-timer.urgent{animation:urgentFlash .6s ease-in-out infinite;border-color:var(--accent);box-shadow:0 0 20px var(--accent-dim)}
+.countdown-timer.urgent .timer-digits{color:var(--accent);animation:vibrateText .15s linear infinite}
+@keyframes urgentFlash{0%,100%{background:var(--panel)}50%{background:var(--accent-dim)}}
+@keyframes vibrateText{0%,100%{transform:translate(0)}25%{transform:translate(-1px,1px)}75%{transform:translate(1px,-1px)}}
+.timer-label{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.timer-digits{font-weight:700;font-size:1rem;color:var(--accent)}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.player-selector{display:flex;gap:4px}
+.player-btn{padding:6px 12px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:600;transition:all .2s}
+.player-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);box-shadow:0 0 12px var(--accent-dim)}
+.player-btn:hover{border-color:var(--accent)}
+.focus-toggle{padding:6px 10px;border:1px solid var(--border);background:var(--panel);color:var(--accent);border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:700;display:none}
+body.theme-jamie .focus-toggle{display:block}
+.nav-bar{position:relative;z-index:90;display:flex;gap:4px;padding:8px 16px;background:rgba(0,0,0,.4);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.tab-btn{padding:8px 16px;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap;transition:all .2s}
+.tab-btn.active,.tab-btn:hover{color:var(--accent);border-color:var(--border);background:var(--accent-dim)}
+.main-content{position:relative;z-index:10;flex:1;overflow:hidden;display:flex;flex-direction:column}
+.view-panel{display:none;flex:1;overflow-y:auto;padding:16px;gap:16px}
+.view-panel.active{display:flex;flex-direction:column}
+.panel-card{background:var(--glass);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.panel-title{font-size:1rem;font-weight:800;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.08em}
+.stat-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.stat-chip{padding:8px 14px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:.85rem}
+.stat-chip strong{color:var(--accent)}
+.activity-log{max-height:120px;overflow-y:auto;font-family:var(--font-mono);font-size:.72rem;color:var(--muted);line-height:1.6;padding:8px;background:rgba(0,0,0,.3);border-radius:6px}
+.activity-log .log-entry{margin-bottom:2px}
+.activity-log .log-urgent{color:#ff4444;font-weight:700}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.item-card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transform:perspective(1000px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));will-change:transform;transition:box-shadow .2s;overflow:hidden}
+.item-card:hover{box-shadow:0 0 20px var(--accent-dim)}
+.item-card.selected{border-color:var(--accent);box-shadow:0 0 16px var(--accent)}
+.item-card.rarity-common{border-left:3px solid #888}
+.item-card.rarity-rare{border-left:3px solid #4488ff}
+.item-card.rarity-epic{border-left:3px solid #aa44ff}
+.item-card.rarity-mythic{border-left:3px solid #ffd700;animation:mythicGlow 2s linear infinite}
+.item-card.rarity-exotic{border-left:3px solid transparent;animation:goldenRainbow 3s linear infinite;background-clip:padding-box;border-image:linear-gradient(90deg,#ffd700,#ff6b00,#ff0044,#aa00ff,#00ff66,#ffd700) 1}
+.item-card.rarity-godly{border-left:3px solid #fff;animation:godlyPulse 1.5s ease-in-out infinite}
+@keyframes mythicGlow{0%,100%{box-shadow:0 0 12px rgba(255,215,0,.4)}50%{box-shadow:0 0 24px rgba(255,215,0,.8)}}
+@keyframes goldenRainbow{0%{border-color:#ffd700;box-shadow:0 0 16px rgba(255,215,0,.6)}25%{border-color:#ff6b00;box-shadow:0 0 16px rgba(255,107,0,.6)}50%{border-color:#ff0044;box-shadow:0 0 16px rgba(255,0,68,.6)}75%{border-color:#aa00ff;box-shadow:0 0 16px rgba(170,0,255,.6)}100%{border-color:#ffd700;box-shadow:0 0 16px rgba(255,215,0,.6)}}
+@keyframes godlyPulse{0%,100%{box-shadow:0 0 20px rgba(255,255,255,.5)}50%{box-shadow:0 0 40px rgba(255,255,255,.9)}}
+.card-sheen{position:absolute;inset:0;background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,.08) 50%,transparent 60%);background-size:200% 200%;background-position:var(--sheen-x) var(--sheen-y);pointer-events:none;border-radius:10px}
+.card-name{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.3}
+.card-rarity{font-size:.65rem;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.card-stats{font-size:.7rem;color:var(--muted);line-height:1.5}
+.card-boost{font-size:.68rem;color:var(--accent);margin-top:4px}
+.action-btn{padding:10px 18px;border:1px solid var(--accent);background:var(--accent-dim);color:var(--accent);border-radius:8px;cursor:pointer;font-weight:700;font-size:.8rem;transition:all .2s;margin:4px}
+.action-btn:hover{background:var(--accent);color:#000;box-shadow:0 0 16px var(--accent-dim)}
+.action-btn:disabled{opacity:.4;cursor:not-allowed}
+.action-btn.danger{border-color:#ff4444;color:#ff4444;background:rgba(255,68,68,.15)}
+.action-btn.danger:hover{background:#ff4444;color:#fff}
+.grow-bay-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.grow-bay{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.bay-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bay-title{font-weight:700;color:var(--accent)}
+.progress-bar{height:8px;background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent-dim),var(--accent));border-radius:4px;transition:width .3s}
+.upgrade-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.trade-layout{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+@media(max-width:900px){.trade-layout{grid-template-columns:1fr}}
+.trade-slot{min-height:180px;border:2px dashed var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(0,0,0,.2)}
+.trade-slot.filled{border-style:solid;border-color:var(--accent)}
+.karlach-panel{background:var(--panel);border:2px solid var(--border);border-radius:12px;padding:16px;min-height:200px;display:flex;flex-direction:column;gap:10px}
+.karlach-panel.rejected{border-color:#ff2200;background:rgba(80,10,10,.6);animation:karlachReject .3s ease-in-out infinite}
+.karlach-panel.praised{border-color:#ffd700;animation:goldenRainbow 2s linear infinite}
+@keyframes karlachReject{0%,100%{transform:translate(0)}25%{transform:translate(-2px,0)}75%{transform:translate(2px,0)}}
+.karlach-avatar{width:64px;height:64px;border-radius:50%;border:2px solid var(--accent)}
+.karlach-dialogue{font-size:.85rem;line-height:1.5;font-style:italic;color:var(--text)}
+.karlach-name{font-weight:800;color:var(--accent);font-size:.9rem}
+.trade-controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.cash-input{padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.9rem;width:140px}
+.recipient-select{padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text)}
+.overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(25px);opacity:0;pointer-events:none;transition:opacity .3s}
+.overlay.active{opacity:1;pointer-events:auto}
+.overlay-card{background:var(--panel);border:2px solid var(--accent);border-radius:16px;padding:32px;max-width:520px;width:90%;text-align:center;box-shadow:0 0 60px var(--accent-dim);animation:overlayPop .4s ease-out}
+@keyframes overlayPop{0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+.overlay-title{font-size:1.4rem;font-weight:900;color:var(--accent);margin-bottom:16px;line-height:1.4;text-transform:uppercase}
+.overlay-body{font-size:.95rem;margin-bottom:20px;line-height:1.6}
+.overlay-btn{padding:14px 32px;border:none;background:var(--accent);color:#000;font-weight:800;font-size:1rem;border-radius:8px;cursor:pointer}
+.overlay-btn:hover{box-shadow:0 0 24px var(--accent)}
+.overlay.mythic-drop .overlay-card{animation:goldenRainbow 2s linear infinite,mythicShake .5s ease-in-out infinite}
+@keyframes mythicShake{0%,100%{transform:translate(0)}25%{transform:translate(-4px,2px)}75%{transform:translate(4px,-2px)}}
+.compendium-card{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px}
+.discovery-stamp{font-family:var(--font-mono);font-size:.75rem;color:var(--muted);border:1px dashed var(--border);padding:6px 12px;border-radius:4px}
+.flex-alert{position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:500;padding:12px 24px;background:var(--panel);border:2px solid var(--accent);border-radius:8px;font-weight:700;animation:flexFlash 1s ease-in-out infinite;pointer-events:none;opacity:0;transition:opacity .3s}
+.flex-alert.visible{opacity:1}
+@keyframes flexFlash{0%,100%{box-shadow:0 0 12px var(--accent-dim)}50%{box-shadow:0 0 28px var(--accent)}}
+.buster-overlay{position:fixed;inset:0;z-index:900;background:rgba(120,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px;border:4px solid #ff0000}
+.buster-overlay.active{display:flex;animation:busterPulse .8s ease-in-out infinite}
+@keyframes busterPulse{0%,100%{border-color:#ff0000}50%{border-color:#ff6666}}
+.buster-title{font-size:2rem;font-weight:900;color:#fff;text-shadow:0 0 20px #ff0000}
+.buster-btns{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.update-blur{filter:blur(25px)!important}
+.screen-shake{animation:screenShake .6s ease-in-out infinite}
+@keyframes screenShake{0%,100%{transform:translate(0,0)}10%{transform:translate(-5px,-3px)}30%{transform:translate(5px,3px)}50%{transform:translate(-3px,5px)}70%{transform:translate(3px,-5px)}90%{transform:translate(-2px,2px)}}
+body.theme-edward .wireframe-bar{height:4px;background:linear-gradient(90deg,transparent,var(--accent),transparent);margin:4px 0;animation:wireScan 2s linear infinite}
+@keyframes wireScan{0%{opacity:.3}50%{opacity:1}100%{opacity:.3}}
+.equipped-slots{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.equip-slot{padding:12px;border:1px dashed var(--border);border-radius:8px;text-align:center;font-size:.7rem;min-height:80px;cursor:pointer}
+.equip-slot.filled{border-style:solid;border-color:var(--accent)}
+.heat-meter{width:100%;height:12px;background:rgba(0,0,0,.5);border-radius:6px;overflow:hidden;margin:8px 0}
+.heat-fill{height:100%;background:linear-gradient(90deg,#ffaa00,#ff2200);transition:width .3s;border-radius:6px}
+.street-console{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.street-console{grid-template-columns:1fr}}
+.pack-result{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px}
+.empty-state{color:var(--muted);font-size:.85rem;text-align:center;padding:24px}
+.view-matrix-toggle{margin-bottom:12px}
+.connection-badge{font-size:.65rem;font-weight:700;color:var(--accent);padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.connection-badge.offline{color:#ff4444;border-color:#ff4444}
+.sync-pulse{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;animation:syncPulse 1.5s ease-in-out infinite}
+@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}
+.player-selector.locked{opacity:.5;pointer-events:none}
+</style>
+</head>
+<body class="theme-aden" id="bodyRoot">
+<div class="bg-canvas" id="bgCanvas">
+  <div class="parallax-layer"></div>
+  <div class="floating-orb orb-1"></div>
+  <div class="floating-orb orb-2"></div>
+</div>
+<div id="flexAlert" class="flex-alert"></div>
+<div id="app">
+  <header class="global-header">
+    <div class="logo-block">
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M24 4L44 14V34L24 44L4 34V14L24 4Z" stroke="currentColor" stroke-width="2" fill="rgba(0,0,0,.3)"/>
+        <path d="M24 12L36 18V30L24 36L12 30V18L24 12Z" fill="currentColor" opacity=".6"/>
+        <circle cx="24" cy="24" r="4" fill="currentColor"/>
+      </svg>
+      <span class="logo-text">SYNDICATE BLOCK</span>
+    </div>
+    <div class="header-center">
+      <span class="timer-label">NEXT PROCEDURAL DROP</span>
+      <div class="countdown-timer" id="countdownTimer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="timer-digits" id="timerDigits">00:00:00</span>
+      </div>
+      <div class="wireframe-bar" id="wireframeBar" style="display:none;width:120px"></div>
+    </div>
+    <div class="header-right">
+      <div class="connection-badge" id="connectionBadge"><span class="sync-pulse"></span>CONNECTING...</div>
+      <div class="player-selector" id="playerSelector"></div>
+      <button class="focus-toggle" id="focusToggle">FOCUS ENGINE TOGGLE</button>
+    </div>
+  </header>
+  <nav class="nav-bar" id="navBar">
+    <button class="tab-btn nav-btn active" data-view="dashboard">COMMAND</button>
+    <button class="tab-btn nav-btn" data-view="warehouse">WAREHOUSE</button>
+    <button class="tab-btn nav-btn" data-view="packs">PACK LOTTERY</button>
+    <button class="tab-btn nav-btn" data-view="hideout">HIDEOUT</button>
+    <button class="tab-btn nav-btn" data-view="compendium">COMPENDIUM</button>
+    <button class="tab-btn nav-btn" data-view="street">STREET</button>
+  </nav>
+  <main class="main-content" id="mainContent">
+    <section class="view-panel active" id="view-dashboard"></section>
+    <section class="view-panel" id="view-warehouse"></section>
+    <section class="view-panel" id="view-packs"></section>
+    <section class="view-panel" id="view-hideout"></section>
+    <section class="view-panel" id="view-compendium"></section>
+    <section class="view-panel" id="view-street"></section>
+  </main>
+</div>
+<div class="overlay" id="updateOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title">BIG UPDATE<br>500 NEW STRAINS HAVE JUST DROPPED<br>CAN YOU FIND THEM??</div>
+    <button class="overlay-btn" id="confirmUpdateBtn">COMMIT NEW DATASETS</button>
+  </div>
+</div>
+<div class="overlay" id="discoveryOverlay">
+  <div class="overlay-card compendium-card" id="discoveryCard"></div>
+</div>
+<div class="overlay" id="packOverlay">
+  <div class="overlay-card pack-result" id="packResultCard"></div>
+</div>
+<div class="overlay" id="mythicOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title" style="animation:goldenRainbow 1s linear infinite">MYTHIC DROP DETONATED</div>
+    <div class="overlay-body" id="mythicBody"></div>
+    <button class="overlay-btn" id="mythicCloseBtn">ACCEPT LEGEND</button>
+  </div>
+</div>
+<div class="buster-overlay" id="busterOverlay">
+  <div class="buster-title">HEAT MAXED — BUSTED</div>
+  <p style="color:#fff;font-size:1rem;text-align:center;max-width:400px">Cop raid incoming. Choose your move.</p>
+  <div class="buster-btns">
+    <button class="action-btn" id="bribeBtn">PAY $500 BRIBE</button>
+    <button class="action-btn danger" id="surrenderBtn">SURRENDER HALF BACKPACK</button>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+
+const PREFIXES = ['Shadowforge','Voidline','Infernal','Quantum','Obsidian','Chrome','Radioactive','Cyber','Galactic','Doomsday','Phantom','Toxic','Neon','Titan','Savage','Cosmic','Pyro','Frost','Hydro','Static','Mutant','Rogue','Catalyst','Matrix','Crystalline'];
+const SUFFIXES = ['Hazard','Masterwork','Engine OG','Kush','Haze','Skunk','Poison','Dream','Widow','Express','Diesel','Crack','Thunder','Shockwave','Venom','Eclipse','Vortex','Nova','Nebula','Disaster'];
+const CORE_MODIFIERS = ['cash_multiplier','luck_multiplier','heat_reduction','mutation_chance','grow_velocity','stash_expansion','evolution_discount','bribe_mitigation','purity_crit_chance','resilience_shielded','flavor_bloom','yield_inflation','trade_tax_bypass','raid_immunity'];
+const PERF_CATEGORIES = ['Base','Flash','Surge','Overdrive','Kinetic'];
+const RARITY_SCALES = [
+  { name:'Common', mult:1.1, weight:70 },
+  { name:'Rare', mult:1.5, weight:20 },
+  { name:'Epic', mult:2.5, weight:9.99 },
+  { name:'Mythic', mult:10.0, weight:0.01 },
+  { name:'Godly', mult:25.0, weight:0 }
+];
+const ELITE_RARITY = [
+  { name:'Epic', mult:2.5, weight:99 },
+  { name:'Mythic', mult:10.0, weight:1 }
+];
+const KARLACH_LINES = {
+  reject: [
+    "Hey, Edward! Are you smoking your own backyard dirt? This trash deal is an absolute fucking joke.",
+    "Oi! Drop some real fucking coin or step away from the table, you cheap prick!",
+    "That is straight-up highway robbery! Fix this bullshit offer before I smash your device to bits.",
+    "Are you trying to scam your own family? Put some actual cash on the table, you absolute tool!",
+    "My infernal engine runs hot, but this goddamn trash offer leaves me completely stone cold. Denied!",
+    "Nice try, you cheap bastard. Go crawl back to your grow room and come back when you aren't broke.",
+    "Fuck off with this deal. Seriously. You're trading an elite masterwork item card for absolute peanuts."
+  ],
+  roast: [
+    "Jesus Christ, look at this depressing inventory. It's literally just a pile of low-grade ditch weed.",
+    "Wow. Your backpack looks like an absolute ghost town. Did you forget how to press the mash button?",
+    "My engine would literally stall out and die if I tried to burn this weak-ass garbage stack.",
+    "Are you even playing the game or just sitting there staring at the screen? This inventory is pure trash.",
+    "You've got 500 strains to discover and your backpack looks like a broken-down local corner store. Pathetic.",
+    "Go upgrade your lighting equipment right now, because this stash is downright embarrassing to look at."
+  ],
+  praise: [
+    "HOLY FUCKING SHIT! Look at that glow! That is a pure, unadulterated masterwork right there!",
+    "FUCK ME, look at that gradient ring! I would burn down this entire valley just to handle this batch.",
+    "Absolute god-tier legend status! Your economy is broken now, go wipe the floor with them on the board!",
+    "Now THAT is what I'm talking about! Pure black magic genetics. You're a certified kingpin on this block.",
+    "I'm completely hyped just staring at this card. This makes everything else look like compost.",
+    "This is insane. I didn't even know you could breed an exotic card with metrics this goddamn high!",
+    "Fucking legendary roll! Lock this deal in right now and let's go get a goddamn drink to celebrate!"
+  ]
+};
+
+const GAME_STATE = {
+  active_player: 'Aden',
+  versus_mode_active: true,
+  launch_date: '2026-07-04T00:00:00',
+  global_activity_log: ['[23:38] SYSTEM INITIALIZED: Welcome to the Syndicate block. Get to work.'],
+  live_trade_session: null,
+  procedural_day: 0,
+  update_pending: false,
+  last_update_applied_day: 0,
+  strain_pool: [],
+  boost_pool: [],
+  item_id_counter: 1,
+  last_grow_tick: 0,
+  pending_discovery: null,
+  trade_view_matrix: 'backpack',
+  trade_slot_item: null,
+  trade_cash_offer: 0,
+  trade_recipient: 'Edward',
+  active_view: 'dashboard',
+  players: {
+    Aden: { identity:'Aden', theme:'fallout4_neon', accentColor:'#00ff66', cash:2000, luck_multiplier:1.0, global_heat:0, max_stash_size:50, equipped:{helmet:null,shirt:null,legs:null,boots:null}, backpack_stash:[], warehouse_bays:[{bay_id:1,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0},{bay_id:2,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0}], compendium_discovered:[], flex_alerts:[] },
+    Edward: { identity:'Edward', theme:'fallout76_amber', accentColor:'#ffaa00', cash:2000, luck_multiplier:1.0, global_heat:0, max_stash_size:50, equipped:{helmet:null,shirt:null,legs:null,boots:null}, backpack_stash:[], warehouse_bays:[{bay_id:1,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0},{bay_id:2,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0}], compendium_discovered:[], flex_alerts:[] },
+    Jamie: { identity:'Jamie', theme:'bg3_karlach_red', accentColor:'#ff2200', minimal_view_active:false, cash:2000, luck_multiplier:1.0, global_heat:0, max_stash_size:50, equipped:{helmet:null,shirt:null,legs:null,boots:null}, backpack_stash:[], warehouse_bays:[{bay_id:1,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0},{bay_id:2,current_crop:null,lamps_level:1,soil_level:1,grow_progress:0}], compendium_discovered:[], flex_alerts:[] }
+  }
+};
+
+let itemIdCounter = 1;
+let updateTriggeredThisCycle = false;
+let growTickInterval = null;
+let cloudVersion = 0;
+let cloudRoomId = 'syndicate';
+let cloudPlayerLocked = false;
+let cloudSyncTimer = null;
+let cloudPollTimer = null;
+let lastRemoteVersion = 0;
+let isApplyingRemote = false;
+let seenFlexTs = {};
+
+function parseUrlParams(){
+  const params = new URLSearchParams(window.location.search);
+  const player = params.get('player');
+  const room = params.get('room') || 'syndicate';
+  cloudRoomId = room.replace(/[^a-zA-Z0-9_-]/g, '') || 'syndicate';
+  if(player && GAME_STATE.players[player]){
+    GAME_STATE.active_player = player;
+    cloudPlayerLocked = true;
+  }
+}
+
+function apiUrl(){
+  return '/api/room/' + encodeURIComponent(cloudRoomId);
+}
+
+async function cloudFetch(method, body){
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(apiUrl(), opts);
+  const data = await res.json().catch(function(){ return {}; });
+  return { ok: res.ok, status: res.status, data: data };
+}
+
+function syncItemIdCounter(){
+  if(GAME_STATE.item_id_counter && GAME_STATE.item_id_counter > itemIdCounter){
+    itemIdCounter = GAME_STATE.item_id_counter;
+  }
+}
+
+function generateItemId(){
+  const id = 'item_' + (itemIdCounter++) + '_' + Date.now();
+  GAME_STATE.item_id_counter = itemIdCounter;
+  return id;
+}
+
+function applyRemoteState(remoteState, remoteVersion){
+  if(!remoteState) return;
+  isApplyingRemote = true;
+  const myPlayer = GAME_STATE.active_player;
+  const localTradeSlot = GAME_STATE.trade_slot_item;
+  const localTradeMatrix = GAME_STATE.trade_view_matrix;
+  const localTradeCash = GAME_STATE.trade_cash_offer;
+  const localTradeRecipient = GAME_STATE.trade_recipient;
+  const localActiveView = GAME_STATE.active_view;
+  const localPendingDiscovery = GAME_STATE.pending_discovery;
+  Object.keys(remoteState).forEach(function(key){
+    if(key !== 'players') GAME_STATE[key] = remoteState[key];
+  });
+  Object.keys(remoteState.players || {}).forEach(function(pid){
+    GAME_STATE.players[pid] = remoteState.players[pid];
+  });
+  GAME_STATE.trade_slot_item = localTradeSlot;
+  GAME_STATE.trade_view_matrix = localTradeMatrix;
+  GAME_STATE.trade_cash_offer = localTradeCash;
+  GAME_STATE.trade_recipient = localTradeRecipient;
+  GAME_STATE.active_view = localActiveView;
+  GAME_STATE.pending_discovery = localPendingDiscovery;
+  GAME_STATE.active_player = myPlayer;
+  syncItemIdCounter();
+  cloudVersion = remoteVersion;
+  lastRemoteVersion = remoteVersion;
+  const alerts = GAME_STATE.players[myPlayer].flex_alerts || [];
+  alerts.forEach(function(a){
+    const key = (a.ts || 0) + '_' + a.msg;
+    if(!seenFlexTs[key]){
+      seenFlexTs[key] = true;
+      showFlexAlert(a.msg);
+    }
+  });
+  GAME_STATE.players[myPlayer].flex_alerts = [];
+  isApplyingRemote = false;
+  renderAll();
+}
+
+async function cloudInit(){
+  const badge = document.getElementById('connectionBadge');
+  try {
+    const getRes = await cloudFetch('GET');
+    if(getRes.data && getRes.data.state){
+      applyRemoteState(getRes.data.state, getRes.data.version);
+      if(badge) badge.innerHTML = '<span class="sync-pulse"></span>CONNECTED AS ' + GAME_STATE.active_player.toUpperCase() + ' · ROOM: ' + cloudRoomId.toUpperCase();
+      return;
+    }
+    const day = calculateGameDay();
+    GAME_STATE.procedural_day = day;
+    GAME_STATE.strain_pool = generateStrainPool(day, getPoolCap());
+    GAME_STATE.boost_pool = generateBoostPool();
+    GAME_STATE.last_update_applied_day = day;
+    GAME_STATE.item_id_counter = itemIdCounter;
+    const initRes = await cloudFetch('POST', { action: 'init', state: prepareStateForSync() });
+    if(initRes.data && initRes.data.state){
+      applyRemoteState(initRes.data.state, initRes.data.version || 1);
+    } else if(initRes.data && initRes.data.alreadyExists){
+      const retry = await cloudFetch('GET');
+      if(retry.data && retry.data.state) applyRemoteState(retry.data.state, retry.data.version);
+    }
+    if(badge) badge.innerHTML = '<span class="sync-pulse"></span>CONNECTED AS ' + GAME_STATE.active_player.toUpperCase() + ' · ROOM: ' + cloudRoomId.toUpperCase();
+  } catch(e){
+    if(badge){
+      badge.classList.add('offline');
+      badge.textContent = 'OFFLINE — LOCAL MODE';
+    }
+    const day = calculateGameDay();
+    GAME_STATE.procedural_day = day;
+    GAME_STATE.strain_pool = generateStrainPool(day, getPoolCap());
+    GAME_STATE.boost_pool = generateBoostPool();
+    GAME_STATE.last_update_applied_day = day;
+    logActivity('Cloud sync unavailable — playing local.');
+  }
+}
+
+function prepareStateForSync(){
+  const clone = JSON.parse(JSON.stringify(GAME_STATE));
+  clone.pending_discovery = null;
+  clone.trade_slot_item = null;
+  clone.trade_cash_offer = 0;
+  clone.active_view = 'dashboard';
+  return clone;
+}
+
+function cloudSyncPush(force){
+  if(isApplyingRemote) return;
+  if(cloudSyncTimer && !force){
+    return;
+  }
+  const doPush = async function(){
+    cloudSyncTimer = null;
+    GAME_STATE.item_id_counter = itemIdCounter;
+    try {
+      const res = await cloudFetch('POST', {
+        action: 'sync',
+        version: cloudVersion,
+        state: prepareStateForSync(),
+        player: GAME_STATE.active_player
+      });
+      if(res.status === 409 && res.data && res.data.state){
+        applyRemoteState(res.data.state, res.data.version);
+        const retry = await cloudFetch('POST', {
+          action: 'sync',
+          version: cloudVersion,
+          state: GAME_STATE,
+          player: GAME_STATE.active_player
+        });
+        if(retry.data && retry.data.version) cloudVersion = retry.data.version;
+      } else if(res.data && res.data.version){
+        cloudVersion = res.data.version;
+        lastRemoteVersion = res.data.version;
+      }
+    } catch(e){}
+  };
+  if(force){
+    doPush();
+  } else {
+    cloudSyncTimer = setTimeout(doPush, 400);
+  }
+}
+
+async function cloudPoll(){
+  if(isApplyingRemote) return;
+  try {
+    const res = await cloudFetch('GET');
+    if(res.data && res.data.state && res.data.version > lastRemoteVersion){
+      applyRemoteState(res.data.state, res.data.version);
+    }
+  } catch(e){}
+}
+
+function startCloudLoop(){
+  cloudPollTimer = setInterval(cloudPoll, 2000);
+  setInterval(function(){
+    cloudFetch('POST', { action: 'heartbeat', player: GAME_STATE.active_player }).catch(function(){});
+  }, 10000);
+}
+
+function getLaunchTimestamp(){
+  return new Date(GAME_STATE.launch_date).getTime();
+}
+
+function calculateGameDay(){
+  const elapsed = Date.now() - getLaunchTimestamp();
+  const day = Math.floor(elapsed / (24 * 60 * 60 * 1000));
+  return Math.max(0, day);
+}
+
+function getPoolCap(){
+  return 500 * (calculateGameDay() + 1);
+}
+
+function getTimeUntilNextDrop(){
+  const launch = getLaunchTimestamp();
+  const elapsed = Date.now() - launch;
+  const cycleMs = 24 * 60 * 60 * 1000;
+  const mod = elapsed % cycleMs;
+  if(mod === 0 && elapsed > 0) return 0;
+  return mod === 0 ? cycleMs : cycleMs - mod;
+}
+
+function formatCountdown(ms){
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+function generateStrainPool(day, cap){
+  const pool = [];
+  const basePotency = 40 + day * 8;
+  const baseFlavor = 35 + day * 6;
+  const baseYield = 30 + day * 7;
+  const baseResilience = 25 + day * 5;
+  let idx = 0;
+  outer: for(let pi = 0; pi < PREFIXES.length; pi++){
+    for(let si = 0; si < SUFFIXES.length; si++){
+      if(idx >= cap) break outer;
+      const prefix = PREFIXES[pi];
+      const suffix = SUFFIXES[si];
+      const name = prefix + ' ' + suffix + ' V' + day;
+      const variance = (idx % 17) * 1.3;
+      pool.push({
+        template_id: 'strain_' + day + '_' + idx,
+        name: name,
+        type: 'strain',
+        day_version: day,
+        potency: Math.round(basePotency + variance + (idx % 5) * 3),
+        flavor: Math.round(baseFlavor + variance * 0.8 + (idx % 7) * 2),
+        yield_rating: Math.round(baseYield + variance * 1.1 + (idx % 4) * 4),
+        resilience: Math.round(baseResilience + variance * 0.9 + (idx % 6) * 2),
+        rarity: idx % 100 === 0 ? 'Epic' : idx % 25 === 0 ? 'Rare' : 'Common'
+      });
+      idx++;
+    }
+  }
+  while(pool.length < cap && pool.length < PREFIXES.length * SUFFIXES.length * 2){
+    const pi = pool.length % PREFIXES.length;
+    const si = Math.floor(pool.length / PREFIXES.length) % SUFFIXES.length;
+    const variance = pool.length * 1.7;
+    pool.push({
+      template_id: 'strain_' + day + '_x' + pool.length,
+      name: PREFIXES[pi] + ' ' + SUFFIXES[si] + ' V' + day,
+      type: 'strain',
+      day_version: day,
+      potency: Math.round(basePotency + variance),
+      flavor: Math.round(baseFlavor + variance * 0.8),
+      yield_rating: Math.round(baseYield + variance * 1.1),
+      resilience: Math.round(baseResilience + variance * 0.9),
+      rarity: pool.length % 50 === 0 ? 'Mythic' : pool.length % 15 === 0 ? 'Epic' : 'Common'
+    });
+  }
+  return pool.slice(0, cap);
+}
+
+function generateBoostPool(){
+  const pool = [];
+  let id = 0;
+  for(let mi = 0; mi < CORE_MODIFIERS.length; mi++){
+    for(let pi = 0; pi < PERF_CATEGORIES.length; pi++){
+      for(let ri = 0; ri < RARITY_SCALES.length; ri++){
+        const mod = CORE_MODIFIERS[mi];
+        const perf = PERF_CATEGORIES[pi];
+        const rarity = RARITY_SCALES[ri];
+        const baseVal = 0.05 + (mi * 0.012) + (pi * 0.008);
+        pool.push({
+          template_id: 'boost_' + id,
+          name: mod.replace(/_/g,' ').toUpperCase() + ' [' + perf + ']',
+          type: 'boost',
+          modifier: mod,
+          performance: perf,
+          rarity: rarity.name,
+          multiplier: rarity.mult,
+          value: parseFloat((baseVal * rarity.mult).toFixed(4)),
+          weight: rarity.weight
+        });
+        id++;
+      }
+    }
+  }
+  return pool;
+}
+
+function instantiateStrain(template){
+  return {
+    id: generateItemId(),
+    name: template.name,
+    type: 'strain',
+    rarity: template.rarity,
+    potency: template.potency,
+    flavor: template.flavor,
+    yield_rating: template.yield_rating,
+    resilience: template.resilience,
+    day_version: template.day_version,
+    discovered_at: null,
+    evolved: false
+  };
+}
+
+function instantiateBoost(template){
+  return {
+    id: generateItemId(),
+    name: template.name,
+    type: 'boost',
+    rarity: template.rarity,
+    modifier: template.modifier,
+    performance: template.performance,
+    multiplier: template.multiplier,
+    value: template.value,
+    discovered_at: null
+  };
+}
+
+function logActivity(msg, urgent){
+  const now = new Date();
+  const ts = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  const entry = '[' + ts + '] ' + msg;
+  GAME_STATE.global_activity_log.unshift(entry);
+  if(GAME_STATE.global_activity_log.length > 100) GAME_STATE.global_activity_log.pop();
+  cloudSyncPush(false);
+}
+
+function getActivePlayer(){
+  return GAME_STATE.players[GAME_STATE.active_player];
+}
+
+function addToBackpack(playerId, item){
+  const p = GAME_STATE.players[playerId];
+  if(p.backpack_stash.length >= p.max_stash_size){
+    logActivity(p.identity + ' backpack full — item discarded: ' + item.name);
+    return false;
+  }
+  p.backpack_stash.push(item);
+  return true;
+}
+
+function removeFromInventory(playerId, itemId, source){
+  const p = GAME_STATE.players[playerId];
+  if(source === 'equipped'){
+    for(const slot of ['helmet','shirt','legs','boots']){
+      if(p.equipped[slot] && p.equipped[slot].id === itemId){
+        const item = p.equipped[slot];
+        p.equipped[slot] = null;
+        return { item, source: 'equipped', slot };
+      }
+    }
+    return null;
+  }
+  const idx = p.backpack_stash.findIndex(i => i.id === itemId);
+  if(idx === -1) return null;
+  const item = p.backpack_stash.splice(idx, 1)[0];
+  return { item, source: 'backpack' };
+}
+
+function rollRarity(oddsTable, luckMult){
+  const adjusted = oddsTable.map(o => ({ ...o, weight: o.weight * (o.name === 'Mythic' || o.name === 'Epic' ? luckMult : 1) }));
+  const total = adjusted.reduce((s,o) => s + o.weight, 0);
+  let roll = Math.random() * total;
+  for(const o of adjusted){
+    roll -= o.weight;
+    if(roll <= 0) return o;
+  }
+  return adjusted[adjusted.length - 1];
+}
+
+function openPack(playerId, packType){
+  const player = GAME_STATE.players[playerId];
+  const cost = packType === 'elite' ? 2500 : 500;
+  if(player.cash < cost){
+    logActivity(player.identity + ' insufficient funds for ' + packType + ' pack.');
+    return null;
+  }
+  player.cash -= cost;
+  const luck = player.luck_multiplier;
+  const odds = packType === 'elite' ? ELITE_RARITY : RARITY_SCALES.filter(r => r.weight > 0);
+  const rolledRarity = rollRarity(odds, luck);
+  let item;
+  if(Math.random() < 0.6){
+    const day = calculateGameDay();
+    const strainTemplates = GAME_STATE.strain_pool.filter(s => s.day_version <= day);
+    const template = strainTemplates[Math.floor(Math.random() * strainTemplates.length)];
+    item = instantiateStrain({ ...template, rarity: rolledRarity.name });
+  } else {
+    const boostTemplates = GAME_STATE.boost_pool.filter(b => b.rarity === rolledRarity.name);
+    const template = boostTemplates[Math.floor(Math.random() * boostTemplates.length)] || GAME_STATE.boost_pool[0];
+    item = instantiateBoost({ ...template, rarity: rolledRarity.name, multiplier: rolledRarity.mult });
+  }
+  item.rarity = rolledRarity.name;
+  if(rolledRarity.name === 'Mythic' || rolledRarity.name === 'Godly'){
+    item.multiplier = rolledRarity.mult;
+    if(item.type === 'boost') item.value = parseFloat((item.value * rolledRarity.mult * 0.1).toFixed(4));
+  }
+  addToBackpack(playerId, item);
+  registerDiscovery(playerId, item);
+  logActivity(player.identity + ' opened ' + packType + ' pack: ' + item.name + ' [' + item.rarity + ']');
+  if(rolledRarity.name === 'Mythic' || rolledRarity.name === 'Godly'){
+    triggerMythicDrop(item);
+  }
+  applyBoostOnOpen(player, item);
+  renderAll();
+  showPackResult(item, rolledRarity.name);
+  return item;
+}
+
+function applyBoostOnOpen(player, item){
+  if(item.type !== 'boost') return;
+  let effectScale = 1;
+  if(item.performance === 'Surge' && player.global_heat > 75) effectScale = 2.5;
+  if(item.performance === 'Overdrive'){
+    effectScale = 3.0;
+    player.global_heat = Math.min(100, player.global_heat + Math.round(15 * item.value * 10));
+    if(player.global_heat >= 100) setTimeout(triggerBuster, 500);
+  }
+  if(item.performance === 'Flash'){
+    const burst = Math.round(200 * item.value * item.multiplier * effectScale);
+    player.cash += burst;
+    logActivity(player.identity + ' Flash boost: +$' + burst);
+  }
+  if(item.performance === 'Kinetic'){
+    player.luck_multiplier = parseFloat((player.luck_multiplier + item.value * 0.1 * effectScale).toFixed(3));
+  }
+  if(item.modifier === 'luck_multiplier'){
+    player.luck_multiplier = parseFloat((player.luck_multiplier + item.value * effectScale).toFixed(3));
+  }
+  if(item.modifier === 'stash_expansion'){
+    player.max_stash_size += Math.round(item.value * 10 * effectScale);
+  }
+  if(item.modifier === 'heat_reduction'){
+    player.global_heat = Math.max(0, player.global_heat - Math.round(item.value * 20 * effectScale));
+  }
+  if(item.modifier === 'cash_multiplier'){
+    player.cash += Math.round(100 * item.value * item.multiplier * effectScale);
+  }
+  if(item.modifier === 'raid_immunity' && player.global_heat > 0){
+    player.global_heat = Math.max(0, player.global_heat - Math.round(25 * effectScale));
+  }
+}
+
+function registerDiscovery(playerId, item){
+  const p = GAME_STATE.players[playerId];
+  const key = item.name + '_' + item.type;
+  if(!p.compendium_discovered.includes(key)){
+    p.compendium_discovered.push(key);
+    item.discovered_at = new Date().toISOString();
+    if(!GAME_STATE.pending_discovery){
+      GAME_STATE.pending_discovery = { playerId, item };
+      showDiscoveryModal(item);
+    }
+  }
+}
+
+function showDiscoveryModal(item){
+  const overlay = document.getElementById('discoveryOverlay');
+  const card = document.getElementById('discoveryCard');
+  const stamp = new Date().toLocaleString();
+  card.innerHTML = '<div class="overlay-title">NEW DISCOVERY</div>' +
+    renderItemCardHTML(item, false) +
+    '<div class="discovery-stamp">LOGGED: ' + stamp + '</div>' +
+    '<button class="overlay-btn" id="sendCrewBtn">SEND DATA LOG TO CREW</button>' +
+    '<button class="action-btn" id="closeDiscoveryBtn" style="margin-top:8px">DISMISS</button>';
+  overlay.classList.add('active');
+  document.getElementById('sendCrewBtn').onclick = function(){
+    sendDataLogToCrew(GAME_STATE.active_player, item, stamp);
+    overlay.classList.remove('active');
+    GAME_STATE.pending_discovery = null;
+  };
+  document.getElementById('closeDiscoveryBtn').onclick = function(){
+    overlay.classList.remove('active');
+    GAME_STATE.pending_discovery = null;
+  };
+}
+
+function sendDataLogToCrew(senderId, item, stamp){
+  const msg = senderId + ' found ' + item.name + ' on ' + stamp.split(',')[0] + ' at ' + stamp.split(',')[1];
+  cloudFetch('POST', { action: 'flex', from: senderId, msg: msg, version: cloudVersion }).then(function(res){
+    if(res.data && res.data.state){
+      applyRemoteState(res.data.state, res.data.version);
+    }
+  }).catch(function(){});
+  logActivity('DATA LOG transmitted: ' + msg);
+}
+
+function showFlexAlert(msg){
+  const el = document.getElementById('flexAlert');
+  el.textContent = msg;
+  el.classList.add('visible');
+  setTimeout(function(){ el.classList.remove('visible'); }, 5000);
+}
+
+function triggerMythicDrop(item){
+  document.body.classList.add('screen-shake');
+  const overlay = document.getElementById('mythicOverlay');
+  document.getElementById('mythicBody').textContent = item.name + ' — ' + item.rarity + ' — 25.0x BROKEN TIER';
+  overlay.classList.add('active');
+  overlay.classList.add('mythic-drop');
+  document.getElementById('mythicCloseBtn').onclick = function(){
+    overlay.classList.remove('active');
+    overlay.classList.remove('mythic-drop');
+    document.body.classList.remove('screen-shake');
+  };
+  setTimeout(function(){ document.body.classList.remove('screen-shake'); }, 3000);
+}
+
+function showPackResult(item, rarity){
+  const overlay = document.getElementById('packOverlay');
+  const card = document.getElementById('packResultCard');
+  card.innerHTML = renderItemCardHTML(item, false) +
+    '<button class="overlay-btn" id="closePackBtn">COLLECT</button>';
+  overlay.classList.add('active');
+  document.getElementById('closePackBtn').onclick = function(){ overlay.classList.remove('active'); };
+}
+
+function evolveBud(playerId, itemId){
+  const player = GAME_STATE.players[playerId];
+  if(player.cash < 1500){
+    logActivity(player.identity + ' cannot afford evolution ($1,500 required).');
+    return;
+  }
+  const idx = player.backpack_stash.findIndex(i => i.id === itemId);
+  if(idx === -1) return;
+  const item = player.backpack_stash[idx];
+  if(item.type !== 'strain'){
+    logActivity('Only strain cards can be evolved.');
+    return;
+  }
+  player.cash -= 1500;
+  item.potency += 10;
+  item.flavor += 10;
+  item.evolved = true;
+  const combined = item.potency + item.flavor;
+  if(combined >= 185){
+    item.name = 'Voidline Masterwork ' + item.name;
+    item.rarity = 'Exotic';
+    logActivity(player.identity + ' MUTATION EVOLUTION: ' + item.name);
+    triggerMythicDrop(item);
+  } else {
+    logActivity(player.identity + ' evolved ' + item.name + ' (+10 Potency, +10 Flavor)');
+  }
+  renderAll();
+}
+
+function upgradeBay(playerId, bayId, upgradeType){
+  const player = GAME_STATE.players[playerId];
+  const bay = player.warehouse_bays.find(b => b.bay_id === bayId);
+  if(!bay) return;
+  const level = upgradeType === 'lamps' ? bay.lamps_level : bay.soil_level;
+  const cost = upgradeType === 'lamps' ? 300 * level : 400 * level;
+  if(player.cash < cost){
+    logActivity(player.identity + ' insufficient funds for upgrade.');
+    return;
+  }
+  player.cash -= cost;
+  if(upgradeType === 'lamps') bay.lamps_level++;
+  else bay.soil_level++;
+  logActivity(player.identity + ' upgraded bay ' + bayId + ' ' + upgradeType + ' to L' + (upgradeType === 'lamps' ? bay.lamps_level : bay.soil_level));
+  renderAll();
+}
+
+function plantCrop(playerId, bayId, itemId){
+  const player = GAME_STATE.players[playerId];
+  const bay = player.warehouse_bays.find(b => b.bay_id === bayId);
+  const idx = player.backpack_stash.findIndex(i => i.id === itemId);
+  if(!bay || idx === -1 || bay.current_crop) return;
+  const strain = player.backpack_stash.splice(idx, 1)[0];
+  if(strain.type !== 'strain'){ player.backpack_stash.splice(idx, 0, strain); return; }
+  bay.current_crop = strain;
+  bay.grow_progress = 0;
+  logActivity(player.identity + ' planted ' + strain.name + ' in bay ' + bayId);
+  renderAll();
+}
+
+function harvestBay(playerId, bayId){
+  const player = GAME_STATE.players[playerId];
+  const bay = player.warehouse_bays.find(b => b.bay_id === bayId);
+  if(!bay || !bay.current_crop || bay.grow_progress < 100) return;
+  const crop = bay.current_crop;
+  const potencyBonus = 1 + (bay.lamps_level - 1) * 0.05;
+  const yieldBonus = 1 + (bay.soil_level - 1) * 0.08;
+  const harvest = {
+    ...crop,
+    id: generateItemId(),
+    potency: Math.round(crop.potency * potencyBonus),
+    yield_rating: Math.round(crop.yield_rating * yieldBonus),
+    name: crop.name + ' [Harvest]'
+  };
+  addToBackpack(playerId, harvest);
+  registerDiscovery(playerId, harvest);
+  bay.current_crop = null;
+  bay.grow_progress = 0;
+  logActivity(player.identity + ' harvested ' + harvest.name);
+  renderAll();
+}
+
+function tickGrowProgress(){
+  Object.keys(GAME_STATE.players).forEach(pid => {
+    const p = GAME_STATE.players[pid];
+    let velocityBoost = 1;
+    p.backpack_stash.forEach(item => {
+      if(item.type === 'boost' && item.modifier === 'grow_velocity') velocityBoost += item.value;
+    });
+    p.warehouse_bays.forEach(bay => {
+      if(bay.current_crop){
+        const rate = 0.5 * velocityBoost * (1 + bay.lamps_level * 0.03);
+        bay.grow_progress = Math.min(100, bay.grow_progress + rate);
+      }
+    });
+  });
+}
+
+function evaluateKarlach(playerId, item, cashOffer){
+  const panel = document.getElementById('karlachPanel');
+  const dialogue = document.getElementById('karlachDialogue');
+  if(!panel || !dialogue) return;
+  panel.classList.remove('rejected','praised');
+  const player = GAME_STATE.players[playerId];
+  if(!item){
+    const hasQuality = player.backpack_stash.some(i => i.rarity === 'Epic' || i.rarity === 'Mythic' || i.rarity === 'Exotic' || i.rarity === 'Godly' || i.evolved);
+    if(!hasQuality && player.backpack_stash.length < 3){
+      panel.classList.add('rejected');
+      dialogue.textContent = KARLACH_LINES.roast[Math.floor(Math.random() * KARLACH_LINES.roast.length)];
+      return 'roast';
+    }
+    dialogue.textContent = 'Select an item and make an offer, choom.';
+    return 'neutral';
+  }
+  if(item.rarity === 'Mythic' || item.rarity === 'Exotic' || item.name.indexOf('Voidline Masterwork') === 0){
+    panel.classList.add('praised');
+    dialogue.textContent = KARLACH_LINES.praise[Math.floor(Math.random() * KARLACH_LINES.praise.length)];
+    return 'praise';
+  }
+  const baseValue = calculateItemValue(item);
+  const ratio = cashOffer / baseValue;
+  if(ratio < 0.3){
+    panel.classList.add('rejected');
+    dialogue.textContent = KARLACH_LINES.reject[Math.floor(Math.random() * KARLACH_LINES.reject.length)];
+    return 'reject';
+  }
+  dialogue.textContent = 'Offer registered at ' + Math.round(ratio * 100) + '% asset value. Adjust or execute.';
+  return 'ok';
+}
+
+function calculateItemValue(item){
+  if(!item) return 100;
+  let base = 100;
+  if(item.type === 'strain'){
+    base = (item.potency || 0) * 3 + (item.flavor || 0) * 2 + (item.yield_rating || 0) * 2 + (item.resilience || 0);
+  } else if(item.type === 'boost'){
+    base = (item.value || 0.1) * 500 * (item.multiplier || 1);
+  }
+  const rarityMult = { Common:1, Rare:2.5, Epic:8, Mythic:50, Godly:200, Exotic:100 };
+  base *= rarityMult[item.rarity] || 1;
+  return Math.max(50, Math.round(base));
+}
+
+async function executeSwap(){
+  const senderId = GAME_STATE.active_player;
+  const recipientId = GAME_STATE.trade_recipient;
+  const item = GAME_STATE.trade_slot_item;
+  const cashOffer = GAME_STATE.trade_cash_offer;
+  if(!item || senderId === recipientId){
+    logActivity('Invalid trade configuration.');
+    return;
+  }
+  const evalResult = evaluateKarlach(senderId, item, cashOffer);
+  if(evalResult === 'reject' || evalResult === 'roast'){
+    logActivity('Karlach denied the trade.');
+    return;
+  }
+  try {
+    const res = await cloudFetch('POST', {
+      action: 'trade',
+      version: cloudVersion,
+      senderId: senderId,
+      recipientId: recipientId,
+      itemId: item.id,
+      source: GAME_STATE.trade_view_matrix === 'equipped' ? 'equipped' : 'backpack',
+      cashOffer: cashOffer || 0
+    });
+    if(res.status === 409 && res.data && res.data.state){
+      applyRemoteState(res.data.state, res.data.version);
+      logActivity('Trade conflict — state refreshed. Try again.');
+      return;
+    }
+    if(!res.ok){
+      logActivity(res.data.error || 'Trade failed.');
+      return;
+    }
+    if(res.data && res.data.state){
+      applyRemoteState(res.data.state, res.data.version);
+    }
+    GAME_STATE.trade_slot_item = null;
+    evaluateKarlach(senderId, null, 0);
+  } catch(e){
+    logActivity('Trade network error.');
+  }
+}
+
+function streetTransaction(amount){
+  const player = getActivePlayer();
+  if(player.cash < amount){
+    logActivity(player.identity + ' insufficient street capital.');
+    return;
+  }
+  player.cash -= amount;
+  let heatGain = Math.round(amount / 50);
+  let reduction = 0;
+  let taxBypass = 0;
+  player.backpack_stash.forEach(item => {
+    if(item.type === 'boost' && item.modifier === 'heat_reduction') reduction += item.value * 10;
+    if(item.type === 'boost' && item.modifier === 'trade_tax_bypass') taxBypass += item.value;
+  });
+  player.backpack_stash.forEach(item => {
+    if(item.type === 'boost' && item.modifier === 'raid_immunity') reduction += item.value * 15;
+  });
+  const netHeat = Math.max(1, heatGain - reduction);
+  player.global_heat = Math.min(100, player.global_heat + netHeat);
+  const profitMult = 1.4 + taxBypass * 0.2;
+  player.cash += Math.round(amount * profitMult);
+  logActivity(player.identity + ' street deal: -$' + amount + ' investment, heat +' + netHeat + ', profit x' + profitMult.toFixed(2));
+  if(player.global_heat >= 100) triggerBuster();
+  renderAll();
+}
+
+function triggerBuster(){
+  document.getElementById('busterOverlay').classList.add('active');
+  document.body.classList.add('buster-active');
+}
+
+function resolveBribe(){
+  const player = getActivePlayer();
+  let cost = 500;
+  player.backpack_stash.forEach(item => {
+    if(item.type === 'boost' && item.modifier === 'bribe_mitigation') cost = Math.round(cost * (1 - item.value));
+  });
+  if(player.cash < cost){
+    logActivity('Cannot afford bribe.');
+    return;
+  }
+  player.cash -= cost;
+  player.global_heat = 0;
+  document.getElementById('busterOverlay').classList.remove('active');
+  document.body.classList.remove('buster-active');
+  logActivity(player.identity + ' paid $' + cost + ' bribe. Heat reset.');
+  renderAll();
+}
+
+function resolveSurrender(){
+  const player = getActivePlayer();
+  const half = Math.ceil(player.backpack_stash.length / 2);
+  player.backpack_stash.splice(0, half);
+  player.global_heat = 0;
+  document.getElementById('busterOverlay').classList.remove('active');
+  document.body.classList.remove('buster-active');
+  logActivity(player.identity + ' surrendered ' + half + ' items. Heat reset.');
+  renderAll();
+}
+
+function triggerDailyUpdate(){
+  if(updateTriggeredThisCycle) return;
+  updateTriggeredThisCycle = true;
+  GAME_STATE.update_pending = true;
+  document.body.classList.add('update-frozen');
+  document.getElementById('mainContent').classList.add('update-blur');
+  document.body.classList.add('screen-shake');
+  document.getElementById('updateOverlay').classList.add('active');
+  logActivity('PROCEDURAL EXPANSION DETONATED — 500 NEW STRAINS INCOMING', true);
+}
+
+function commitUpdate(){
+  const day = calculateGameDay();
+  GAME_STATE.procedural_day = day;
+  const cap = getPoolCap();
+  const newStrains = generateStrainPool(day, 500);
+  GAME_STATE.strain_pool = GAME_STATE.strain_pool.concat(newStrains);
+  GAME_STATE.last_update_applied_day = day;
+  GAME_STATE.update_pending = false;
+  updateTriggeredThisCycle = false;
+  document.body.classList.remove('update-frozen','screen-shake');
+  document.getElementById('mainContent').classList.remove('update-blur');
+  document.getElementById('updateOverlay').classList.remove('active');
+  logActivity('Day ' + day + ' datasets committed. Pool cap: ' + cap + ' strains.', true);
+  cloudSyncPush(true);
+  renderAll();
+}
+
+function applyTheme(playerId){
+  const p = GAME_STATE.players[playerId];
+  const body = document.getElementById('bodyRoot');
+  body.className = '';
+  if(p.theme === 'fallout4_neon') body.classList.add('theme-aden');
+  else if(p.theme === 'fallout76_amber') body.classList.add('theme-edward');
+  else if(p.theme === 'bg3_karlach_red') body.classList.add('theme-jamie');
+  if(p.minimal_view_active) body.classList.add('minimal-view');
+  document.documentElement.style.setProperty('--accent', p.accentColor);
+  const wf = document.getElementById('wireframeBar');
+  if(wf) wf.style.display = p.theme === 'fallout76_amber' ? 'block' : 'none';
+}
+
+function renderItemCardHTML(item, selectable){
+  if(!item) return '<div class="empty-state">Empty</div>';
+  const rarityClass = 'rarity-' + (item.rarity || 'common').toLowerCase();
+  let stats = '';
+  if(item.type === 'strain'){
+    stats = 'P:' + item.potency + ' F:' + item.flavor + ' Y:' + item.yield_rating + ' R:' + item.resilience;
+  } else if(item.type === 'boost'){
+    stats = item.modifier + ' | ' + item.performance + ' | ' + (item.value * item.multiplier).toFixed(3);
+  }
+  return '<div class="item-card card-3d ' + rarityClass + '" data-item-id="' + item.id + '">' +
+    '<div class="card-sheen"></div>' +
+    '<div class="card-rarity">' + (item.rarity || 'Common') + '</div>' +
+    '<div class="card-name">' + item.name + '</div>' +
+    '<div class="card-stats">' + stats + '</div>' +
+    (item.type === 'boost' ? '<div class="card-boost">' + item.modifier.replace(/_/g,' ') + '</div>' : '') +
+    '</div>';
+}
+
+function renderDashboard(){
+  const p = getActivePlayer();
+  const day = calculateGameDay();
+  const cap = getPoolCap();
+  document.getElementById('view-dashboard').innerHTML =
+    '<div class="panel-card">' +
+    '<div class="panel-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg> COMMAND CENTER — ' + p.identity + '</div>' +
+    '<div class="stat-row">' +
+    '<div class="stat-chip">Cash: <strong>$' + p.cash.toLocaleString() + '</strong></div>' +
+    '<div class="stat-chip">Heat: <strong>' + p.global_heat + '%</strong></div>' +
+    '<div class="stat-chip">Luck: <strong>' + p.luck_multiplier.toFixed(2) + 'x</strong></div>' +
+    '<div class="stat-chip">Stash: <strong>' + p.backpack_stash.length + '/' + p.max_stash_size + '</strong></div>' +
+    '<div class="stat-chip">Game Day: <strong>' + day + '</strong></div>' +
+    '<div class="stat-chip">Pool Cap: <strong>' + cap + '</strong></div>' +
+    '<div class="stat-chip">Discovered: <strong>' + p.compendium_discovered.length + '</strong></div>' +
+    '</div>' +
+    '<div class="heat-meter"><div class="heat-fill" style="width:' + p.global_heat + '%"></div></div>' +
+    '</div>' +
+    '<div class="panel-card">' +
+    '<div class="panel-title">GLOBAL ACTIVITY LOG</div>' +
+    '<div class="activity-log" id="activityLog">' +
+    GAME_STATE.global_activity_log.map(function(e){ return '<div class="log-entry">' + e + '</div>'; }).join('') +
+    '</div></div>' +
+    '<div class="panel-card">' +
+    '<div class="panel-title">BACKPACK</div>' +
+    '<div class="card-grid" id="dashBackpack">' +
+    (p.backpack_stash.length ? p.backpack_stash.map(function(i){ return renderItemCardHTML(i, true); }).join('') : '<div class="empty-state">Backpack empty — hit the Pack Lottery.</div>') +
+    '</div></div>';
+}
+
+function renderWarehouse(){
+  const p = getActivePlayer();
+  let baysHTML = p.warehouse_bays.map(function(bay){
+    const crop = bay.current_crop;
+    return '<div class="grow-bay">' +
+      '<div class="bay-header"><span class="bay-title">BAY ' + bay.bay_id + '</span>' +
+      '<span>Lamps L' + bay.lamps_level + ' | Soil L' + bay.soil_level + '</span></div>' +
+      (crop ? '<div class="card-name">' + crop.name + '</div><div class="progress-bar"><div class="progress-fill" style="width:' + bay.grow_progress + '%"></div></div><div class="card-stats">' + Math.round(bay.grow_progress) + '% grown</div>' +
+      (bay.grow_progress >= 100 ? '<button class="action-btn harvest-btn" data-bay="' + bay.bay_id + '">HARVEST</button>' : '') :
+      '<div class="empty-state">No crop planted</div>') +
+      '<div class="upgrade-row">' +
+      '<button class="action-btn upgrade-btn" data-bay="' + bay.bay_id + '" data-type="lamps">LIGHT ARRAY ($' + (300 * bay.lamps_level) + ')</button>' +
+      '<button class="action-btn upgrade-btn" data-bay="' + bay.bay_id + '" data-type="soil">HYDRO-SOIL ($' + (400 * bay.soil_level) + ')</button>' +
+      '</div>' +
+      (!crop ? '<select class="recipient-select plant-select" data-bay="' + bay.bay_id + '"><option value="">Plant strain...</option>' +
+      p.backpack_stash.filter(function(i){ return i.type === 'strain'; }).map(function(i){ return '<option value="' + i.id + '">' + i.name + '</option>'; }).join('') +
+      '</select><button class="action-btn plant-btn" data-bay="' + bay.bay_id + '">PLANT</button>' : '') +
+      '</div>';
+  }).join('');
+  document.getElementById('view-warehouse').innerHTML =
+    '<div class="panel-card"><div class="panel-title">GROW GRID — WAREHOUSE</div>' +
+    '<div class="grow-bay-grid">' + baysHTML + '</div></div>' +
+    '<div class="panel-card"><div class="panel-title">EVOLVE BUD</div>' +
+    '<p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">Select a strain from backpack ($1,500 — +10 Potency, +10 Flavor). ≥185 triggers Voidline Masterwork mutation.</p>' +
+    '<div class="card-grid" id="evolveGrid">' +
+    p.backpack_stash.filter(function(i){ return i.type === 'strain'; }).map(function(i){
+      return renderItemCardHTML(i, true) + '<button class="action-btn evolve-btn" data-id="' + i.id + '">EVOLVE ($1,500)</button>';
+    }).join('') || '<div class="empty-state">No strains available.</div>' +
+    '</div></div>';
+}
+
+function renderPacks(){
+  const p = getActivePlayer();
+  document.getElementById('view-packs').innerHTML =
+    '<div class="panel-card"><div class="panel-title">SYSTEM PACK LOTTERY</div>' +
+    '<div class="stat-row">' +
+    '<div class="stat-chip">Balance: <strong>$' + p.cash + '</strong></div>' +
+    '<div class="stat-chip">Luck: <strong>' + p.luck_multiplier.toFixed(2) + 'x</strong></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">' +
+    '<button class="action-btn pack-btn" data-type="standard">STANDARD PACK — $500<br><small>70% Common | 20% Rare | 9.99% Epic | 0.01% Mythic</small></button>' +
+    '<button class="action-btn pack-btn" data-type="elite">ELITE CRATE — $2,500<br><small>99% Epic | 1% Mythic</small></button>' +
+    '</div></div>' +
+    '<div class="panel-card"><div class="panel-title">REPRODUCTIVE LAB STATS</div>' +
+    '<div class="stat-row">' +
+    '<div class="stat-chip">Active Pool: <strong>' + GAME_STATE.strain_pool.length + ' strains</strong></div>' +
+    '<div class="stat-chip">Boost Matrix: <strong>' + GAME_STATE.boost_pool.length + ' variants</strong></div>' +
+    '<div class="stat-chip">Day Version: <strong>V' + calculateGameDay() + '</strong></div>' +
+    '</div></div>';
+}
+
+function renderHideout(){
+  const p = getActivePlayer();
+  const others = ['Aden','Edward','Jamie'].filter(function(id){ return id !== p.identity; });
+  const tradeItem = GAME_STATE.trade_slot_item;
+  let sourceItems = [];
+  if(GAME_STATE.trade_view_matrix === 'equipped'){
+    ['helmet','shirt','legs','boots'].forEach(function(slot){
+      if(p.equipped[slot]) sourceItems.push({ ...p.equipped[slot], _slot: slot, _source: 'equipped' });
+    });
+  } else {
+    sourceItems = p.backpack_stash.map(function(i){ return { ...i, _source: 'backpack' }; });
+  }
+  document.getElementById('view-hideout').innerHTML =
+    '<div class="panel-card"><div class="panel-title">TACTICAL TRADING TERMINAL</div>' +
+    '<button class="action-btn view-matrix-toggle" id="swapMatrixBtn">SWAP ACTIVE VIEW MATRIX (' + (GAME_STATE.trade_view_matrix === 'backpack' ? 'BACKPACK' : 'EQUIPPED') + ')</button>' +
+    '<div class="trade-layout">' +
+    '<div><div class="panel-title" style="font-size:.85rem">YOUR ' + (GAME_STATE.trade_view_matrix === 'backpack' ? 'BACKPACK' : 'EQUIPPED') + '</div>' +
+    '<div class="card-grid" id="tradeSourceGrid">' +
+    (sourceItems.length ? sourceItems.map(function(i){
+      return '<div class="trade-source-item" data-id="' + i.id + '" data-source="' + i._source + '">' + renderItemCardHTML(i, true) + '</div>';
+    }).join('') : '<div class="empty-state">No items in this view.</div>') +
+    '</div></div>' +
+    '<div><div class="panel-title" style="font-size:.85rem">TRADE BLOCK</div>' +
+    '<div class="trade-slot ' + (tradeItem ? 'filled' : '') + '" id="tradeSlot">' +
+    (tradeItem ? renderItemCardHTML(tradeItem, false) : '<span class="empty-state">Drop item here</span>') +
+    '</div>' +
+    '<input type="number" class="cash-input" id="tradeCashInput" placeholder="Cash offer" value="' + GAME_STATE.trade_cash_offer + '" min="0">' +
+    '<select class="recipient-select" id="tradeRecipient">' +
+    others.map(function(o){ return '<option value="' + o + '"' + (GAME_STATE.trade_recipient === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') +
+    '</select>' +
+    '<div class="trade-controls">' +
+    '<button class="action-btn" id="executeSwapBtn">EXECUTE SWAP</button>' +
+    '<button class="action-btn" id="clearTradeBtn">CLEAR SLOT</button>' +
+    '</div></div>' +
+    '<div class="karlach-panel" id="karlachPanel">' +
+    '<svg class="karlach-avatar" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#4a1010" stroke="#ff2200" stroke-width="2"/><path d="M20 28c0-6 5-10 12-10s12 4 12 10" stroke="#ff6644" stroke-width="2" fill="none"/><circle cx="26" cy="30" r="3" fill="#ffaa00"/><circle cx="38" cy="30" r="3" fill="#ffaa00"/><path d="M24 42 Q32 48 40 42" stroke="#ff4422" stroke-width="2" fill="none"/></svg>' +
+    '<div class="karlach-name">KARLACH — Valuation Engine</div>' +
+    '<div class="karlach-dialogue" id="karlachDialogue">Select an item and make an offer, choom.</div>' +
+    '</div></div></div>' +
+    '<div class="panel-card"><div class="panel-title">EQUIPMENT SLOTS</div>' +
+    '<div class="equipped-slots">' +
+    ['helmet','shirt','legs','boots'].map(function(slot){
+      const eq = p.equipped[slot];
+      return '<div class="equip-slot ' + (eq ? 'filled' : '') + '" data-slot="' + slot + '">' +
+        slot.toUpperCase() + (eq ? '<br>' + eq.name.substring(0,20) : '<br>Empty') +
+        (eq && GAME_STATE.trade_view_matrix === 'backpack' ? '<br><button class="action-btn equip-off-btn" data-id="' + eq.id + '" data-slot="' + slot + '" style="font-size:.65rem;padding:4px 8px;margin-top:4px">UNEQUIP</button>' : '') +
+        '</div>';
+    }).join('') +
+    '</div><p style="font-size:.75rem;color:var(--muted)">Click backpack item to equip. Matrix toggle lets you trade equipped gear directly.</p></div>';
+  evaluateKarlach(p.identity, tradeItem, GAME_STATE.trade_cash_offer);
+}
+
+function renderCompendium(){
+  const p = getActivePlayer();
+  const allDiscovered = p.compendium_discovered;
+  document.getElementById('view-compendium').innerHTML =
+    '<div class="panel-card"><div class="panel-title">COMPENDIUM REGISTER — ' + allDiscovered.length + ' ENTRIES</div>' +
+    '<div class="card-grid">' +
+    (allDiscovered.length ? allDiscovered.map(function(key){
+      const item = p.backpack_stash.find(function(i){ return (i.name + '_' + i.type) === key; }) ||
+        Object.values(p.equipped).find(function(i){ return i && (i.name + '_' + i.type) === key; });
+      if(item) return renderItemCardHTML(item, false);
+      return '<div class="item-card"><div class="card-name">' + key.replace(/_/,' ') + '</div><div class="card-stats">Archived</div></div>';
+    }).join('') : '<div class="empty-state">No discoveries yet. Open packs and grow strains.</div>') +
+    '</div></div>';
+}
+
+function renderStreet(){
+  const p = getActivePlayer();
+  document.getElementById('view-street').innerHTML =
+    '<div class="panel-card"><div class="panel-title">STREET CONSOLE</div>' +
+    '<p style="font-size:.85rem;color:var(--muted);margin-bottom:12px">Push product on the block. Higher stakes = more heat. At 100% heat, cop bust triggers.</p>' +
+    '<div class="heat-meter"><div class="heat-fill" style="width:' + p.global_heat + '%"></div></div>' +
+    '<div class="stat-chip" style="margin-bottom:12px">Current Heat: <strong>' + p.global_heat + '%</strong></div>' +
+    '<div class="street-console">' +
+    '<button class="action-btn street-btn" data-amt="100">SMALL PUSH — $100</button>' +
+    '<button class="action-btn street-btn" data-amt="500">MID PUSH — $500</button>' +
+    '<button class="action-btn street-btn" data-amt="1000">BIG PUSH — $1,000</button>' +
+    '<button class="action-btn street-btn" data-amt="2500">EMPIRE PUSH — $2,500</button>' +
+    '</div></div>';
+}
+
+function renderPlayerSelector(){
+  const el = document.getElementById('playerSelector');
+  if(cloudPlayerLocked){
+    el.classList.add('locked');
+    el.innerHTML = '<button class="player-btn active" data-player="' + GAME_STATE.active_player + '">' + GAME_STATE.active_player + '</button>';
+    return;
+  }
+  el.classList.remove('locked');
+  el.innerHTML = ['Aden','Edward','Jamie'].map(function(id){
+    return '<button class="player-btn ' + (GAME_STATE.active_player === id ? 'active' : '') + '" data-player="' + id + '">' + id + '</button>';
+  }).join('');
+}
+
+function renderAll(){
+  applyTheme(GAME_STATE.active_player);
+  renderPlayerSelector();
+  renderDashboard();
+  renderWarehouse();
+  renderPacks();
+  renderHideout();
+  renderCompendium();
+  renderStreet();
+  bindEvents();
+  if(!isApplyingRemote) cloudSyncPush(false);
+}
+
+function bindEvents(){
+  if(!cloudPlayerLocked){
+    document.querySelectorAll('.player-btn').forEach(function(btn){
+      btn.onclick = function(){
+        GAME_STATE.active_player = btn.dataset.player;
+        renderAll();
+      };
+    });
+  }
+  document.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.onclick = function(){
+      document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.view-panel').forEach(function(v){ v.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      GAME_STATE.active_view = btn.dataset.view;
+    };
+  });
+  const focusBtn = document.getElementById('focusToggle');
+  if(focusBtn){
+    focusBtn.onclick = function(){
+      const p = GAME_STATE.players.Jamie;
+      p.minimal_view_active = !p.minimal_view_active;
+      applyTheme(GAME_STATE.active_player);
+      logActivity('Jamie Focus Engine: ' + (p.minimal_view_active ? 'MINIMAL' : 'FULL'));
+    };
+  }
+  document.querySelectorAll('.pack-btn').forEach(function(btn){
+    btn.onclick = function(){ openPack(GAME_STATE.active_player, btn.dataset.type); };
+  });
+  document.querySelectorAll('.upgrade-btn').forEach(function(btn){
+    btn.onclick = function(){ upgradeBay(GAME_STATE.active_player, parseInt(btn.dataset.bay), btn.dataset.type); };
+  });
+  document.querySelectorAll('.harvest-btn').forEach(function(btn){
+    btn.onclick = function(){ harvestBay(GAME_STATE.active_player, parseInt(btn.dataset.bay)); };
+  });
+  document.querySelectorAll('.plant-btn').forEach(function(btn){
+    btn.onclick = function(){
+      const sel = document.querySelector('.plant-select[data-bay="' + btn.dataset.bay + '"]');
+      if(sel && sel.value) plantCrop(GAME_STATE.active_player, parseInt(btn.dataset.bay), sel.value);
+    };
+  });
+  document.querySelectorAll('.evolve-btn').forEach(function(btn){
+    btn.onclick = function(){ evolveBud(GAME_STATE.active_player, btn.dataset.id); };
+  });
+  document.querySelectorAll('.street-btn').forEach(function(btn){
+    btn.onclick = function(){ streetTransaction(parseInt(btn.dataset.amt)); };
+  });
+  const swapMatrixBtn = document.getElementById('swapMatrixBtn');
+  if(swapMatrixBtn){
+    swapMatrixBtn.onclick = function(){
+      GAME_STATE.trade_view_matrix = GAME_STATE.trade_view_matrix === 'backpack' ? 'equipped' : 'backpack';
+      GAME_STATE.trade_slot_item = null;
+      renderHideout();
+      bindEvents();
+    };
+  }
+  document.querySelectorAll('.trade-source-item').forEach(function(el){
+    el.onclick = function(){
+      const id = el.dataset.id;
+      const p = getActivePlayer();
+      let item = null;
+      if(GAME_STATE.trade_view_matrix === 'equipped'){
+        for(const slot of ['helmet','shirt','legs','boots']){
+          if(p.equipped[slot] && p.equipped[slot].id === id){ item = p.equipped[slot]; break; }
+        }
+      } else {
+        item = p.backpack_stash.find(function(i){ return i.id === id; });
+      }
+      if(item){
+        GAME_STATE.trade_slot_item = item;
+        GAME_STATE.trade_cash_offer = parseInt(document.getElementById('tradeCashInput').value) || 0;
+        renderHideout();
+        bindEvents();
+      }
+    };
+  });
+  const cashInput = document.getElementById('tradeCashInput');
+  if(cashInput){
+    cashInput.oninput = function(){
+      GAME_STATE.trade_cash_offer = parseInt(cashInput.value) || 0;
+      evaluateKarlach(GAME_STATE.active_player, GAME_STATE.trade_slot_item, GAME_STATE.trade_cash_offer);
+    };
+  }
+  const recipientSel = document.getElementById('tradeRecipient');
+  if(recipientSel){
+    recipientSel.onchange = function(){ GAME_STATE.trade_recipient = recipientSel.value; };
+  }
+  const execBtn = document.getElementById('executeSwapBtn');
+  if(execBtn) execBtn.onclick = executeSwap;
+  const clearBtn = document.getElementById('clearTradeBtn');
+  if(clearBtn){
+    clearBtn.onclick = function(){
+      GAME_STATE.trade_slot_item = null;
+      renderHideout();
+      bindEvents();
+    };
+  }
+  document.getElementById('bribeBtn').onclick = resolveBribe;
+  document.getElementById('surrenderBtn').onclick = resolveSurrender;
+  document.getElementById('confirmUpdateBtn').onclick = commitUpdate;
+  document.querySelectorAll('#dashBackpack .item-card, #evolveGrid .item-card').forEach(function(card){
+    card.onclick = function(e){
+      if(e.target.classList.contains('evolve-btn')) return;
+      const id = card.dataset.itemId;
+      const p = getActivePlayer();
+      const item = p.backpack_stash.find(function(i){ return i.id === id; });
+      if(!item) return;
+      const slots = ['helmet','shirt','legs','boots'];
+      const emptySlot = slots.find(function(s){ return !p.equipped[s]; });
+      if(emptySlot && item.type === 'boost'){
+        p.backpack_stash = p.backpack_stash.filter(function(i){ return i.id !== id; });
+        p.equipped[emptySlot] = item;
+        logActivity(p.identity + ' equipped ' + item.name + ' to ' + emptySlot);
+        renderAll();
+      }
+    };
+  });
+  initCardTilt();
+}
+
+function initCardTilt(){
+  if(GAME_STATE.players.Jamie.minimal_view_active && GAME_STATE.active_player === 'Jamie') return;
+  document.querySelectorAll('.card-3d').forEach(function(card){
+    card.onmousemove = function(e){
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      card.style.setProperty('--tilt-x', (-y * 12) + 'deg');
+      card.style.setProperty('--tilt-y', (x * 12) + 'deg');
+      const sheen = card.querySelector('.card-sheen');
+      if(sheen){
+        sheen.style.backgroundPosition = ((x + 0.5) * 100) + '% ' + ((y + 0.5) * 100) + '%';
+      }
+    };
+    card.onmouseleave = function(){
+      card.style.setProperty('--tilt-x', '0deg');
+      card.style.setProperty('--tilt-y', '0deg');
+    };
+  });
+}
+
+function tickCountdown(){
+  const ms = getTimeUntilNextDrop();
+  const timerEl = document.getElementById('timerDigits');
+  const container = document.getElementById('countdownTimer');
+  if(timerEl) timerEl.textContent = formatCountdown(ms);
+  const hoursLeft = ms / (1000 * 60 * 60);
+  if(hoursLeft < 4 && hoursLeft > 0){
+    container.classList.add('urgent');
+    if(!container.dataset.warned){
+      container.dataset.warned = '1';
+      logActivity('URGENT: Procedural drop in less than 4 hours!', true);
+    }
+  } else {
+    container.classList.remove('urgent');
+    delete container.dataset.warned;
+  }
+  if(ms <= 1000 && !GAME_STATE.update_pending){
+    triggerDailyUpdate();
+  }
+  if(ms > 60000 && updateTriggeredThisCycle && !GAME_STATE.update_pending){
+    updateTriggeredThisCycle = false;
+  }
+}
+
+function initEngine(){
+  parseUrlParams();
+  cloudInit().then(function(){
+    logActivity('Engine boot — Day ' + calculateGameDay() + ', ' + GAME_STATE.strain_pool.length + ' strains, ' + GAME_STATE.boost_pool.length + ' boosts online.');
+    renderAll();
+    startCloudLoop();
+  });
+  setInterval(tickCountdown, 1000);
+  tickCountdown();
+}
+
+document.addEventListener('DOMContentLoaded', initEngine);
+})();
+</script>
+</body>
+</html>
