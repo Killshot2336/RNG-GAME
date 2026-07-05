@@ -4,6 +4,9 @@ import { BottomNav } from '@/components/BottomNav'
 import { PlayerCardHUD } from '@/components/PlayerCardHUD'
 import { PlayerProfileModal } from '@/components/PlayerProfileModal'
 import { RealityWarpOverlay, SettingsPanel } from '@/components/RealityWarpOverlay'
+import { DialogueBubble } from '@/components/DialogueBubble'
+import { PackRevealOverlay } from '@/components/PackRevealOverlay'
+import { TransactionBeam } from '@/components/TransactionBeam'
 
 interface AppShellProps {
   children: ReactNode
@@ -15,7 +18,6 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className={`h-full w-full flex items-center justify-center ${realityWarp ? 'reality-warp-active' : ''}`}>
-      {/* Desktop ambient glow behind phone frame */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
@@ -23,16 +25,13 @@ export function AppShell({ children }: AppShellProps) {
         }}
       />
 
-      {/* Phone frame container */}
       <div
-        className="relative void-bg flex flex-col w-full h-full sm:h-[92vh] sm:max-h-[900px] sm:max-w-xl sm:rounded-[2rem] overflow-hidden"
+        className="relative void-bg flex flex-col w-full max-w-md mx-auto min-h-screen bg-[#0C011A] text-white shadow-[0_0_50px_rgba(61,0,102,0.6)] border-x border-[#3D0066] overflow-hidden justify-between"
         style={{
-          boxShadow: '0 0 80px rgba(168, 85, 247, 0.2), 0 0 0 1px rgba(61, 0, 102, 0.5)',
           transition: 'filter 0.35s ease',
           filter: backdropDimmed ? 'brightness(0.4)' : undefined,
         }}
       >
-        {/* Top HUD bar */}
         <header className="relative z-30 shrink-0 flex items-center justify-between px-4 py-3">
           <div className="flex flex-col">
             <span
@@ -51,7 +50,6 @@ export function AppShell({ children }: AppShellProps) {
           <PlayerCardHUD />
         </header>
 
-        {/* Main scrollable content */}
         <main className="relative z-20 flex-1 overflow-y-auto overflow-x-hidden void-scroll px-4 pb-2">
           {children}
         </main>
@@ -59,6 +57,9 @@ export function AppShell({ children }: AppShellProps) {
         <BottomNav />
 
         <RealityWarpOverlay />
+        <DialogueBubble />
+        <PackRevealOverlay />
+        <TransactionBeam />
       </div>
 
       <PlayerProfileModal />

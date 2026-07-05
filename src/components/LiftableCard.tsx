@@ -107,14 +107,14 @@ export function LiftableCard({ id, children, className = '', onUpgrade, onTrade 
                 className="game-btn game-btn-green flex-1"
                 onClick={(e) => { e.stopPropagation(); onUpgrade?.() }}
               >
-                🔋 UPGRADE
+                🔋 UPGRADE CARD
               </button>
               <button
                 type="button"
                 className="game-btn flex-1"
                 onClick={(e) => { e.stopPropagation(); onTrade?.() }}
               >
-                🤝 TRADE
+                🤝 TRADE-GIFT
               </button>
             </div>
           )}

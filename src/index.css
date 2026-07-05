@@ -6,9 +6,9 @@
   --color-panel: #1F0033;
   --color-neon-purple: #3D0066;
   --color-neon-glow: #A855F7;
-  --color-radio-green: #39FF14;
-  --color-radio-green-dim: #22C55E;
-  --color-cyber-cyan: #00F0FF;
+  --color-radio-green: #22C55E;
+  --color-neon-pink: #EC4899;
+  --color-cyber-cyan: #06B6D4;
   --color-hud-glass: rgba(31, 0, 51, 0.72);
   --color-text-primary: #F3E8FF;
   --color-text-muted: #A78BFA;
@@ -306,4 +306,129 @@ html, body, #root {
   border-top-color: var(--color-radio-green);
   border-right-color: var(--color-neon-glow);
   animation: var(--animate-avatar-spin);
+}
+
+/* Conveyor belt */
+@keyframes conveyor-scroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+@keyframes conveyor-item-move {
+  0% { left: -10%; }
+  100% { left: 110%; }
+}
+
+.conveyor-belt {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(61, 0, 102, 0.5);
+}
+
+.conveyor-track {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(168, 85, 247, 0.15) 0px,
+    rgba(168, 85, 247, 0.15) 8px,
+    rgba(57, 255, 20, 0.08) 8px,
+    rgba(57, 255, 20, 0.08) 16px
+  );
+  animation: conveyor-scroll 1.2s linear infinite;
+}
+
+.conveyor-item {
+  animation: conveyor-item-move 3s linear infinite;
+}
+
+/* Capsule cloner */
+@keyframes hue-shift {
+  0% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(180deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes bubble-rise {
+  0% { transform: translateY(0) scale(1); opacity: 0.6; }
+  100% { transform: translateY(-80px) scale(0.3); opacity: 0; }
+}
+
+.clone-active-card {
+  animation: hue-shift 4s ease-in-out infinite;
+}
+
+.capsule-cloner .clone-bubbles::before,
+.capsule-cloner .clone-bubbles::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(57, 255, 20, 0.3);
+  border: 1px solid rgba(57, 255, 20, 0.5);
+  bottom: 20%;
+  animation: bubble-rise 2.5s ease-in-out infinite;
+}
+
+.capsule-cloner .clone-bubbles::before { left: 30%; animation-delay: 0s; }
+.capsule-cloner .clone-bubbles::after { left: 65%; animation-delay: 1.2s; }
+
+/* Holographic grid */
+.holographic-grid-lines {
+  background-image:
+    linear-gradient(rgba(168, 85, 247, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168, 85, 247, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.holographic-sheen {
+  background: linear-gradient(
+    135deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 70%
+  );
+  animation: shimmer-slide 4s ease-in-out infinite;
+}
+
+/* Pack reveal */
+@keyframes pack-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.pack-reveal-card {
+  animation: pack-pulse 2s ease-in-out infinite;
+}
+
+.pack-reveal-shimmer {
+  background: linear-gradient(120deg, transparent 30%, rgba(168, 85, 247, 0.2) 50%, transparent 70%);
+  animation: shimmer-slide 2s ease-in-out infinite;
+}
+
+/* Transaction beam */
+@keyframes beam-flash {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes beam-sweep {
+  0% { transform: rotate(-25deg) scaleY(0.3); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: rotate(-25deg) scaleY(1.2); opacity: 0; }
+}
+
+.transaction-beam-line {
+  width: 4px;
+  height: 70%;
+  background: linear-gradient(180deg, transparent, #22C55E, #EC4899, #06B6D4, transparent);
+  box-shadow: 0 0 30px rgba(57, 255, 20, 0.6), 0 0 60px rgba(236, 72, 153, 0.3);
+  animation: beam-sweep 1.2s ease-out infinite, beam-flash 0.6s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.game-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
 }
