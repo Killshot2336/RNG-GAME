@@ -5,9 +5,9 @@
   "description": "Voidline Galaxy Farm — AAA space-cyberpunk mobile game shell",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "dev": "vite --config legacy/react-build/vite.config.ts 2>nul || npx serve .",
+    "build": "node scripts/copy-static.mjs",
+    "preview": "npx serve dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
