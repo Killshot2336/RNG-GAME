@@ -215,6 +215,62 @@
     .store-slot.buyable:hover { outline: 1px solid var(--green); }
     .store-slot.disabled { opacity: 0.4; }
 
+    .hub-rocket-btn {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 2.75rem; height: 2.75rem; border-radius: 50%; border: 2px solid rgba(57,255,20,0.5);
+      background: linear-gradient(135deg, rgba(61,0,102,0.95), rgba(12,1,26,0.95));
+      box-shadow: 0 0 20px rgba(57,255,20,0.35); cursor: pointer; z-index: 35;
+      display: flex; align-items: center; justify-content: center; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .hub-rocket-btn.active { border-color: var(--cyan); box-shadow: 0 0 24px rgba(6,182,212,0.5); transform: translate(-50%, -50%) scale(1.08); }
+    .hub-rocket-btn:active { transform: translate(-50%, -50%) scale(0.95); }
+    #hud-header { position: relative; }
+    .boss-arena { animation: cosmic-float 6s ease-in-out infinite; }
+    .rocket-shaft {
+      background: linear-gradient(180deg, rgba(12,1,26,0.9), rgba(61,0,102,0.4));
+      border: 1px solid rgba(168,85,247,0.4); border-radius: 1rem; padding: 1rem;
+      min-height: 200px; position: relative; overflow: hidden;
+    }
+    .rocket-shaft::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(180deg, rgba(57,255,20,0.06) 0 24px, transparent 24px 48px);
+    }
+    .binder-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+    .cr-card {
+      border: none; background: none; padding: 0; cursor: pointer; text-align: center;
+      transition: transform 0.25s ease; animation: cosmic-float 4s ease-in-out infinite;
+    }
+    .cr-card:hover { transform: translateY(-6px) scale(1.03); }
+    .cr-card.selected .cr-card-frame { outline: 2px solid var(--green); }
+    .cr-card-frame {
+      border-radius: 0.75rem; padding: 0.5rem; position: relative; overflow: hidden;
+      background: linear-gradient(180deg, rgba(31,0,51,0.9), rgba(12,1,26,0.95));
+      border: 2px solid var(--neon-purple); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .cr-card-glow-dust { border-color: #6b7280; box-shadow: 0 0 12px #6b728055; }
+    .cr-card-glow-pulse { border-color: #38bdf8; box-shadow: 0 0 16px #38bdf866; }
+    .cr-card-glow-bloom { border-color: #2dd4bf; box-shadow: 0 0 18px #2dd4bf66; }
+    .cr-card-glow-legend { border-color: #8b5cf6; box-shadow: 0 0 22px #8b5cf688; }
+    .cr-card-glow-mythic { border-color: #ffd700; box-shadow: 0 0 28px #ffd70088; }
+    .cr-card-glow-voidgod { border-color: #fff; box-shadow: 0 0 36px #ffffffaa; animation: neon-pulse-green 1.5s ease-in-out infinite; }
+    .cr-card-art { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; margin: 0 auto; }
+    .cr-card-name {
+      font-family: var(--font-display); font-size: 0.5rem; letter-spacing: 0.05em;
+      margin-top: 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cr-card-rarity { font-family: var(--font-mono); font-size: 0.4rem; margin-top: 0.15rem; }
+    .coop-card { border-left: 3px solid var(--green); }
+    .casino-table { background: radial-gradient(ellipse at center, rgba(20,80,20,0.25), rgba(12,1,26,0.9)); border-radius: 1rem; border: 1px solid rgba(57,255,20,0.3); }
+    .slot-machine { max-width: 20rem; }
+    .screen-shake { animation: screen-shake 0.4s ease; }
+    @keyframes screen-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+    .casino-toast {
+      position: fixed; top: 5rem; left: 50%; transform: translateX(-50%); z-index: 9200;
+      padding: 0.5rem 1rem; border-radius: 0.5rem; background: rgba(236,72,153,0.9);
+      font-family: var(--font-mono); font-size: 0.65rem; pointer-events: none;
+    }
+    .strain-bud-img { display: inline-block; vertical-align: middle; }
+
     /* Desktop / large screens — wider playable frame, mouse-friendly */
     @media (min-width: 640px) {
       #voidline-app { align-items: center; padding: 1rem; }
@@ -274,9 +330,11 @@
       </header>
       <main id="screen-root"></main>
       <nav id="bottom-dock">
+        <button type="button" class="nav-btn active" data-tab="battle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5 2 7L12 17l-6.5 3.5 2-7L2 9h7z"/></svg>FIGHT</button>
         <button type="button" class="nav-btn" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6h15l-1.5 9H7.5L6 6z"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>SHOP</button>
-        <button type="button" class="nav-btn active" data-tab="farm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>FARM</button>
-        <button type="button" class="nav-btn" data-tab="index"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>INDEX</button>
+        <button type="button" class="nav-btn" data-tab="index"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BOOK</button>
+        <button type="button" class="nav-btn" data-tab="coop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M14 20c0-2 2-3.5 4-3.5"/></svg>CO-OP</button>
+        <button type="button" class="nav-btn" data-tab="casino"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>CASINO</button>
       </nav>
       <div id="overlay-reality-warp" class="reality-warp-overlay"></div>
       <div id="overlay-dialogue" class="dialogue-bubble"></div>
@@ -288,6 +346,6 @@
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel p-4" id="settings-panel"></div></div>
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
   </div>
-  <script src="game.js?v=5"></script>
+  <script src="game.js?v=7"></script>
 </body>
 </html>

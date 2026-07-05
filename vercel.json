@@ -6,7 +6,8 @@
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/game.js", "destination": "/game.js" },
     { "source": "/voidline-icon.svg", "destination": "/voidline-icon.svg" },
-    { "source": "/((?!api/|game\\.js|voidline-icon\\.svg).*)", "destination": "/index.html" }
+    { "source": "/public/(.*)", "destination": "/public/$1" },
+    { "source": "/((?!api/|game\\.js|voidline-icon\\.svg|public/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
