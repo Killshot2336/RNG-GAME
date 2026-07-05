@@ -5,6 +5,9 @@
   var SAVE_PREFIX = 'voidline_galaxy_farm_v2_';
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
+  var APP_VERSION = '3';
+  var VERSION_KEY = 'voidline_app_version';
+  var SAVE_VERSION = 3;
   var PORTAL_BASE_COST = 25000;
   var PLAYERS = [
     { id: 'aden', label: 'Aden', avatar: '🌌', defaultName: 'Aden' },
@@ -40,11 +43,18 @@
     {id:'radar',name:'Cosmic Radar',level:0,maxLevel:10,baseCost:22000,scanRateBonus:0.12},
     {id:'shield',name:'Shield Insulation',level:0,maxLevel:10,baseCost:18000,scanRateBonus:0.06},
   ];
-  var PERSIST = ['cash','sp','empireLevel','empireXp','name','avatar','badgeIds','storefrontSlots','strains','inventory','factoryFloors','sectorUpgrades','blitzUpgrades','blitzEndsAt','purchasedBlitzIds','counterPrices','cloneJob','focusedStrainId','farmSubTab','nextPortalNum'];
+  var PERSIST = ['saveVersion','cash','sp','empireLevel','empireXp','name','avatar','badgeIds','storefrontSlots','strains','inventory','factoryFloors','sectorUpgrades','blitzUpgrades','blitzEndsAt','purchasedBlitzIds','counterPrices','cloneJob','focusedStrainId','farmSubTab','nextPortalNum'];
 
   // #region agent log
   function dbg(loc, msg, data, hyp) {
-    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2fa0f7'},body:JSON.stringify({sessionId:'2fa0f7',location:loc,message:msg,data:data||{},hypothesisId:hyp||'',timestamp:Date.now()})}).catch(function(){});
+    var entry = {sessionId:'2fa0f7',location:loc,message:msg,data:data||{},hypothesisId:hyp||'',timestamp:Date.now()};
+    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2fa0f7'},body:JSON.stringify(entry)}).catch(function(){});
+    try {
+      var ring = JSON.parse(localStorage.getItem('vl_debug_ring') || '[]');
+      ring.push(entry);
+      if (ring.length > 40) ring = ring.slice(-40);
+      localStorage.setItem('vl_debug_ring', JSON.stringify(ring));
+    } catch (e) {}
   }
   // #endregion
 
@@ -74,7 +84,7 @@
   var portalNames=['Portal Alpha','Portal Beta','Portal Gamma','Portal Delta','Portal Epsilon','Portal Zeta'];
 
   function freshState(pid){var p=playerDef(pid);return{
-    playerId:pid,cash:250000,sp:100,empireLevel:1,empireXp:0,name:p.defaultName,avatar:p.avatar,badgeIds:[null,null,null],
+    playerId:pid,saveVersion:SAVE_VERSION,cash:250000,sp:100,empireLevel:1,empireXp:0,name:p.defaultName,avatar:p.avatar,badgeIds:[null,null,null],
     storefrontSlots:emptySF(),strains:[],inventory:STORE.map(function(i){return Object.assign({},i,{owned:0});}),
     factoryFloors:[],sectorUpgrades:clone(SECTORS),blitzUpgrades:clone(BLITZ),
     blitzEndsAt:Date.now()+BLITZ_MS,purchasedBlitzIds:[],counterPrices:{},
@@ -83,14 +93,34 @@
   };}
 
   function readPlayerSave(pid){try{var r=localStorage.getItem(saveKey(pid));if(!r)return null;return JSON.parse(r);}catch(e){return null;}}
-  function saveGame(){if(!G||!activePlayerId)return;try{var p={playerId:activePlayerId};PERSIST.forEach(function(k){p[k]=G[k];});localStorage.setItem(saveKey(activePlayerId),JSON.stringify(p));}catch(e){}}
+  function saveGame(){if(!G||!activePlayerId)return;try{G.saveVersion=SAVE_VERSION;var p={playerId:activePlayerId,saveVersion:SAVE_VERSION};PERSIST.forEach(function(k){p[k]=G[k];});localStorage.setItem(saveKey(activePlayerId),JSON.stringify(p));}catch(e){}}
+  function sanitizeSave(pid){
+    delete G.planetOffers;
+    delete G.profileViewIndex;
+    var p=playerDef(pid);
+    if(G.name==='VoidPilot_Aden'||G.name==='VoidPilot')G.name=p.defaultName;
+    if(!G.saveVersion||G.saveVersion<SAVE_VERSION){
+      var hadLegacyFloors=(G.factoryFloors||[]).length>=3&&!G.nextPortalNum;
+      if(!G.saveVersion||hadLegacyFloors||G.saveVersion<2){
+        G.factoryFloors=[];
+        G.nextPortalNum=1;
+      }
+      G.saveVersion=SAVE_VERSION;
+      // #region agent log
+      dbg('game.js:sanitizeSave','migrated save',{playerId:pid,hadLegacyFloors:hadLegacyFloors,floors:(G.factoryFloors||[]).length,empireLevel:G.empireLevel},'H2');
+      // #endregion
+    }
+  }
   function loadGame(pid){
     var d=readPlayerSave(pid);
-    if(!d&&pid==='aden'){try{var leg=localStorage.getItem(LEGACY_SAVE);if(leg)d=JSON.parse(leg);}catch(e){}}
-    G=d?Object.assign(freshState(pid),d,{playerId:pid,factoryFloors:d.factoryFloors||[],nextPortalNum:d.nextPortalNum||((d.factoryFloors||[]).length+1)}):freshState(pid);
+    var fromLegacy=false;
+    if(!d&&pid==='aden'){try{var leg=localStorage.getItem(LEGACY_SAVE);if(leg){d=JSON.parse(leg);fromLegacy=true;}}catch(e){}}
+    G=d?Object.assign(freshState(pid),d,{playerId:pid}):freshState(pid);
     if(!G.factoryFloors)G.factoryFloors=[];
+    if(!G.nextPortalNum)G.nextPortalNum=(G.factoryFloors.length||0)+1;
+    sanitizeSave(pid);
     // #region agent log
-    dbg('game.js:loadGame','loaded player save',{playerId:pid,empireLevel:G.empireLevel,name:G.name,saveKey:saveKey(pid),floorCount:G.factoryFloors.length},'H1');
+    dbg('game.js:loadGame','loaded player save',{playerId:pid,empireLevel:G.empireLevel,name:G.name,fromLegacy:fromLegacy,floorCount:G.factoryFloors.length,saveVersion:G.saveVersion},'H1');
     // #endregion
   }
 
@@ -271,7 +301,6 @@
     else if(act==='open-settings'){UI.settingsOpen=true;UI.profileOpen=false;}
     else if(act==='dismiss-lift'){UI.liftedCardId=null;UI.liftOnUpgrade=null;}
     else if(act==='lift-upgrade'&&UI.liftOnUpgrade){runAction(UI.liftOnUpgrade.split(':')[0],UI.liftOnUpgrade.split(':').slice(1).join(':'));UI.liftedCardId=null;UI.liftOnUpgrade=null;}
-    if(G.cash<10000)plantSay('lowcash');
     scheduleSave();render();
   }
 
@@ -292,9 +321,21 @@
   document.getElementById('voidline-app').addEventListener('input',function(e){if(e.target.id==='edit-name')G.name=e.target.value.trim()||playerDef(activePlayerId).defaultName;if(e.target.dataset.action==='counter-input')G.counterPrices=Object.assign({},G.counterPrices,{[e.target.dataset.id]:Number(e.target.value)});});
 
   try{
-    var sess=sessionStorage.getItem(SESSION_KEY);
-    if(sess&&PLAYERS.some(function(p){return p.id===sess;})){selectPlayer(sess);}
-    else{UI.playerSelectOpen=true;G=freshState('aden');render();}
+    var storedVer=localStorage.getItem(VERSION_KEY);
+    if(storedVer!==APP_VERSION){
+      localStorage.setItem(VERSION_KEY,APP_VERSION);
+      try{sessionStorage.removeItem(SESSION_KEY);}catch(e2){}
+      UI.playerSelectOpen=true;
+      G=freshState('aden');
+      // #region agent log
+      dbg('game.js:boot','app version bump — force player picker',{appVersion:APP_VERSION,prevVersion:storedVer},'H5');
+      // #endregion
+      render();
+    }else{
+      var sess=sessionStorage.getItem(SESSION_KEY);
+      if(sess&&PLAYERS.some(function(p){return p.id===sess;})){selectPlayer(sess);}
+      else{UI.playerSelectOpen=true;G=freshState('aden');render();}
+    }
   }catch(e){UI.playerSelectOpen=true;G=freshState('aden');render();}
 
   setInterval(function(){if(!G||UI.playerSelectOpen)return;tick(Date.now());renderHUD();if(UI.activeTab==='shop'){var cd=document.querySelector('.neon-card-green .font-mono.text-green[style*="1.125rem"]');if(cd)cd.textContent=fmtCd(blitzRem());}if(G.farmSubTab==='portal'&&G.cloneJob){var cr=document.querySelector('.clone-active .font-mono.text-green');if(cr)cr.textContent=fmtCd(cloneRem());}document.getElementById('hud-cash').textContent=fmtCash(G.cash);if(G.cash<10000&&Date.now()-dialogueState.lastAt>60000)plantSay('lowcash');scheduleSave();},50);
