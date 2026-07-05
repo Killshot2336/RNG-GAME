@@ -5,7 +5,7 @@
   var SAVE_PREFIX = 'voidline_galaxy_farm_v2_';
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
-  var APP_VERSION = '3';
+  var APP_VERSION = '4';
   var VERSION_KEY = 'voidline_app_version';
   var SAVE_VERSION = 3;
   var PORTAL_BASE_COST = 25000;
@@ -44,19 +44,6 @@
     {id:'shield',name:'Shield Insulation',level:0,maxLevel:10,baseCost:18000,scanRateBonus:0.06},
   ];
   var PERSIST = ['saveVersion','cash','sp','empireLevel','empireXp','name','avatar','badgeIds','storefrontSlots','strains','inventory','factoryFloors','sectorUpgrades','blitzUpgrades','blitzEndsAt','purchasedBlitzIds','counterPrices','cloneJob','focusedStrainId','farmSubTab','nextPortalNum'];
-
-  // #region agent log
-  function dbg(loc, msg, data, hyp) {
-    var entry = {sessionId:'2fa0f7',location:loc,message:msg,data:data||{},hypothesisId:hyp||'',timestamp:Date.now()};
-    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2fa0f7'},body:JSON.stringify(entry)}).catch(function(){});
-    try {
-      var ring = JSON.parse(localStorage.getItem('vl_debug_ring') || '[]');
-      ring.push(entry);
-      if (ring.length > 40) ring = ring.slice(-40);
-      localStorage.setItem('vl_debug_ring', JSON.stringify(ring));
-    } catch (e) {}
-  }
-  // #endregion
 
   function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function fmtCash(v){if(v>=1e12)return'$'+(v/1e12).toFixed(2)+'T';if(v>=1e9)return'$'+(v/1e9).toFixed(2)+'B';if(v>=1e6)return'$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return'$'+(v/1e3).toFixed(1)+'K';return'$'+v.toFixed(2);}
@@ -106,9 +93,6 @@
         G.nextPortalNum=1;
       }
       G.saveVersion=SAVE_VERSION;
-      // #region agent log
-      dbg('game.js:sanitizeSave','migrated save',{playerId:pid,hadLegacyFloors:hadLegacyFloors,floors:(G.factoryFloors||[]).length,empireLevel:G.empireLevel},'H2');
-      // #endregion
     }
   }
   function loadGame(pid){
@@ -119,9 +103,6 @@
     if(!G.factoryFloors)G.factoryFloors=[];
     if(!G.nextPortalNum)G.nextPortalNum=(G.factoryFloors.length||0)+1;
     sanitizeSave(pid);
-    // #region agent log
-    dbg('game.js:loadGame','loaded player save',{playerId:pid,empireLevel:G.empireLevel,name:G.name,fromLegacy:fromLegacy,floorCount:G.factoryFloors.length,saveVersion:G.saveVersion},'H1');
-    // #endregion
   }
 
   function getSharedOffers(){
@@ -137,9 +118,6 @@
         offers.push({id:pl.id+'-slot-'+si,strainName:strain.name,thcPercent:strain.thcPercent,yield:strain.yield,offerPrice:slot.price,sellerName:save.name||pl.label,sellerId:pl.id});
       });
     });
-    // #region agent log
-    dbg('game.js:getSharedOffers','shared board offers',{count:offers.length,sellers:offers.map(function(o){return o.sellerName;})},'H3');
-    // #endregion
     return offers;
   }
 
@@ -183,9 +161,6 @@
       mascot.style.filter=s?'hue-rotate('+(s.hue)+'deg)':'none';
       mascot.title=s?s.name:'No strain yet';
     }
-    // #region agent log
-    dbg('game.js:plantSay','dialogue fired',{reason:reason,count:dialogueState.count,strain:s?s.name:null,force:!!force},'H4');
-    // #endregion
   }
 
   function selectPlayer(pid){
@@ -195,9 +170,6 @@
     loadGame(pid);
     UI.playerSelectOpen=false;
     UI.activeTab='farm';
-    // #region agent log
-    dbg('game.js:selectPlayer','player selected',{playerId:pid,empireLevel:G.empireLevel,name:G.name},'H1');
-    // #endregion
     plantSay('welcome',true);
     render();
   }
@@ -327,9 +299,6 @@
       try{sessionStorage.removeItem(SESSION_KEY);}catch(e2){}
       UI.playerSelectOpen=true;
       G=freshState('aden');
-      // #region agent log
-      dbg('game.js:boot','app version bump — force player picker',{appVersion:APP_VERSION,prevVersion:storedVer},'H5');
-      // #endregion
       render();
     }else{
       var sess=sessionStorage.getItem(SESSION_KEY);
