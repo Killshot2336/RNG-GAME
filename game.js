@@ -11,6 +11,7 @@
   var SAVE_VERSION = 4;
   var PORTAL_BASE_COST = 25000;
   var SLOT_COST = 500;
+  var BET_CHIPS = [500, 1000, 2500, 5000, 10000, 25000];
   var BUD_ART = '/public/art/strain-bud.svg';
   var BOSS_ART = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
@@ -105,7 +106,7 @@
     'strains', 'inventory', 'factoryFloors', 'sectorUpgrades', 'blitzUpgrades', 'blitzEndsAt', 'purchasedBlitzIds',
     'counterPrices', 'cloneJob', 'focusedStrainId', 'farmSubTab', 'nextPortalNum',
     'bossRound', 'bossHp', 'bossMaxHp', 'bossName', 'bossSeed', 'bossRarity', 'equippedBattleIds',
-    'indexSearch', 'indexSort',
+    'indexSearch', 'indexSort', 'casinoBets',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -250,6 +251,7 @@
       farmSubTab: 'portal', transactionBeam: null, lastTickAt: Date.now(), nextPortalNum: 1,
       bossRound: 1, bossHp: 0, bossMaxHp: 0, bossName: '', bossSeed: 0, bossRarity: 'dust', equippedBattleIds: [],
       indexSearch: '', indexSort: 'recent',
+      casinoBets: { blackjack: 1000, slots: 500 },
     };
   }
 
@@ -273,6 +275,9 @@
     if (!G.equippedBattleIds) G.equippedBattleIds = [];
     if (!G.indexSearch) G.indexSearch = '';
     if (!G.indexSort) G.indexSort = 'recent';
+    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
+    if (!G.casinoBets.blackjack) G.casinoBets.blackjack = 1000;
+    if (!G.casinoBets.slots) G.casinoBets.slots = 500;
     if (!G.bossRound) G.bossRound = 1;
     if (!G.saveVersion || G.saveVersion < SAVE_VERSION) {
       var hadLegacyFloors = (G.factoryFloors || []).length >= 3 && !G.nextPortalNum;
@@ -628,16 +633,65 @@
     }).join('');
   }
 
-  function liftWrap(id, inner, onUp) { return '<div class="liftable-wrap" data-lift="' + esc(id) + '" data-lift-up="' + (onUp || '') + '"><div class="neon-card p-4">' + inner + '</div></div>'; }
+  function cardGlowClass(rarity) {
+    var idx = rarityIndex(rarity);
+    if (idx >= 25) return 'cr-card-glow-voidgod';
+    if (idx >= 20) return 'cr-card-glow-mythic';
+    if (idx >= 18) return 'cr-card-glow-legend';
+    if (idx >= 10) return 'cr-card-glow-bloom';
+    if (idx >= 4) return 'cr-card-glow-pulse';
+    return 'cr-card-glow-dust';
+  }
+
+  function casinoBet(game) {
+    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
+    return G.casinoBets[game] || (game === 'slots' ? 500 : 1000);
+  }
+
+  function setCasinoBet(game, amt) {
+    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
+    var n = Math.max(BET_CHIPS[0], Math.min(Math.floor(amt), G.cash));
+    G.casinoBets[game] = n;
+  }
+
+  function renderBetPicker(game) {
+    var cur = casinoBet(game);
+    var h = '<div class="bet-picker mb-3"><div class="bet-picker-label">BET · ' + fmtCash(cur) + '</div><div class="bet-chips">';
+    BET_CHIPS.forEach(function (amt) {
+      h += '<button type="button" class="bet-chip' + (cur === amt ? ' active' : '') + '" data-action="set-bet" data-id="' + game + ':' + amt + '"' + (G.cash < amt ? ' disabled' : '') + '>' + fmtCash(amt) + '</button>';
+    });
+    h += '<button type="button" class="bet-chip bet-chip-max' + (cur === G.cash && G.cash > 0 ? ' active' : '') + '" data-action="set-bet" data-id="' + game + ':max"' + (G.cash < BET_CHIPS[0] ? ' disabled' : '') + '>MAX</button></div></div>';
+    return h;
+  }
+
+  function playingCardHtml(card, hidden) {
+    if (hidden) return '<div class="playing-card playing-card-back"><div class="playing-card-pattern"></div></div>';
+    var red = card.label.indexOf('♥') >= 0 || card.label.indexOf('♦') >= 0;
+    var rank = card.label.slice(0, -1);
+    var suit = card.label.slice(-1);
+    return '<div class="playing-card' + (red ? ' playing-card-red' : '') + '">' +
+      '<div class="playing-card-corner tl"><span class="pc-rank">' + rank + '</span><span class="pc-suit">' + suit + '</span></div>' +
+      '<div class="playing-card-center">' + suit + '</div>' +
+      '<div class="playing-card-corner br"><span class="pc-rank">' + rank + '</span><span class="pc-suit">' + suit + '</span></div></div>';
+  }
+
+  function playingHandHtml(hand, hideSecond) {
+    return '<div class="playing-hand">' + hand.map(function (c, i) { return playingCardHtml(c, hideSecond && i === 1); }).join('') + '</div>';
+  }
+
+  function liftWrap(id, inner, onUp) { return '<div class="liftable-wrap" data-lift="' + esc(id) + '" data-lift-up="' + (onUp || '') + '"><div class="neon-card neon-card-static p-4">' + inner + '</div></div>'; }
 
   function crCardHtml(s, opts) {
     opts = opts || {};
     var c = rarityColor(s.rarity), sel = opts.selected ? ' selected' : '';
-    return '<button type="button" class="cr-card cr-card-glow' + sel + '" data-strain-focus="' + esc(s.id) + '" style="--rarity-color:' + c + ';border-color:' + c + '55">' +
-      '<div class="cr-card-art">' + budImg(s, '3rem') + '</div>' +
-      '<div class="font-mono" style="font-size:0.45rem;color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + '</div>' +
-      '<div style="font-weight:600;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s.name) + '</div>' +
-      '<div class="font-mono text-xs text-muted">THC ' + s.thcPercent + '% · x' + s.quantity + '</div></button>';
+    var glow = cardGlowClass(s.rarity);
+    return '<button type="button" class="cr-card' + sel + '" data-strain-focus="' + esc(s.id) + '">' +
+      '<div class="cr-card-frame ' + glow + '" style="--rarity-color:' + c + '">' +
+      '<div class="cr-card-shine"></div>' +
+      '<div class="cr-card-art-wrap">' + budImg(s, '3.25rem') + '</div>' +
+      '<div class="cr-card-rarity" style="color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + '</div>' +
+      '<div class="cr-card-name">' + esc(s.name) + '</div>' +
+      '<div class="cr-card-meta">x' + s.quantity + '</div></div></button>';
   }
 
   function showCasinoToast(msg) { UI.casinoToast = msg; setTimeout(function () { if (UI.casinoToast === msg) UI.casinoToast = ''; render(); }, 3000); }
@@ -651,10 +705,11 @@
   function handVal(hand) { return hand.reduce(function (s, c) { return s + c.v; }, 0); }
 
   function startBlackjack() {
-    if (G.cash < 1000) return;
-    G.cash -= 1000;
+    var bet = casinoBet('blackjack');
+    if (G.cash < bet) return;
+    G.cash -= bet;
     var deck = newDeck();
-    UI.blackjack = { deck: deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], bet: 1000, done: false, win: null };
+    UI.blackjack = { deck: deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], bet: bet, done: false, win: null };
   }
   function blackjackHit() {
     var bj = UI.blackjack;
@@ -669,7 +724,7 @@
     while (handVal(bj.dealer) < 17) bj.dealer.push(bj.deck.pop());
     var pv = handVal(bj.player), dv = handVal(bj.dealer);
     bj.done = true;
-    if (dv > 21 || pv > dv) { bj.win = true; G.cash += bj.bet * 2; }
+    if (dv > 21 || pv > dv) { bj.win = true; G.cash += bj.bet * 2; shakeScreen(); }
     else if (pv === dv) { bj.win = null; G.cash += bj.bet; }
     else { bj.win = false; }
     scheduleSave();
@@ -677,16 +732,27 @@
   }
 
   function spinSlots() {
-    if (G.cash < SLOT_COST) return false;
-    G.cash -= SLOT_COST;
+    var cost = casinoBet('slots');
+    if (G.cash < cost) return false;
+    G.cash -= cost;
     var rng = rngSeed(Date.now());
     var reels = [SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)], SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)], SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)]];
     var win = 0;
-    if (reels[0] === reels[1] && reels[1] === reels[2]) win = SLOT_COST * 20;
-    else if (reels[0] === reels[1] || reels[1] === reels[2]) win = SLOT_COST * 3;
+    if (reels[0] === reels[1] && reels[1] === reels[2]) win = cost * 20;
+    else if (reels[0] === reels[1] || reels[1] === reels[2]) win = cost * 3;
     G.cash += win;
     UI.slotResult = { reels: reels, win: win };
+    if (win > 0) shakeScreen();
     return true;
+  }
+
+  function shakeScreen() {
+    var shell = document.getElementById('phone-shell');
+    if (!shell) return;
+    shell.classList.remove('screen-shake');
+    void shell.offsetWidth;
+    shell.classList.add('screen-shake');
+    setTimeout(function () { shell.classList.remove('screen-shake'); }, 450);
   }
 
   function togglePokerReady() {
@@ -792,7 +858,7 @@
   }
 
   function renderFarm() {
-    var h = '<div class="screen-section"><div class="neon-card neon-card-green p-3 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
+    var h = '<div class="screen-section"><div class="neon-card neon-card-green neon-card-pulse p-3 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
     h += '<div class="farm-tabs mb-3">';
     ['upgrade', 'control', 'portal'].forEach(function (t) {
       var lbl = { upgrade: 'UPGRADE DECK', control: 'CONTROL DECK', portal: 'PORTAL FARM' }[t];
@@ -853,7 +919,7 @@
       var dis = G.cash < p.price && !(p.type === 'omega' && p.spCost && G.sp >= p.spCost);
       h += liftWrap('pack-' + p.type, '<div class="flex-row"><div style="font-size:1.875rem">' + p.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(p.name) + '</div><div class="text-muted text-xs">' + esc(p.desc) + '</div><div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>OPEN</button></div>', 'buy-pack:' + p.type);
     });
-    h += '<div class="neon-card neon-card-green p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
+    h += '<div class="neon-card neon-card-green neon-card-pulse p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
     G.blitzUpgrades.forEach(function (u) {
       h += '<div class="flex-between p-3 mb-2" style="background:rgba(0,0,0,0.35);border-radius:0.75rem;border:1px solid ' + (u.purchased ? 'rgba(100,100,100,0.3)' : 'rgba(57,255,20,0.25)') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
@@ -867,7 +933,7 @@
 
   function renderIndex() {
     var list = filteredStrains();
-    var h = '<div class="screen-section"><div class="neon-card neon-card-green p-4 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.3em">STRAIN INDEX</div><div class="font-display chromatic-text" style="font-size:1.875rem;font-weight:700">' + G.strains.length + ' <span class="text-muted" style="font-size:1rem">/ ∞</span></div><div class="text-muted text-xs">Scanning the void for new genetics...</div></div>';
+    var h = '<div class="screen-section"><div class="neon-card neon-card-green neon-card-pulse p-4 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.3em">STRAIN INDEX</div><div class="font-display chromatic-text" style="font-size:1.875rem;font-weight:700">' + G.strains.length + ' <span class="text-muted" style="font-size:1rem">/ ∞</span></div><div class="text-muted text-xs">Scanning the void for new genetics...</div></div>';
     h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="index-search" value="' + esc(G.indexSearch || '') + '">';
     h += '<select class="input-field mb-3" data-action="index-sort"><option value="recent"' + (G.indexSort === 'recent' ? ' selected' : '') + '>Sort: Recent</option><option value="rarity"' + (G.indexSort === 'rarity' ? ' selected' : '') + '>Sort: Rarity</option><option value="name"' + (G.indexSort === 'name' ? ' selected' : '') + '>Sort: Name</option></select>';
     if (!list.length) {
@@ -932,21 +998,25 @@
     }
     if (UI.casinoGame === 'blackjack') {
       var bj = UI.blackjack;
-      h += '<div class="casino-table neon-card p-4 mb-3">';
+      var bet = casinoBet('blackjack');
+      h += '<div class="casino-scene"><div class="casino-table neon-card neon-card-static p-4 mb-3">';
+      h += renderBetPicker('blackjack');
       if (!bj) {
-        h += '<p class="text-muted text-xs text-center mb-3">Bet $1,000 — beat the dealer to 21.</p><button type="button" class="game-btn game-btn-green w-full" data-action="blackjack-deal"' + (G.cash < 1000 ? ' disabled' : '') + '>DEAL</button>';
+        h += '<p class="text-muted text-xs text-center mb-3">Beat the dealer to 21. Current bet: <span class="text-green">' + fmtCash(bet) + '</span></p>';
+        h += '<button type="button" class="game-btn game-btn-green w-full" data-action="blackjack-deal"' + (G.cash < bet ? ' disabled' : '') + '>DEAL · ' + fmtCash(bet) + '</button>';
       } else {
-        h += '<div class="mb-3"><div class="text-xs text-muted mb-1">DEALER (' + handVal(bj.dealer) + ')</div><div>' + bj.dealer.map(function (c) { return c.label; }).join(' ') + '</div></div>';
-        h += '<div class="mb-3"><div class="text-xs text-green mb-1">YOU (' + handVal(bj.player) + ')</div><div>' + bj.player.map(function (c) { return c.label; }).join(' ') + '</div></div>';
-        if (bj.done) h += '<div class="text-center mb-2 ' + (bj.win === true ? 'text-green' : bj.win === false ? 'text-muted' : 'text-cyan') + '">' + (bj.win === true ? 'YOU WIN!' : bj.win === false ? 'BUST / LOSE' : 'PUSH') + '</div>';
+        h += '<div class="bj-zone mb-3"><div class="bj-label text-muted">DEALER · ' + (bj.done ? handVal(bj.dealer) : '?') + '</div>' + playingHandHtml(bj.dealer, !bj.done) + '</div>';
+        h += '<div class="bj-zone mb-3"><div class="bj-label text-green">YOU · ' + handVal(bj.player) + '</div>' + playingHandHtml(bj.player, false) + '</div>';
+        if (bj.done) h += '<div class="text-center mb-3 bj-result ' + (bj.win === true ? 'text-green' : bj.win === false ? 'text-muted' : 'text-cyan') + '">' + (bj.win === true ? 'YOU WIN +' + fmtCash(bj.bet) + '!' : bj.win === false ? 'BUST / LOSE' : 'PUSH') + '</div>';
         else h += '<div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="blackjack-hit">HIT</button><button type="button" class="game-btn" style="flex:1" data-action="blackjack-stand">STAND</button></div>';
-        if (bj.done) h += '<button type="button" class="game-btn w-full mt-2" data-action="blackjack-deal"' + (G.cash < 1000 ? ' disabled' : '') + '>DEAL AGAIN</button>';
+        if (bj.done) h += '<button type="button" class="game-btn w-full mt-2" data-action="blackjack-deal"' + (G.cash < bet ? ' disabled' : '') + '>DEAL AGAIN · ' + fmtCash(bet) + '</button>';
       }
       h += '<button type="button" class="game-btn w-full mt-2" data-action="casino-select" data-id="menu">← BACK</button></div></div>';
       return h;
     }
     if (UI.casinoGame === 'slots-info') {
-      h += '<div class="neon-card p-4 text-center text-sm text-muted mb-3">Slot machine opens during an active poker session. Spin costs ' + fmtCash(SLOT_COST) + '.</div><button type="button" class="game-btn w-full" data-action="casino-select" data-id="menu">← BACK</button></div>';
+      h += renderBetPicker('slots');
+      h += '<div class="neon-card neon-card-static p-4 text-center text-sm text-muted mb-3">Slot machine opens during an active poker session. Spins cost your selected bet (' + fmtCash(casinoBet('slots')) + ').</div><button type="button" class="game-btn w-full" data-action="casino-select" data-id="menu">← BACK</button></div>';
       return h;
     }
     h += '</div>';
@@ -964,7 +1034,7 @@
     if (!UI.slotOverlay) { el.classList.remove('open'); el.innerHTML = ''; return; }
     var r = UI.slotResult || { reels: ['?', '?', '?'], win: 0 };
     el.classList.add('open');
-    el.innerHTML = '<button type="button" class="overlay-backdrop" data-action="close-slots"></button><div class="overlay-panel slot-machine p-5 text-center"><h3 class="font-display mb-3">VOID SLOTS</h3><div class="font-mono" style="font-size:2rem;letter-spacing:0.5em;margin:1rem 0">' + r.reels.join(' ') + '</div><div class="text-muted text-xs mb-3">Cost ' + fmtCash(SLOT_COST) + ' per spin</div>' + (r.win > 0 ? '<div class="text-green mb-2">Won ' + fmtCash(r.win) + '!</div>' : '') + '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="slot-spin"' + (G.cash < SLOT_COST ? ' disabled' : '') + '>SPIN</button><button type="button" class="game-btn w-full" data-action="close-slots">CLOSE</button></div>';
+    el.innerHTML = '<button type="button" class="overlay-backdrop" data-action="close-slots"></button><div class="overlay-panel slot-machine p-5 text-center"><h3 class="font-display mb-2">VOID SLOTS</h3>' + renderBetPicker('slots') + '<div class="slot-reels font-mono" style="font-size:2rem;letter-spacing:0.5em;margin:1rem 0">' + r.reels.join(' ') + '</div><div class="text-muted text-xs mb-3">Spin · ' + fmtCash(casinoBet('slots')) + '</div>' + (r.win > 0 ? '<div class="text-green mb-2">Won ' + fmtCash(r.win) + '!</div>' : '') + '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="slot-spin"' + (G.cash < casinoBet('slots') ? ' disabled' : '') + '>SPIN</button><button type="button" class="game-btn w-full" data-action="close-slots">CLOSE</button></div>';
   }
 
   function renderProfile() {
@@ -1024,7 +1094,7 @@
     if (!UI.liftedCardId) { el.innerHTML = ''; return; }
     var body = renderLiftBody();
     if (!body) { el.innerHTML = ''; UI.liftedCardId = null; UI.liftOnUpgrade = null; return; }
-    el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button><div class="lifted-card"><div class="neon-card" style="max-height:80vh;overflow-y:auto">' + body + (UI.liftOnUpgrade ? '<div class="lift-actions"><button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE CARD</button></div>' : '') + '</div></div>';
+    el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button><div class="lifted-card"><div class="neon-card neon-card-static" style="max-height:80vh;overflow-y:auto">' + body + (UI.liftOnUpgrade ? '<div class="lift-actions"><button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE CARD</button></div>' : '') + '</div></div>';
   }
 
   function renderBeam() {
@@ -1099,9 +1169,16 @@
     else if (act==='casino-select') { UI.casinoGame = val; UI.blackjack = null; }
     else if (act==='poker-ready') togglePokerReady();
     else if (act==='poker-start') startPoker();
-    else if (act==='blackjack-deal') { if (G.cash >= 1000) startBlackjack(); }
+    else if (act==='blackjack-deal') { if (G.cash >= casinoBet('blackjack')) startBlackjack(); }
     else if (act==='blackjack-hit') blackjackHit();
     else if (act==='blackjack-stand') blackjackStand();
+    else if (act==='set-bet') {
+      var bp = val.split(':');
+      var bgame = bp[0];
+      var braw = bp.slice(1).join(':');
+      if (braw === 'max') setCasinoBet(bgame, G.cash);
+      else setCasinoBet(bgame, parseInt(braw, 10) || casinoBet(bgame));
+    }
     else if (act==='open-slots') { var rm = getPokerRoom(); if (rm.active) UI.slotOverlay = true; }
     else if (act==='close-slots') UI.slotOverlay = false;
     else if (act==='slot-spin') spinSlots();
@@ -1129,6 +1206,7 @@
       e.stopPropagation();
       var a = t.dataset.action, v = t.dataset.id || t.dataset.pack || t.dataset.pid || t.dataset.av;
       if (a === 'equip-floor') runAction(a, t.dataset.id + ':' + (t.value !== undefined ? t.value : ''));
+      else if (a === 'set-bet') runAction(a, t.dataset.id);
       else if (a === 'set-badge') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'sf-strain') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'sf-price') runAction(a, t.dataset.slot + ':' + t.value);
