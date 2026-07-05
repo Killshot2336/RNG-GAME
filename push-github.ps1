@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Creating GitHub repo and pushing..."
 & $git branch -M main
-& $gh repo create syndicate-block --private --source=. --remote=origin --push
+& $gh repo create RNG-GAME --private --source=. --remote=origin --push
 
 Write-Host ""
 Write-Host "Done! Repo URL:"

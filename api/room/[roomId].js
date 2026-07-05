@@ -15,11 +15,14 @@ function defaultPlayer(identity, extras) {
     equipped: { helmet: null, shirt: null, legs: null, boots: null },
     backpack_stash: [],
     warehouse_bays: [
-      { bay_id: 1, current_crop: null, lamps_level: 1, soil_level: 1, grow_progress: 0 },
-      { bay_id: 2, current_crop: null, lamps_level: 1, soil_level: 1, grow_progress: 0 }
+      { bay_id: 1, current_crop: null, lamps_level: 1, soil_level: 1, harvest_ready_at: null, planted_at: null },
+      { bay_id: 2, current_crop: null, lamps_level: 1, soil_level: 1, harvest_ready_at: null, planted_at: null }
     ],
     compendium_discovered: [],
-    flex_alerts: []
+    flex_alerts: [],
+    strain_mastery: {},
+    hideout_shop: { supply_slots_level: 0, luck_tuning_level: 0, automation_level: 0, warehouse_extensions: 0, stash_bay_level: 0 },
+    hideout_requests: []
   };
 }
 
@@ -36,7 +39,8 @@ function defaultGameState() {
     strain_pool: [],
     boost_pool: [],
     item_id_counter: 1,
-    last_grow_tick: 0,
+    last_discovery_recalc: 0,
+    build_label: 'FINAL PRODUCT: PART B FINISHING SUB-SYSTEM',
     players: {
       Aden: defaultPlayer('Aden', { theme: 'fallout4_neon', accentColor: '#00ff66' }),
       Edward: defaultPlayer('Edward', { theme: 'fallout76_amber', accentColor: '#ffaa00' }),
@@ -250,9 +254,6 @@ export default async function handler(req, res) {
       if (!room) {
         return res.status(200).json({ state: null, version: 0, updatedAt: null, presence: {} });
       }
-      if (room.state) applyGrowTick(room.state);
-      room.updatedAt = Date.now();
-      await saveRoom(roomId, room);
       return res.status(200).json({
         state: room.state,
         version: room.version,
@@ -381,9 +382,34 @@ export default async function handler(req, res) {
         if (pid !== from) {
           room.state.players[pid].flex_alerts = room.state.players[pid].flex_alerts || [];
           room.state.players[pid].flex_alerts.push({ msg, from, ts: Date.now() });
+          room.state.players[pid].hideout_requests = room.state.players[pid].hideout_requests || [];
+          room.state.players[pid].hideout_requests.push({ from, type: 'share_log', msg, ts: Date.now() });
         }
       });
       room.state.global_activity_log.unshift(logEntry('DATA LOG transmitted: ' + msg));
+      if (room.state.global_activity_log.length > 100) room.state.global_activity_log.pop();
+      room.version = room.version + 1;
+      room.updatedAt = Date.now();
+      await saveRoom(roomId, room);
+      return res.status(200).json({ state: room.state, version: room.version, updatedAt: room.updatedAt });
+    }
+
+    if (action === 'notify') {
+      const from = body.from;
+      const target = body.target;
+      const type = body.type || 'share_log';
+      const msg = body.msg || '';
+      if (!VALID_PLAYERS.includes(from) || !VALID_PLAYERS.includes(target) || from === target) {
+        return res.status(400).json({ error: 'Invalid notify payload.' });
+      }
+      const targetPlayer = room.state.players[target];
+      targetPlayer.hideout_requests = targetPlayer.hideout_requests || [];
+      targetPlayer.hideout_requests.push({ from, type, msg, ts: Date.now() });
+      if (type === 'share_log') {
+        targetPlayer.flex_alerts = targetPlayer.flex_alerts || [];
+        targetPlayer.flex_alerts.push({ msg, from, ts: Date.now() });
+      }
+      room.state.global_activity_log.unshift(logEntry(from + ' → ' + target + ': ' + type));
       if (room.state.global_activity_log.length > 100) room.state.global_activity_log.pop();
       room.version = room.version + 1;
       room.updatedAt = Date.now();
