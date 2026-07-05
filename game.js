@@ -220,7 +220,7 @@
   function buyBlitz(id){var u=G.blitzUpgrades.find(function(b){return b.id===id;});if(!u||u.purchased||G.cash<u.price)return false;var first=!G.purchasedBlitzIds.length;G.cash-=u.price;G.blitzUpgrades=G.blitzUpgrades.map(function(b){return b.id===id?Object.assign({},b,{purchased:true}):b;});G.purchasedBlitzIds=G.purchasedBlitzIds.concat([id]);if(first)G.blitzEndsAt=Date.now()+BLITZ_MS;return true;}
   function buyItem(id){var it=G.inventory.find(function(i){return i.id===id;});if(!it||G.cash<it.price)return false;G.cash-=it.price;G.inventory=G.inventory.map(function(i){return i.id===id?Object.assign({},i,{owned:i.owned+1}):i;});return true;}
   function upSector(id){var s=G.sectorUpgrades.find(function(x){return x.id===id;});if(!s||s.level>=s.maxLevel)return false;var c=s.baseCost*(s.level+1);if(G.cash<c)return false;G.cash-=c;G.sectorUpgrades=G.sectorUpgrades.map(function(x){return x.id===id?Object.assign({},x,{level:x.level+1}):x;});return true;}
-  function acceptOffer(oid){var offers=getSharedOffers(),o=offers.find(function(x){return x.id===oid;});if(!o||G.cash<o.offerPrice)return false;var s=genPack('guaranteed',oid.split('').reduce(function(a,c){return a+c.charCodeAt(0);},0));s.name=o.strainName;s.thcPercent=o.thcPercent;s.yield=o.yield;G.cash-=o.offerPrice;G.strains=mergeStrains(G.strains,s);return true;}
+  function acceptOffer(oid){var offers=getSharedOffers(),o=offers.find(function(x){return x.id===oid;});if(!o||G.cash<o.offerPrice)return false;var s=genPack('guaranteed',oid.split('').reduce(function(a,c){return a+c.charCodeAt(0);},0));s.name=o.strainName;s.thcPercent=o.thcPercent;s.yield=o.yield;G.cash-=o.offerPrice;G.strains=mergeStrains(G.strains,s);if(!G.focusedStrainId)G.focusedStrainId=s.id;addXp(15);plantSay('pack');return true;}
   function counterOffer(oid){var offers=getSharedOffers(),o=offers.find(function(x){return x.id===oid;}),c=G.counterPrices[oid];if(!o||!c||c<=0||G.cash<c||c<o.offerPrice*0.85)return false;var s=genPack('basic',c);s.name=o.strainName;s.thcPercent=o.thcPercent;s.yield=o.yield;G.cash-=c;G.strains=mergeStrains(G.strains,s);return true;}
   function buyPortal(){var cost=portalCost();if(G.cash<cost)return false;G.cash-=cost;var n=G.nextPortalNum,name=portalNames[(n-1)%portalNames.length]||('Portal #'+n);G.factoryFloors=G.factoryFloors.concat([{id:'floor-'+n,name:name,equippedStrainId:null,level:1}]);G.nextPortalNum=n+1;plantSay('portal',true);return true;}
   function equipFloor(fid,sid){G.factoryFloors=G.factoryFloors.map(function(f){return f.id===fid?Object.assign({},f,{equippedStrainId:sid||null}):f;});if(sid)plantSay('equip');}
@@ -247,7 +247,7 @@
   function renderPlayerSelect(){
     var el=document.getElementById('overlay-player-select');
     if(!el)return;
-    if(!UI.playerSelectOpen){el.classList.remove('open');return;}
+    if(!UI.playerSelectOpen){el.classList.remove('open');el.innerHTML='';return;}
     el.classList.add('open');
     var h='<div class="overlay-panel p-5 text-center"><h2 class="font-display chromatic-text mb-2" style="font-size:1rem;letter-spacing:0.15em">WHO ARE YOU?</h2><p class="text-muted text-xs mb-4">Each person gets their own save on this device.</p><div class="player-pick-grid">';
     PLAYERS.forEach(function(pl){

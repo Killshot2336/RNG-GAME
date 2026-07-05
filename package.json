@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --config legacy/react-build/vite.config.ts 2>nul || npx serve .",
     "build": "node scripts/copy-static.mjs",
+    "audit": "node scripts/audit-actions.mjs",
     "preview": "npx serve dist"
   },
   "dependencies": {
