@@ -10,7 +10,7 @@
   <title>Voidline Galaxy Farm</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <style>
     :root {
       --void: #0C011A; --void-deep: #050010; --panel: rgba(31,0,51,0.65);
@@ -240,37 +240,130 @@
     }
     .binder-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.625rem; }
     @media (min-width: 420px) { .binder-grid { grid-template-columns: repeat(3, 1fr); gap: 0.75rem; } }
+    /* —— Clash Royale style strain cards —— */
     .cr-card {
       border: none; background: none; padding: 0; cursor: pointer; text-align: center;
-      transition: transform 0.22s ease, filter 0.22s ease; animation: none; width: 100%;
+      transition: transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.2s ease;
+      animation: none; width: 100%; perspective: 600px;
     }
-    .cr-card:hover { transform: translateY(-5px) scale(1.02); filter: brightness(1.08); }
-    .cr-card:active { transform: translateY(-2px) scale(0.98); }
-    .cr-card.selected .cr-card-frame { outline: 2px solid var(--green); box-shadow: 0 0 20px rgba(57,255,20,0.45); }
+    .cr-card:hover { transform: translateY(-8px) rotate(-1deg) scale(1.03); filter: brightness(1.06); }
+    .cr-card:active { transform: translateY(-2px) scale(0.96); transition-duration: 0.08s; }
+    .cr-card.selected .cr-card-frame {
+      outline: 3px solid #39FF14; outline-offset: 2px;
+      box-shadow: 0 0 24px rgba(57,255,20,0.55), 0 12px 32px rgba(0,0,0,0.6);
+    }
     .cr-card-frame {
-      border-radius: 0.65rem; padding: 0.4rem 0.45rem 0.5rem; position: relative; overflow: hidden;
-      aspect-ratio: 2 / 3; display: flex; flex-direction: column; align-items: stretch;
-      background: linear-gradient(165deg, rgba(45,0,75,0.95) 0%, rgba(12,1,26,0.98) 55%, rgba(0,0,0,0.9) 100%);
-      border: 2px solid var(--neon-purple); box-shadow: 0 10px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+      position: relative; overflow: visible; aspect-ratio: 3 / 4;
+      border-radius: 0.75rem; border: 3px solid var(--cr-border, #6b7280);
+      box-shadow:
+        0 10px 28px rgba(0,0,0,0.55),
+        inset 0 2px 0 rgba(255,255,255,0.18),
+        inset 0 -3px 0 rgba(0,0,0,0.35);
+      background: #1A1209;
+    }
+    .cr-card-bevel {
+      position: absolute; inset: 3px; border-radius: 0.55rem; pointer-events: none; z-index: 4;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 4px rgba(0,0,0,0.25);
+    }
+    .cr-card-arena {
+      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
+      pointer-events: none; z-index: 0;
+      background: var(--cr-arena, radial-gradient(ellipse 90% 70% at 50% 85%, #2D5A27 0%, #1A1209 70%));
+    }
+    .cr-card-art {
+      position: absolute; left: 0; right: 0; top: 8%; bottom: 2.1rem;
+      display: flex; align-items: flex-end; justify-content: center; z-index: 1;
+      padding: 0 0.15rem;
+    }
+    .cr-card-art img, .cr-card-art .cr-planet-orb {
+      width: 92%; max-height: 100%; object-fit: contain;
+      filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+      transform-origin: bottom center;
+      animation: cr-card-idle 3.5s ease-in-out infinite;
+    }
+    .cr-tier-legend .cr-card-art img,
+    .cr-tier-champion .cr-card-art img,
+    .cr-tier-god .cr-card-art img { animation: cr-card-idle 3s ease-in-out infinite, cr-card-breathe 4s ease-in-out infinite; }
+    @keyframes cr-card-idle { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-3px) scale(1.02)} }
+    @keyframes cr-card-breathe { 0%,100%{filter:drop-shadow(0 6px 8px rgba(0,0,0,0.45))} 50%{filter:drop-shadow(0 8px 14px rgba(255,215,0,0.35))} }
+    .cr-planet-orb {
+      width: 4.5rem !important; height: 4.5rem; border-radius: 50%;
+      box-shadow: inset -6px -8px 16px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.35);
+    }
+    .cr-badge {
+      position: absolute; z-index: 5; display: flex; align-items: center; justify-content: center;
+      font-family: "Fredoka", var(--font-display); font-weight: 700; line-height: 1;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.45), 0 4px 10px rgba(0,0,0,0.35);
+    }
+    .cr-badge-thc {
+      top: -0.35rem; left: -0.35rem; min-width: 1.65rem; height: 1.65rem;
+      border-radius: 50%; border: 2px solid #1A1209;
+      background: radial-gradient(circle at 35% 30%, #C084FC, #7C3AED 55%, #4C1D95);
+      color: #fff; font-size: 0.62rem; padding: 0 0.2rem;
+    }
+    .cr-badge-thc.cr-badge-sm { font-size: 0.5rem; min-width: 1.5rem; height: 1.5rem; }
+    .cr-badge-lvl {
+      top: -0.35rem; right: -0.35rem; min-width: 1.75rem; height: 1.55rem;
+      border-radius: 0.35rem; border: 2px solid #1A1209;
+      background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 45%, #B45309 100%);
+      color: #1A1209; font-size: 0.55rem; padding: 0 0.25rem;
+    }
+    .cr-badge-lvl span { font-size: 0.42rem; font-weight: 600; opacity: 0.85; margin-right: 1px; }
+    .cr-badge-qty {
+      bottom: 2rem; left: -0.25rem; min-width: 1.35rem; height: 1.35rem;
+      border-radius: 50%; border: 2px solid #1A1209;
+      background: linear-gradient(180deg, #4ADE80, #16A34A);
+      color: #fff; font-size: 0.48rem;
+    }
+    .cr-badge-tag {
+      bottom: 2rem; right: -0.2rem; font-size: 0.65rem;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    }
+    .cr-card-banner {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+      min-height: 2.1rem; padding: 0.3rem 0.35rem;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.88) 25%, rgba(0,0,0,0.95) 100%);
+      border-radius: 0 0 0.55rem 0.55rem;
+      border-top: 2px solid rgba(0,0,0,0.5);
+    }
+    .cr-card-name {
+      font-family: "Fredoka", var(--font-display); font-weight: 700;
+      font-size: 0.58rem; letter-spacing: 0.02em; line-height: 1.15;
+      color: #fff; text-shadow: 0 1px 0 #000, 0 2px 4px rgba(0,0,0,0.6);
+      overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      word-break: break-word;
     }
     .cr-card-shine {
-      position: absolute; inset: 0; pointer-events: none;
-      background: linear-gradient(125deg, transparent 35%, rgba(255,255,255,0.07) 48%, transparent 62%);
+      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
+      pointer-events: none; z-index: 2; opacity: 0;
+      background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.22) 48%, transparent 65%);
     }
-    .cr-card-art-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0.15rem 0; }
-    .cr-card-glow-dust { border-color: #6b7280; box-shadow: 0 0 12px #6b728044, 0 8px 24px rgba(0,0,0,0.5); }
-    .cr-card-glow-pulse { border-color: #38bdf8; box-shadow: 0 0 16px #38bdf866, 0 8px 24px rgba(0,0,0,0.5); }
-    .cr-card-glow-bloom { border-color: #2dd4bf; box-shadow: 0 0 18px #2dd4bf66, 0 8px 24px rgba(0,0,0,0.5); }
-    .cr-card-glow-legend { border-color: #8b5cf6; box-shadow: 0 0 22px #8b5cf688, 0 8px 24px rgba(0,0,0,0.5); }
-    .cr-card-glow-mythic { border-color: #ffd700; box-shadow: 0 0 28px #ffd70088, 0 8px 28px rgba(0,0,0,0.5); }
-    .cr-card-glow-voidgod { border-color: #fff; box-shadow: 0 0 36px #ffffffaa, 0 8px 32px rgba(0,0,0,0.55); }
-    .cr-card-rarity { font-family: var(--font-mono); font-size: 0.42rem; letter-spacing: 0.08em; margin-top: 0.2rem; line-height: 1.1; }
-    .cr-card-name {
-      font-family: var(--font-display); font-size: 0.58rem; letter-spacing: 0.04em; line-height: 1.2;
-      margin-top: 0.2rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      white-space: normal; word-break: break-word; min-height: 1.35rem;
+    .cr-tier-legend .cr-card-shine,
+    .cr-tier-champion .cr-card-shine,
+    .cr-tier-god .cr-card-shine {
+      opacity: 1; animation: cr-shine-sweep 3.5s ease-in-out infinite;
     }
-    .cr-card-meta { font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); margin-top: 0.15rem; }
+    @keyframes cr-shine-sweep {
+      0%,70%,100%{transform:translateX(-120%) skewX(-12deg);opacity:0}
+      75%{opacity:1} 95%{transform:translateX(180%) skewX(-12deg);opacity:0}
+    }
+    /* tier borders + arenas */
+    .cr-tier-common { --cr-border: #6B7280; --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3D6B35 0%, #1F2937 55%, #111827 100%); }
+    .cr-tier-rare { --cr-border: #38BDF8; box-shadow: 0 0 14px #38bdf866, 0 10px 28px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.18); }
+    .cr-tier-rare .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #1E3A5F 55%, #0F172A 100%); }
+    .cr-tier-epic { --cr-border: #A855F7; box-shadow: 0 0 18px #a855f766, 0 10px 28px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.18); }
+    .cr-tier-epic .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5B21B6 0%, #3B0764 55%, #1A0533 100%); }
+    .cr-tier-legend { --cr-border: #FACC15; box-shadow: 0 0 22px #facc1566, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
+    .cr-tier-legend .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #854D0E 0%, #422006 55%, #1A1209 100%); }
+    .cr-tier-champion { --cr-border: #FB923C; box-shadow: 0 0 26px #fb923c88, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
+    .cr-tier-champion .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #C2410C 0%, #7C2D12 55%, #1A1209 100%); }
+    .cr-tier-god { --cr-border: #fff; box-shadow: 0 0 32px rgba(255,255,255,0.45), 0 0 48px rgba(168,85,247,0.35), 0 14px 36px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.3); animation: cr-god-pulse 2.5s ease-in-out infinite; }
+    .cr-tier-god .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4C1D95 0%, #1E1B4B 40%, #0C011A 100%); }
+    @keyframes cr-god-pulse { 0%,100%{box-shadow:0 0 32px rgba(255,255,255,0.4),0 14px 36px rgba(0,0,0,0.6)} 50%{box-shadow:0 0 48px rgba(255,255,255,0.65),0 0 60px rgba(0,240,255,0.25),0 14px 36px rgba(0,0,0,0.6)} }
+    .cr-card-lg .cr-card-frame { max-width: 11rem; margin: 0 auto; }
+    .cr-card-lg .cr-card-name { font-size: 0.72rem; }
+    .lifted-card .cr-card-frame { transform: scale(1.05); }
     .coop-card { border-left: 3px solid var(--green); }
     .casino-scene {
       position: relative; border-radius: 1rem; overflow: hidden;
@@ -438,19 +531,18 @@
     }
     .strain-bud-img { display: inline-block; vertical-align: middle; }
     #overlay-strain-picker { z-index: 8100; }
-    .strain-picker-panel { max-width: 22rem; max-height: 85vh; display: flex; flex-direction: column; }
-    .strain-picker-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-    .strain-picker-row {
-      display: flex; align-items: center; gap: 0.625rem; width: 100%; padding: 0.625rem 0.75rem;
-      border-radius: 0.75rem; border: 1px solid rgba(168,85,247,0.35); background: rgba(0,0,0,0.35);
-      color: var(--text); cursor: pointer; text-align: left; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    .strain-picker-panel { max-width: 26rem; max-height: 92vh; display: flex; flex-direction: column; }
+    .strain-picker-grid { max-height: 55vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0.15rem; }
+    .strain-picker-card {
+      position: relative; border: none; background: none; padding: 0; cursor: pointer; width: 100%;
     }
-    .strain-picker-row:hover { border-color: var(--green); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(57,255,20,0.15); }
-    .strain-picker-row.active { border-color: var(--green); background: rgba(57,255,20,0.08); box-shadow: 0 0 12px rgba(57,255,20,0.25); }
-    .strain-picker-art { flex-shrink: 0; }
-    .strain-picker-info { flex: 1; min-width: 0; }
-    .strain-picker-name { font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.15rem; }
-    .strain-picker-badge { font-family: var(--font-mono); font-size: 0.45rem; color: var(--green); letter-spacing: 0.08em; flex-shrink: 0; }
+    .strain-picker-card:hover .cr-card { transform: translateY(-4px) scale(1.02); }
+    .strain-picker-card.picker-equipped .cr-card-frame { outline: 3px solid var(--green); }
+    .strain-picker-equipped {
+      position: absolute; bottom: 0.2rem; left: 50%; transform: translateX(-50%);
+      font-family: "Fredoka", var(--font-display); font-size: 0.42rem; font-weight: 700;
+      color: var(--green); text-shadow: 0 1px 2px #000; letter-spacing: 0.08em; z-index: 6; pointer-events: none;
+    }
     .portal-equipped { padding: 0.5rem; border-radius: 0.5rem; background: rgba(57,255,20,0.06); border: 1px solid rgba(57,255,20,0.2); }
 
     /* Desktop / large screens — wider playable frame, mouse-friendly */
@@ -538,6 +630,6 @@
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel p-4" id="settings-panel"></div></div>
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
   </div>
-  <script src="game.js?v=15"></script>
+  <script src="game.js?v=16"></script>
 </body>
 </html>

@@ -510,16 +510,18 @@
 
   function planetCardHtml(p, opts) {
     opts = opts || {};
-    var c = rarityColor(p.rarity), glow = cardGlowClass(p.rarity);
+    var tier = cardTierClass(p.rarity);
+    var c = rarityColor(p.rarity);
     var nm = planetDisplayName(p);
     var focusAttr = opts.asAction ? ' data-action="planet-focus" data-id="' + esc(p.id) + '"' : ' data-planet-focus="' + esc(p.id) + '"';
-    return '<button type="button" class="cr-card planet-card' + (opts.selected ? ' selected' : '') + '"' + focusAttr + ' style="max-width:6.5rem">' +
-      '<div class="cr-card-frame ' + glow + '" style="--rarity-color:' + c + '">' +
-      '<div class="cr-card-shine"></div>' +
-      '<div class="planet-card-orb" style="background:radial-gradient(circle at 35% 35%,' + c + '88,#0C011A);filter:hue-rotate(' + p.hue + 'deg)"></div>' +
-      '<div class="cr-card-rarity" style="color:' + c + '">' + esc(rarityName(p.rarity).toUpperCase()) + '</div>' +
-      '<div class="cr-card-name">' + esc(nm) + '</div>' +
-      '<div class="cr-card-meta">' + fmtRev(planetOutputPerSec(p) * 8) + '</div></div></button>';
+    var rev = Math.max(1, Math.floor(planetOutputPerSec(p) * 8));
+    var lvl = Math.max(1, (p.harvesterLv || 0) + (p.conveyorLv || 0) + 1);
+    var orb = '<div class="cr-planet-orb" style="background:radial-gradient(circle at 32% 28%,' + c + 'dd,' + c + '55 42%,#1A1209 78%);filter:hue-rotate(' + (p.hue || 0) + 'deg)"></div>';
+    return '<button type="button" class="cr-card planet-card' + (opts.selected ? ' selected' : '') + '"' + focusAttr + '>' +
+      crCardFrameInner({ tier: tier, name: nm, artHtml: orb,
+        badgeLeft: '<div class="cr-badge cr-badge-thc cr-badge-sm">' + rev + '</div>',
+        badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + lvl + '</div>',
+        tag: '🪐' }) + '</button>';
   }
 
   function revSec(s) { return (s.yield * s.quantity * s.thcPercent) / 100; }
@@ -1292,14 +1294,49 @@
     }).join('');
   }
 
-  function cardGlowClass(rarity) {
+  function cardTierClass(rarity) {
     var idx = rarityIndex(rarity);
-    if (idx >= 25) return 'cr-card-glow-voidgod';
-    if (idx >= 20) return 'cr-card-glow-mythic';
-    if (idx >= 18) return 'cr-card-glow-legend';
-    if (idx >= 10) return 'cr-card-glow-bloom';
-    if (idx >= 4) return 'cr-card-glow-pulse';
-    return 'cr-card-glow-dust';
+    if (idx >= 25) return 'cr-tier-god';
+    if (idx >= 20) return 'cr-tier-champion';
+    if (idx >= 18) return 'cr-tier-legend';
+    if (idx >= 10) return 'cr-tier-epic';
+    if (idx >= 4) return 'cr-tier-rare';
+    return 'cr-tier-common';
+  }
+
+  function cardTierArtIndex(rarity) {
+    var idx = rarityIndex(rarity);
+    if (idx >= 25) return 5;
+    if (idx >= 20) return 4;
+    if (idx >= 18) return 3;
+    if (idx >= 10) return 2;
+    if (idx >= 4) return 1;
+    return 0;
+  }
+
+  function strainCardArt(s) {
+    return '/public/art/cards/bud-tier-' + cardTierArtIndex(s.rarity) + '.svg';
+  }
+
+  function strainCardLevel(s) {
+    return Math.max(1, Math.min(99, Math.floor((s.potency || 10) / 8) + 1));
+  }
+
+  function strainCardArtImg(s) {
+    var hue = Math.round((s.hue || 0) * 0.12);
+    return '<img src="' + strainCardArt(s) + '" alt="" draggable="false"' + (hue ? ' style="filter:hue-rotate(' + hue + 'deg)"' : '') + '>';
+  }
+
+  function crCardFrameInner(opts) {
+    var qtyBadge = (opts.qty && opts.qty > 1) ? '<div class="cr-badge cr-badge-qty">x' + opts.qty + '</div>' : '';
+    var tagBadge = opts.tag ? '<div class="cr-badge cr-badge-tag">' + opts.tag + '</div>' : '';
+    return '<div class="cr-card-frame ' + opts.tier + (opts.frameExtra || '') + '">' +
+      '<div class="cr-card-bevel"></div>' +
+      '<div class="cr-card-arena"></div>' +
+      '<div class="cr-card-art">' + opts.artHtml + '</div>' +
+      opts.badgeLeft + opts.badgeRight + qtyBadge + tagBadge +
+      '<div class="cr-card-banner"><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
+      '<div class="cr-card-shine"></div></div>';
   }
 
   function casinoBet(game) {
@@ -1342,15 +1379,20 @@
 
   function crCardHtml(s, opts) {
     opts = opts || {};
-    var c = rarityColor(s.rarity), sel = opts.selected ? ' selected' : '';
-    var glow = cardGlowClass(s.rarity);
-    return '<button type="button" class="cr-card' + sel + '" data-strain-focus="' + esc(s.id) + '">' +
-      '<div class="cr-card-frame ' + glow + '" style="--rarity-color:' + c + '">' +
-      '<div class="cr-card-shine"></div>' +
-      '<div class="cr-card-art-wrap">' + budImg(s, '3.25rem') + '</div>' +
-      '<div class="cr-card-rarity" style="color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + '</div>' +
-      '<div class="cr-card-name">' + esc(s.name) + '</div>' +
-      '<div class="cr-card-meta">x' + s.quantity + '</div></div></button>';
+    var tier = cardTierClass(s.rarity);
+    var thc = parseFloat(s.thcPercent || 0);
+    var thcStr = thc % 1 === 0 ? String(Math.floor(thc)) : thc.toFixed(1);
+    var thcCls = thcStr.length > 3 ? ' cr-badge-sm' : '';
+    var tag = s.planetExclusive ? '🌍' : ((s.parentIds && s.parentIds.length) ? '🧬' : '');
+    var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '');
+    var inner = crCardFrameInner({
+      tier: tier, name: s.name, artHtml: strainCardArtImg(s),
+      badgeLeft: '<div class="cr-badge cr-badge-thc' + thcCls + '">' + thcStr + '</div>',
+      badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + strainCardLevel(s) + '</div>',
+      qty: s.quantity, tag: tag,
+    });
+    if (opts.noFocus) return '<div class="' + cls + '">' + inner + '</div>';
+    return '<button type="button" class="' + cls + '" data-strain-focus="' + esc(s.id) + '">' + inner + '</button>';
   }
 
   function showCasinoToast(msg) { UI.casinoToast = msg; setTimeout(function () { if (UI.casinoToast === msg) UI.casinoToast = ''; render(); }, 3000); }
@@ -1803,15 +1845,12 @@
     } else if (!list.length) {
       h += '<div class="neon-card p-4 text-center text-muted text-sm">No strains match your search.</div>';
     } else {
-      h += '<div class="strain-picker-list">';
+      h += '<div class="binder-grid strain-picker-grid">';
       list.forEach(function (s) {
-        var c = rarityColor(s.rarity);
         var on = floor.equippedStrainId === s.id;
-        h += '<button type="button" class="strain-picker-row' + (on ? ' active' : '') + '" data-action="pick-floor-strain" data-id="' + esc(s.id) + '">';
-        h += '<div class="strain-picker-art">' + budImg(s, '2rem') + '</div>';
-        h += '<div class="strain-picker-info"><div class="strain-picker-name">' + esc(s.name) + '</div>';
-        h += '<div class="font-mono text-xs" style="color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + ' · THC ' + s.thcPercent + '% · x' + s.quantity + '</div></div>';
-        if (on) h += '<span class="strain-picker-badge">EQUIPPED</span>';
+        h += '<button type="button" class="strain-picker-card' + (on ? ' picker-equipped' : '') + '" data-action="pick-floor-strain" data-id="' + esc(s.id) + '">';
+        h += crCardHtml(s, { noFocus: true, selected: on });
+        if (on) h += '<div class="strain-picker-equipped">EQUIPPED</div>';
         h += '</button>';
       });
       h += '</div>';
@@ -1855,13 +1894,13 @@
     if (hasDual) {
       inner += '<div class="dual-pack-grid mb-3">';
       pr.strains.forEach(function (s) {
-        var c = rarityColor(s.rarity);
-        inner += '<div class="dual-pack-card" style="border-color:' + c + '"><div class="mb-2">' + budImg(s, '2.75rem') + '</div><div class="font-display" style="font-size:0.75rem">' + esc(s.name) + '</div><div class="font-mono text-xs" style="color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + '</div></div>';
+        inner += '<div>' + crCardHtml(s, { noFocus: true, large: true }) + '</div>';
       });
       inner += '</div><p class="text-muted text-xs mb-3">Two unique genetics — never the same genome.</p>';
     } else {
-      var s = pr.strain, c = rarityColor(s.rarity);
-      inner += '<div style="margin-bottom:1rem">' + budImg(s, '3.75rem') + '</div><h2 class="font-display chromatic-text mb-1">' + esc(s.name) + '</h2><div class="font-mono mb-2" style="color:' + c + ';font-size:0.65rem;font-weight:700">' + esc(rarityName(s.rarity).toUpperCase()) + '</div>' + abilityListHtml(s) + '<div class="grid-3 mb-4 mt-3"><div class="neon-card stat-box"><div class="stat-label">THC</div><div class="stat-value">' + s.thcPercent + '%</div></div><div class="neon-card stat-box"><div class="stat-label">YIELD</div><div class="stat-value">' + s.yield + '</div></div><div class="neon-card stat-box"><div class="stat-label">POTENCY</div><div class="stat-value">' + s.potency + '</div></div></div>';
+      var s = pr.strain;
+      inner += '<div class="mb-3">' + crCardHtml(s, { noFocus: true, large: true }) + '</div>';
+      inner += abilityListHtml(s) + '<div class="grid-3 mb-4 mt-3"><div class="neon-card stat-box"><div class="stat-label">THC</div><div class="stat-value">' + s.thcPercent + '%</div></div><div class="neon-card stat-box"><div class="stat-label">YIELD</div><div class="stat-value">' + s.yield + '</div></div><div class="neon-card stat-box"><div class="stat-label">POTENCY</div><div class="stat-value">' + s.potency + '</div></div></div>';
     }
     var borderC = hasDual ? '#39FF14' : rarityColor(pr.strain.rarity);
     document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:2px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
@@ -1874,7 +1913,7 @@
     if (id.indexOf('index-') === 0) {
       var s = strainById(id.slice(6));
       if (!s) return '';
-      return crCardHtml(s, { selected: G.focusedStrainId === s.id }) + '<div class="mt-3">' + abilityListHtml(s, { upgradeable: true }) + '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="up-strain" data-id="' + esc(s.id) + '">UPGRADE · ' + fmtCash(upCost(s)) + '</button></div>';
+      return crCardHtml(s, { selected: G.focusedStrainId === s.id, large: true }) + '<div class="mt-3">' + abilityListHtml(s, { upgradeable: true }) + '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="up-strain" data-id="' + esc(s.id) + '">UPGRADE · ' + fmtCash(upCost(s)) + '</button></div>';
     }
     if (id === 'planet-scan' && G.scanPending) {
       return planetCardHtml(G.scanPending) + '<div class="mt-3 text-xs text-muted text-center">Rarity-tier genetics exclusive to this world.</div>';
