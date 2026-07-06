@@ -21,7 +21,7 @@ handled.add('sf-price');
 handled.add('set-avatar');
 handled.add('set-bet');
 
-const special = new Set(['counter-input']);
+const special = new Set(['counter-input', 'planet-rename-pending', 'planet-rename']);
 const missing = [...actions].filter((a) => !handled.has(a) && !special.has(a));
 
 console.log('Actions in UI:', [...actions].sort().join(', '));

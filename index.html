@@ -327,6 +327,67 @@
     .slot-machine { max-width: 20rem; }
     .screen-shake { animation: screen-shake 0.4s ease; }
     @keyframes screen-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+    #hud-xp-strip {
+      flex-shrink: 0; z-index: 29; padding: 0 1rem 0.5rem;
+      border-bottom: 1px solid rgba(61,0,102,0.35);
+      background: rgba(12,1,26,0.85);
+    }
+    .hud-xp-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem; }
+  #hud-xp-text { font-family: var(--font-mono); font-size: 0.45rem; color: var(--muted); letter-spacing: 0.08em; }
+  #hud-sp { font-family: var(--font-mono); font-size: 0.45rem; color: var(--cyan); letter-spacing: 0.06em; font-weight: 700; }
+    .hud-xp-bar { height: 0.35rem; border-radius: 9999px; overflow: hidden; background: rgba(31,0,51,0.9); }
+    #hud-xp-fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, var(--pink), var(--green)); transition: width 0.3s; width: 0%; }
+    #battle-toast-layer {
+      position: fixed; top: calc(5.5rem + env(safe-area-inset-top, 0)); left: 50%; transform: translateX(-50%);
+      z-index: 45; display: flex; flex-direction: column; gap: 0.35rem; pointer-events: none; width: min(20rem, 90vw);
+    }
+    .battle-toast {
+      padding: 0.4rem 0.75rem; border-radius: 0.5rem; font-family: var(--font-mono); font-size: 0.55rem;
+      background: rgba(12,1,26,0.92); border: 1px solid rgba(57,255,20,0.35); color: var(--green);
+      animation: toast-in 0.25s ease;
+    }
+    .battle-toast-big { font-size: 0.65rem; border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 20px rgba(6,182,212,0.35); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+    .boss-arena-mega .boss-card-mega { border-color: rgba(236,72,153,0.55); box-shadow: 0 0 30px rgba(236,72,153,0.25); }
+    .boss-hit-flash { animation: boss-hit 0.25s ease; }
+    .boss-crit-flash { animation: boss-crit 0.35s ease; }
+    @keyframes boss-hit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.4) drop-shadow(0 0 12px #39FF14)} }
+    @keyframes boss-crit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6) drop-shadow(0 0 20px #00F0FF)} }
+    .dual-pack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .dual-pack-card { border-radius: 0.75rem; border: 2px solid; padding: 0.75rem; background: rgba(0,0,0,0.35); }
+    .map-scan-rail {
+      position: relative; height: 5rem; margin: 0.5rem 0 1.25rem; display: flex; align-items: center; justify-content: center;
+    }
+    .map-scan-line {
+      position: absolute; left: 5%; right: 5%; height: 3px; top: 50%; transform: translateY(-50%);
+      background: linear-gradient(90deg, transparent, var(--cyan), var(--green), var(--neon-glow), transparent);
+      box-shadow: 0 0 16px rgba(6,182,212,0.5); border-radius: 2px;
+    }
+    .map-scan-beam {
+      position: absolute; left: 10%; width: 30%; height: 2px; top: 50%; transform: translateY(-50%);
+      background: linear-gradient(90deg, transparent, #fff, transparent); opacity: 0; pointer-events: none;
+    }
+    .map-scan-active .map-scan-beam { animation: map-beam-sweep 1.4s ease-in-out infinite; opacity: 1; }
+    @keyframes map-beam-sweep { 0%{left:5%;opacity:0} 20%{opacity:1} 100%{left:75%;opacity:0} }
+    .map-scan-bubble {
+      position: relative; z-index: 2; border-radius: 9999px; padding: 0.65rem 1.25rem;
+      border: 2px solid rgba(6,182,212,0.6); background: radial-gradient(circle at 30% 30%, rgba(6,182,212,0.35), rgba(12,1,26,0.95));
+      box-shadow: 0 0 24px rgba(6,182,212,0.45), inset 0 0 12px rgba(57,255,20,0.15);
+      cursor: pointer; color: var(--cyan); font-family: var(--font-display); letter-spacing: 0.2em; font-size: 0.65rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .map-scan-bubble:hover:not(:disabled) { transform: scale(1.06); box-shadow: 0 0 32px rgba(6,182,212,0.65); }
+    .map-scan-bubble:disabled { opacity: 0.6; cursor: wait; }
+    .map-scan-label { display: block; }
+    .map-pulse { animation: map-pulse 1s ease-in-out infinite; }
+    @keyframes map-pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+    .planet-card-orb {
+      flex: 1; min-height: 0; margin: 0.25rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: inset -4px -8px 16px rgba(0,0,0,0.6), 0 0 20px var(--rarity-color, #A855F7);
+    }
+    #bottom-dock { gap: 0.15rem; }
+    #bottom-dock .nav-btn { padding: 0.3rem 0.35rem; font-size: 0.42rem; }
+    #bottom-dock .nav-btn svg { width: 1.25rem; height: 1.25rem; }
     .casino-toast {
       position: fixed; top: 5rem; left: 50%; transform: translateX(-50%); z-index: 9200;
       padding: 0.5rem 1rem; border-radius: 0.5rem; background: rgba(236,72,153,0.9);
@@ -391,9 +452,18 @@
           </div>
         </button>
       </header>
+      <div id="hud-xp-strip">
+        <div class="hud-xp-row">
+          <span id="hud-xp-text">XP 0 / 500</span>
+          <span id="hud-sp">100 SP</span>
+        </div>
+        <div class="hud-xp-bar"><div id="hud-xp-fill"></div></div>
+      </div>
+      <div id="battle-toast-layer"></div>
       <main id="screen-root"></main>
       <nav id="bottom-dock">
         <button type="button" class="nav-btn active" data-tab="battle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2l3 7h7l-5.5 4.5 2 7L12 17l-6.5 3.5 2-7L2 9h7z"/></svg>FIGHT</button>
+        <button type="button" class="nav-btn" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>MAP</button>
         <button type="button" class="nav-btn" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6h15l-1.5 9H7.5L6 6z"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>SHOP</button>
         <button type="button" class="nav-btn" data-tab="index"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>BOOK</button>
         <button type="button" class="nav-btn" data-tab="coop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M14 20c0-2 2-3.5 4-3.5"/></svg>CO-OP</button>
@@ -409,6 +479,6 @@
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel p-4" id="settings-panel"></div></div>
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
   </div>
-  <script src="game.js?v=8"></script>
+  <script src="game.js?v=9"></script>
 </body>
 </html>
