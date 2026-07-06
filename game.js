@@ -697,9 +697,9 @@
   function strainBattleDps(s, rng) {
     if (!s) return 0;
     var base = (s.yield * s.thcPercent / 100) * rMult(s.rarity) * s.quantity;
-    if (hasAbility(s, 'boss_slayer')) base *= 1.3;
-    if (hasAbility(s, 'thc_overdrive')) base *= 1.15;
-    if (hasAbility(s, 'crit_burst') && rng && rng() < 0.15) base *= 3;
+    if (hasAbility(s, 'boss_slayer')) base *= 1.3 * abilityBoostMult(s, 'boss_slayer');
+    if (hasAbility(s, 'thc_overdrive')) base *= 1.15 * abilityBoostMult(s, 'thc_overdrive');
+    if (hasAbility(s, 'crit_burst') && rng && rng() < 0.15) base *= 3 * abilityBoostMult(s, 'crit_burst');
     return base;
   }
 
@@ -716,9 +716,9 @@
       var s = strainById(id);
       if (!s) return t;
       var base = (s.yield * s.thcPercent / 100) * rMult(s.rarity) * s.quantity;
-      if (hasAbility(s, 'boss_slayer')) base *= 1.3;
-      if (hasAbility(s, 'thc_overdrive')) base *= 1.15;
-      if (hasAbility(s, 'crit_burst') && rng() < 0.15) { base *= 3; hadCrit = true; }
+      if (hasAbility(s, 'boss_slayer')) base *= 1.3 * abilityBoostMult(s, 'boss_slayer');
+      if (hasAbility(s, 'thc_overdrive')) base *= 1.15 * abilityBoostMult(s, 'thc_overdrive');
+      if (hasAbility(s, 'crit_burst') && rng() < 0.15) { base *= 3 * abilityBoostMult(s, 'crit_burst'); hadCrit = true; }
       return t + base;
     }, 0);
     if (hadCrit && (!UI._lastCritAt || Date.now() - UI._lastCritAt > 400)) {
