@@ -110,7 +110,7 @@
     'strains', 'inventory', 'factoryFloors', 'sectorUpgrades', 'blitzUpgrades', 'blitzEndsAt', 'purchasedBlitzIds',
     'counterPrices', 'cloneJob', 'focusedStrainId', 'farmSubTab', 'nextPortalNum',
     'bossRound', 'bossHp', 'bossMaxHp', 'bossName', 'bossSeed', 'bossRarity', 'equippedBattleIds',
-    'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB',
+    'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -336,9 +336,18 @@
   }
 
   function renamePlanet(pid, name) {
+    var updated = null;
     G.ownedPlanets = G.ownedPlanets.map(function (p) {
-      return p.id === pid ? Object.assign({}, p, { customName: (name || '').trim() || p.proceduralName }) : p;
+      if (p.id !== pid) return p;
+      updated = Object.assign({}, p, { customName: (name || '').trim() || p.proceduralName });
+      return updated;
     });
+    if (updated && updated.exclusiveStrainId) {
+      var newName = planetDisplayName(updated) + ' Prime';
+      G.strains = G.strains.map(function (s) {
+        return s.id === updated.exclusiveStrainId ? Object.assign({}, s, { name: newName }) : s;
+      });
+    }
     scheduleSave();
   }
 
@@ -425,8 +434,12 @@
   }
 
   function runBreed() {
+    if (G.packReveal && G.packReveal.open) {
+      showBattleToast('Close the open pack reveal first', false);
+      return false;
+    }
     if (!G.breedSlotA || !G.breedSlotB) return false;
-    if (G.sp < 15) return false;
+    if ((G.sp || 0) < 15) return false;
     var child = breedStrains(G.breedSlotA, G.breedSlotB);
     if (!child) return false;
     G.sp -= 15;
@@ -499,7 +512,7 @@
       bossRound: 1, bossHp: 0, bossMaxHp: 0, bossName: '', bossSeed: 0, bossRarity: 'dust', equippedBattleIds: [],
       indexSearch: '', indexSort: 'recent',
       casinoBets: { blackjack: 1000, slots: 500 },
-      ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null,
+      ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
     };
   }
 
@@ -520,6 +533,8 @@
     var p = playerDef(pid);
     if (G.name === 'VoidPilot_Aden' || G.name === 'VoidPilot') G.name = p.defaultName;
     if (!G.casinoBets.slots) G.casinoBets.slots = 500;
+    if (G.sp == null || isNaN(G.sp)) G.sp = 100;
+    if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.ownedPlanets) G.ownedPlanets = [];
     if (G.scanPending === undefined) G.scanPending = null;
     G.strains = (G.strains || []).map(migrateStrain);
@@ -837,6 +852,7 @@
     UI.farmOpen = false;
     plantSay('welcome', true);
     render();
+    if (G.pendingRewards && G.pendingRewards.length) drainRewardQueue();
   }
 
   function switchPlayerPrompt() { saveGame(); UI.playerSelectOpen = true; UI.profileOpen = false; UI.settingsOpen = false; render(); }
@@ -893,9 +909,13 @@
   }
 
   function buyPack(type) {
+    if (G.packReveal && G.packReveal.open) {
+      showBattleToast('Close the open pack reveal first', false);
+      return false;
+    }
     var p = PACKS.find(function (x) { return x.type === type; });
     if (!p) return false;
-    var nc = G.cash, ns = G.sp;
+    var nc = G.cash, ns = G.sp || 0;
     if (type === 'omega' && G.cash < p.price && p.spCost && G.sp >= p.spCost) ns -= p.spCost;
     else if (G.cash < p.price) return false;
     else { nc -= p.price; ns += Math.floor(p.price / 2500); }
@@ -1513,7 +1533,7 @@
 
   function renderProfile() {
     var pl = playerDef(activePlayerId);
-    var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">✕</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;font-size:1.5rem;border-width:3px">' + G.avatar + '</div></div></div><div class="profile-body"><div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24"><div class="stat-grid"><div class="neon-card stat-box"><div class="stat-label">CASH</div><div class="stat-value">' + fmtCash(G.cash) + '</div></div><div class="neon-card stat-box"><div class="stat-label">SP</div><div class="stat-value">' + fmtSp(G.sp) + '</div></div><div class="neon-card stat-box"><div class="stat-label">REV/SEC</div><div class="stat-value">' + fmtRev(revSecTotal()) + '</div></div></div><div class="font-mono text-muted text-center mb-3" style="font-size:0.55rem">LV.' + G.empireLevel + ' EMPIRE · BOSS R' + G.bossRound + '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker">';
+    var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">✕</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;font-size:1.5rem;border-width:3px">' + G.avatar + '</div></div></div><div class="profile-body"><div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24"><div class="stat-grid"><div class="neon-card stat-box"><div class="stat-label">CASH</div><div class="stat-value">' + fmtCash(G.cash) + '</div></div><div class="neon-card stat-box"><div class="stat-label">SP</div><div class="stat-value">' + fmtSp(G.sp || 0) + '</div></div><div class="neon-card stat-box"><div class="stat-label">REV/SEC</div><div class="stat-value">' + fmtRev(revSecTotal()) + '</div></div></div><div class="font-mono text-muted text-center mb-3" style="font-size:0.55rem">LV.' + G.empireLevel + ' EMPIRE · BOSS R' + G.bossRound + '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker">';
     AVATARS.forEach(function (a) { h += '<button type="button" class="avatar-opt' + (G.avatar === a ? ' selected' : '') + '" data-action="set-avatar" data-av="' + a + '">' + a + '</button>'; });
     h += '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">BADGES</div><div class="grid-3 mb-3">';
     [0, 1, 2].forEach(function (slot) {
@@ -1785,8 +1805,6 @@
     if (UI.activeTab === 'shop') { var cd = document.getElementById('blitz-timer'); if (cd) cd.textContent = fmtCd(blitzRem()); }
     if (UI.farmOpen && G.farmSubTab === 'portal' && G.cloneJob) { var cr = document.querySelector('.clone-active .font-mono.text-green'); if (cr) cr.textContent = fmtCd(cloneRem()); }
     document.getElementById('hud-cash').textContent = fmtCash(G.cash);
-    var spTick = document.getElementById('hud-sp');
-    if (spTick) spTick.textContent = fmtSp(G.sp || 0);
     if (G.cash < 10000 && Date.now() - dialogueState.lastAt > 60000) plantSay('lowcash');
     scheduleSave();
   }, 50);
