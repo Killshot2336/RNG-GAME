@@ -394,6 +394,21 @@
       font-family: var(--font-mono); font-size: 0.65rem; pointer-events: none;
     }
     .strain-bud-img { display: inline-block; vertical-align: middle; }
+    #overlay-strain-picker { z-index: 8100; }
+    .strain-picker-panel { max-width: 22rem; max-height: 85vh; display: flex; flex-direction: column; }
+    .strain-picker-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .strain-picker-row {
+      display: flex; align-items: center; gap: 0.625rem; width: 100%; padding: 0.625rem 0.75rem;
+      border-radius: 0.75rem; border: 1px solid rgba(168,85,247,0.35); background: rgba(0,0,0,0.35);
+      color: var(--text); cursor: pointer; text-align: left; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    }
+    .strain-picker-row:hover { border-color: var(--green); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(57,255,20,0.15); }
+    .strain-picker-row.active { border-color: var(--green); background: rgba(57,255,20,0.08); box-shadow: 0 0 12px rgba(57,255,20,0.25); }
+    .strain-picker-art { flex-shrink: 0; }
+    .strain-picker-info { flex: 1; min-width: 0; }
+    .strain-picker-name { font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.15rem; }
+    .strain-picker-badge { font-family: var(--font-mono); font-size: 0.45rem; color: var(--green); letter-spacing: 0.08em; flex-shrink: 0; }
+    .portal-equipped { padding: 0.5rem; border-radius: 0.5rem; background: rgba(57,255,20,0.06); border: 1px solid rgba(57,255,20,0.2); }
 
     /* Desktop / large screens — wider playable frame, mouse-friendly */
     @media (min-width: 640px) {
@@ -479,6 +494,6 @@
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel p-4" id="settings-panel"></div></div>
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
   </div>
-  <script src="game.js?v=10"></script>
+  <script src="game.js?v=11"></script>
 </body>
 </html>

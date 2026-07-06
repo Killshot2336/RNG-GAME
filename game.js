@@ -492,7 +492,7 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, settingsOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, scanAnimating: false, focusedPlanetId: null };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, settingsOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity' };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -1044,6 +1044,17 @@
     return list;
   }
 
+  function filteredPickerStrains() {
+    var list = G.strains.slice();
+    var q = (UI.strainPickerSearch || '').toLowerCase();
+    if (q) list = list.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0 || rarityName(s.rarity).toLowerCase().indexOf(q) >= 0; });
+    var sort = UI.strainPickerSort || 'rarity';
+    if (sort === 'rarity') list.sort(function (a, b) { return rarityIndex(b.rarity) - rarityIndex(a.rarity); });
+    else if (sort === 'name') list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    else list.sort(function (a, b) { return (b.discoveredAt || 0) - (a.discoveredAt || 0); });
+    return list;
+  }
+
   function abilityListHtml(strainOrIds, opts) {
     opts = opts || {};
     var ids = typeof strainOrIds === 'object' && strainOrIds && strainOrIds.abilities ? strainOrIds.abilities : (strainOrIds || []);
@@ -1220,7 +1231,7 @@
     var spEl = document.getElementById('hud-sp');
     if (spEl) spEl.textContent = fmtSp(G.sp || 0);
     renderBattleToasts();
-    document.getElementById('phone-shell').classList.toggle('dimmed', !!UI.liftedCardId);
+    document.getElementById('phone-shell').classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
     document.getElementById('voidline-app').classList.toggle('reality-warp-active', UI.realityWarp);
     document.getElementById('overlay-reality-warp').classList.toggle('active', UI.realityWarp);
     document.querySelectorAll('.nav-btn').forEach(function (b) {
@@ -1332,9 +1343,15 @@
       G.factoryFloors.forEach(function (f) {
         var eq = f.equippedStrainId ? strainById(f.equippedStrainId) : null;
         var uc = floorUpCost(f);
-        h += '<div class="neon-card p-4 mb-3"><div class="flex-between mb-3"><div><div style="font-weight:600">' + esc(f.name) + '</div><div class="text-muted" style="font-size:0.55rem">Floor Lv.' + f.level + '</div></div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-floor" data-id="' + f.id + '"' + (G.cash < uc ? ' disabled' : '') + '>UP · ' + fmtCash(uc) + '</button></div>' + (eq ? '<div class="font-mono text-green text-xs mb-2">' + esc(eq.name) + '</div>' : '') + '<select class="input-field" data-action="equip-floor" data-id="' + f.id + '"><option value="">— Select strain —</option>';
-        G.strains.forEach(function (s) { h += '<option value="' + esc(s.id) + '"' + (f.equippedStrainId === s.id ? ' selected' : '') + '>' + esc(s.name) + ' (x' + s.quantity + ')</option>'; });
-        h += '</select></div>';
+        h += '<div class="neon-card p-4 mb-3"><div class="flex-between mb-3"><div><div style="font-weight:600">' + esc(f.name) + '</div><div class="text-muted" style="font-size:0.55rem">Floor Lv.' + f.level + '</div></div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-floor" data-id="' + f.id + '"' + (G.cash < uc ? ' disabled' : '') + '>UP · ' + fmtCash(uc) + '</button></div>';
+        if (eq) {
+          h += '<div class="flex-row mb-2 portal-equipped"><div style="flex-shrink:0">' + budImg(eq, '1.5rem') + '</div><div style="flex:1;min-width:0"><div class="font-mono text-green text-xs" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(eq.name) + '</div><div class="text-muted text-xs">' + esc(rarityName(eq.rarity)) + ' · x' + eq.quantity + '</div></div></div>';
+        } else {
+          h += '<div class="text-muted text-xs mb-2 text-center">No strain mining this portal</div>';
+        }
+        h += '<div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="open-strain-picker" data-id="' + esc(f.id) + '"' + (G.strains.length ? '' : ' disabled') + '>SELECT STRAIN</button>';
+        if (eq) h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="clear-floor-strain" data-id="' + esc(f.id) + '">CLEAR</button>';
+        h += '</div></div>';
       });
       if (G.factoryFloors.length) h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>+ BUY FLOOR · ' + fmtCash(portalCost()) + '</button>';
       var cr = cloneRem();
@@ -1531,6 +1548,46 @@
     el.innerHTML = '<button type="button" class="overlay-backdrop" data-action="close-slots"></button><div class="overlay-panel slot-machine p-5 text-center"><h3 class="font-display mb-2">VOID SLOTS</h3>' + renderBetPicker('slots') + '<div class="slot-reels font-mono" style="font-size:2rem;letter-spacing:0.5em;margin:1rem 0">' + r.reels.join(' ') + '</div><div class="text-muted text-xs mb-3">Spin · ' + fmtCash(casinoBet('slots')) + '</div>' + (r.win > 0 ? '<div class="text-green mb-2">Won ' + fmtCash(r.win) + '!</div>' : '') + '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="slot-spin"' + (G.cash < casinoBet('slots') ? ' disabled' : '') + '>SPIN</button><button type="button" class="game-btn w-full" data-action="close-slots">CLOSE</button></div>';
   }
 
+  function renderStrainPicker() {
+    var el = document.getElementById('overlay-strain-picker');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'overlay-strain-picker';
+      el.className = 'overlay';
+      document.getElementById('voidline-app').appendChild(el);
+    }
+    if (!UI.strainPickerFloorId) { el.classList.remove('open'); el.innerHTML = ''; return; }
+    var floor = G.factoryFloors.find(function (f) { return f.id === UI.strainPickerFloorId; });
+    if (!floor) { UI.strainPickerFloorId = null; el.classList.remove('open'); el.innerHTML = ''; return; }
+    var list = filteredPickerStrains();
+    var sort = UI.strainPickerSort || 'rarity';
+    el.classList.add('open');
+    var h = '<button type="button" class="overlay-backdrop" data-close="strain-picker"></button><div class="overlay-panel strain-picker-panel p-4">';
+    h += '<div class="flex-between mb-3"><div><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.12em">SELECT STRAIN</h3><div class="font-mono text-muted text-xs">' + esc(floor.name) + ' · Floor Lv.' + floor.level + '</div></div><button type="button" class="profile-close" data-close="strain-picker" style="position:static;width:2rem;height:2rem">✕</button></div>';
+    h += '<input type="search" class="input-field mb-2" placeholder="Search by name or rarity..." data-action="strain-picker-search" value="' + esc(UI.strainPickerSearch || '') + '" autocomplete="off">';
+    h += '<select class="input-field mb-3" data-action="strain-picker-sort"><option value="rarity"' + (sort === 'rarity' ? ' selected' : '') + '>Sort: Rarity (high → low)</option><option value="name"' + (sort === 'name' ? ' selected' : '') + '>Sort: Name</option><option value="recent"' + (sort === 'recent' ? ' selected' : '') + '>Sort: Recent</option></select>';
+    if (!G.strains.length) {
+      h += '<div class="neon-card p-4 text-center text-muted text-sm">No strains in your Index. Open a pack in Shop first.</div>';
+    } else if (!list.length) {
+      h += '<div class="neon-card p-4 text-center text-muted text-sm">No strains match your search.</div>';
+    } else {
+      h += '<div class="strain-picker-list">';
+      list.forEach(function (s) {
+        var c = rarityColor(s.rarity);
+        var on = floor.equippedStrainId === s.id;
+        h += '<button type="button" class="strain-picker-row' + (on ? ' active' : '') + '" data-action="pick-floor-strain" data-id="' + esc(s.id) + '">';
+        h += '<div class="strain-picker-art">' + budImg(s, '2rem') + '</div>';
+        h += '<div class="strain-picker-info"><div class="strain-picker-name">' + esc(s.name) + '</div>';
+        h += '<div class="font-mono text-xs" style="color:' + c + '">' + esc(rarityName(s.rarity).toUpperCase()) + ' · THC ' + s.thcPercent + '% · x' + s.quantity + '</div></div>';
+        if (on) h += '<span class="strain-picker-badge">EQUIPPED</span>';
+        h += '</button>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
   function renderProfile() {
     var pl = playerDef(activePlayerId);
     var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">✕</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;font-size:1.5rem;border-width:3px">' + G.avatar + '</div></div></div><div class="profile-body"><div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24"><div class="stat-grid"><div class="neon-card stat-box"><div class="stat-label">CASH</div><div class="stat-value">' + fmtCash(G.cash) + '</div></div><div class="neon-card stat-box"><div class="stat-label">SP</div><div class="stat-value">' + fmtSp(G.sp || 0) + '</div></div><div class="neon-card stat-box"><div class="stat-label">REV/SEC</div><div class="stat-value">' + fmtRev(revSecTotal()) + '</div></div></div><div class="font-mono text-muted text-center mb-3" style="font-size:0.55rem">LV.' + G.empireLevel + ' EMPIRE · BOSS R' + G.bossRound + '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker">';
@@ -1639,6 +1696,7 @@
     renderLift();
     renderBeam();
     renderSlotOverlay();
+    renderStrainPicker();
   }
 
   var saveTimer = null;
@@ -1664,6 +1722,12 @@
     else if (act==='accept-offer') acceptOffer(val);
     else if (act==='counter-offer') counterOffer(val);
     else if (act==='equip-floor') equipFloor(val.split(':')[0], val.split(':')[1] || null);
+    else if (act==='open-strain-picker') { UI.strainPickerFloorId = val; UI.strainPickerSearch = ''; UI.strainPickerSort = 'rarity'; }
+    else if (act==='close-strain-picker') { UI.strainPickerFloorId = null; }
+    else if (act==='pick-floor-strain') { if (UI.strainPickerFloorId) { equipFloor(UI.strainPickerFloorId, val); UI.strainPickerFloorId = null; plantSay('equip'); } }
+    else if (act==='clear-floor-strain') equipFloor(val, null);
+    else if (act==='strain-picker-search') UI.strainPickerSearch = val;
+    else if (act==='strain-picker-sort') UI.strainPickerSort = val;
     else if (act==='up-floor') upFloor(val);
     else if (act==='equip-battle') equipBattle(val);
     else if (act==='start-clone') { var sel = document.getElementById('clone-select'); if (sel && sel.value) startClone(sel.value); }
@@ -1728,6 +1792,7 @@
     if (t.dataset.close === 'profile') { UI.profileOpen = false; render(); return; }
     if (t.dataset.close === 'settings') { UI.settingsOpen = false; render(); return; }
     if (t.dataset.close === 'pack') { closePack(); render(); return; }
+    if (t.dataset.close === 'strain-picker') { UI.strainPickerFloorId = null; render(); return; }
     if (t.dataset.action) {
       e.stopPropagation();
       var a = t.dataset.action, v = t.dataset.id || t.dataset.pack || t.dataset.pid || t.dataset.av;
@@ -1757,12 +1822,14 @@
     if (t.dataset.action === 'sf-strain') runAction('sf-strain', t.dataset.slot + ':' + t.value);
     if (t.dataset.action === 'sf-price') runAction('sf-price', t.dataset.slot + ':' + t.value);
     if (t.dataset.action === 'breed-pick') runAction('breed-pick', t.dataset.slot + ':' + t.value);
+    if (t.dataset.action === 'strain-picker-sort') { runAction('strain-picker-sort', t.value); render(); }
   });
 
   document.getElementById('voidline-app').addEventListener('input', function (e) {
     if (e.target.id === 'edit-name') G.name = e.target.value.trim() || playerDef(activePlayerId).defaultName;
     if (e.target.dataset.action === 'counter-input') { G.counterPrices = Object.assign({}, G.counterPrices, { [e.target.dataset.id]: Number(e.target.value) }); render(); }
     if (e.target.dataset.action === 'index-search') { G.indexSearch = e.target.value; render(); }
+    if (e.target.dataset.action === 'strain-picker-search') { UI.strainPickerSearch = e.target.value; renderStrainPicker(); }
     if (e.target.dataset.action === 'planet-rename') { renamePlanet(e.target.dataset.id, e.target.value); }
     if (e.target.dataset.action === 'planet-rename-pending' && G.scanPending) {
       G.scanPending = Object.assign({}, G.scanPending, { customName: e.target.value.trim() || null });
