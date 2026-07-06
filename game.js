@@ -5,6 +5,7 @@
   var SAVE_PREFIX = 'voidline_galaxy_farm_v2_';
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
+  var LAST_PLAYER_KEY = 'voidline_last_player';
   var POKER_KEY = 'voidline_poker_room';
   var APP_VERSION = '6';
   var VERSION_KEY = 'voidline_app_version';
@@ -18,6 +19,12 @@
   var BUD_ART = '/public/art/strain-bud.svg';
   var BOSS_ART = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
+
+  function dbgLog(hypothesisId, location, message, data) {
+    // #region agent log
+    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2fa0f7' }, body: JSON.stringify({ sessionId: '2fa0f7', hypothesisId: hypothesisId, location: location, message: message, data: data || {}, timestamp: Date.now() }) }).catch(function () { });
+    // #endregion
+  }
 
   var PLAYERS = [
     { id: 'aden', label: 'Aden', avatar: '🌌', portrait: '/public/art/strain-bud.svg', defaultName: 'Aden' },
@@ -108,7 +115,7 @@
   var PERSIST = [
     'saveVersion', 'cash', 'sp', 'empireLevel', 'empireXp', 'name', 'avatar', 'badgeIds', 'storefrontSlots',
     'strains', 'inventory', 'factoryFloors', 'sectorUpgrades', 'blitzUpgrades', 'blitzEndsAt', 'purchasedBlitzIds',
-    'counterPrices', 'cloneJob', 'focusedStrainId', 'farmSubTab', 'nextPortalNum',
+    'counterPrices', 'cloneJob', 'focusedStrainId', 'farmSubTab', 'nextPortalNum', 'lastTickAt',
     'bossRound', 'bossHp', 'bossMaxHp', 'bossName', 'bossSeed', 'bossRarity', 'equippedBattleIds',
     'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
   ];
@@ -306,6 +313,8 @@
       G.scanPending = rollScanPlanet();
       UI.scanAnimating = false;
       shakeScreen();
+      popArcade('label', 0, { label: 'SIGNAL FOUND!', mega: true });
+      popArcade('label', 0, { label: 'NEW WORLD', jackpot: true, delay: 150 });
       plantSay('tab_map', true);
       scheduleSave();
       render();
@@ -324,6 +333,12 @@
     p.conveyorLv = 1;
     G.ownedPlanets = (G.ownedPlanets || []).concat([p]);
     G.scanPending = null;
+    addXp(30, true);
+    popArcadeBurst([
+      { type: 'label', label: 'PLANET CLAIMED!', jackpot: true },
+      { type: 'strain', strain: strain, mega: true, delay: 90 },
+      { type: 'xp', amount: 30, big: true, delay: 180 },
+    ]);
     showBattleToast('PLANET CLAIMED: ' + planetDisplayName(p), true);
     plantSay('planet_keep', true);
     scheduleSave();
@@ -385,6 +400,12 @@
       G.strains[i] = Object.assign({}, G.strains[i], { quantity: G.strains[i].quantity + qty });
     }
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
+    addXp(qty * 4, true);
+    popArcadeBurst([
+      { type: 'label', label: 'HARVEST!', mega: true },
+      { type: 'strain', strain: strain, qty: qty, big: true, delay: 80 },
+      { type: 'xp', amount: qty * 4, big: true, delay: 160 },
+    ]);
     showBattleToast('Harvested x' + qty + ' ' + strain.name, false);
     return true;
   }
@@ -392,18 +413,41 @@
   function tickPlanets(dt) {
     if (!G.ownedPlanets || !G.ownedPlanets.length) return;
     var ms = dt / 1000;
+    var cashAcc = 0, spAcc = 0;
     G.ownedPlanets = G.ownedPlanets.map(function (p) {
       var out = planetOutputPerSec(p) * ms;
       var spBonus = 0;
       var strain = strainById(p.exclusiveStrainId);
       if (strain && hasAbility(strain, 'yield_surge')) spBonus += out * 0.02;
-      G.cash += out * 8;
+      var cashGain = out * 8;
+      G.cash += cashGain;
+      cashAcc += cashGain;
       if (strain) {
         p = Object.assign({}, p, { storedYield: (p.storedYield || 0) + out * 0.15 });
       }
-      if (spBonus) G.sp += spBonus;
+      if (spBonus) { G.sp += spBonus; spAcc += spBonus; }
       return p;
     });
+    UI._planetCashAcc = (UI._planetCashAcc || 0) + cashAcc;
+    UI._planetSpAcc = (UI._planetSpAcc || 0) + spAcc;
+    maybePlanetPops();
+  }
+
+  function maybePlanetPops() {
+    var now = Date.now();
+    if (now - (UI._lastPlanetPop || 0) < 2000) return;
+    var items = [];
+    if ((UI._planetCashAcc || 0) >= 25) {
+      items.push({ type: 'cash', amount: UI._planetCashAcc, big: UI._planetCashAcc >= 400 });
+      UI._planetCashAcc = 0;
+    }
+    if ((UI._planetSpAcc || 0) >= 1.5) {
+      items.push({ type: 'sp', amount: Math.max(1, Math.floor(UI._planetSpAcc)), big: UI._planetSpAcc >= 8 });
+      UI._planetSpAcc = 0;
+    }
+    if (!items.length) return;
+    popArcadeBurst(items);
+    UI._lastPlanetPop = now;
   }
 
   function breedStrains(idA, idB) {
@@ -492,7 +536,7 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, settingsOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity' };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, settingsOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', arcadePops: [], _passiveCashAcc: 0, _lastPassivePop: 0, _planetSpAcc: 0, _lastPlanetPop: 0 };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -516,15 +560,50 @@
     };
   }
 
-  function readPlayerSave(pid) { try { var r = localStorage.getItem(saveKey(pid)); if (!r) return null; return JSON.parse(r); } catch (e) { return null; } }
+  function readPlayerSave(pid) {
+    var key = saveKey(pid);
+    try {
+      var r = localStorage.getItem(key);
+      if (!r) r = localStorage.getItem(key + '_backup');
+      if (!r) {
+        // #region agent log
+        dbgLog('E', 'game.js:readPlayerSave', 'no save found', { pid: pid, key: key });
+        // #endregion
+        return null;
+      }
+      return JSON.parse(r);
+    } catch (e) {
+      try {
+        var b = localStorage.getItem(key + '_backup');
+        if (b) return JSON.parse(b);
+      } catch (e2) { }
+      return null;
+    }
+  }
   function saveGame() {
-    if (!G || !activePlayerId) return;
+    if (!G || !activePlayerId) return false;
     try {
       G.saveVersion = SAVE_VERSION;
+      G.lastTickAt = Date.now();
       var p = { playerId: activePlayerId, saveVersion: SAVE_VERSION };
       PERSIST.forEach(function (k) { p[k] = G[k]; });
-      localStorage.setItem(saveKey(activePlayerId), JSON.stringify(p));
-    } catch (e) { }
+      var key = saveKey(activePlayerId);
+      var blob = JSON.stringify(p);
+      localStorage.setItem(key, blob);
+      localStorage.setItem(key + '_backup', blob);
+      localStorage.setItem(LAST_PLAYER_KEY, activePlayerId);
+      try { sessionStorage.setItem(SESSION_KEY, activePlayerId); } catch (e2) { }
+      // #region agent log
+      dbgLog('A', 'game.js:saveGame', 'save ok', { pid: activePlayerId, strains: (G.strains || []).length, cash: G.cash, blobLen: blob.length });
+      // #endregion
+      return true;
+    } catch (e) {
+      console.error('[Voidline] Save failed — progress may not persist:', e);
+      // #region agent log
+      dbgLog('D', 'game.js:saveGame', 'save failed', { pid: activePlayerId, err: String(e && e.message || e) });
+      // #endregion
+      return false;
+    }
   }
 
   function sanitizeSave(pid) {
@@ -561,6 +640,9 @@
     var d = readPlayerSave(pid);
     if (!d && pid === 'aden') { try { var leg = localStorage.getItem(LEGACY_SAVE); if (leg) d = JSON.parse(leg); } catch (e) { } }
     G = d ? Object.assign(freshState(pid), d, { playerId: pid }) : freshState(pid);
+    // #region agent log
+    dbgLog('E', 'game.js:loadGame', d ? 'loaded save' : 'fresh state', { pid: pid, strains: (G.strains || []).length, cash: G.cash, hadSave: !!d });
+    // #endregion
     if (!G.factoryFloors) G.factoryFloors = [];
     if (!G.nextPortalNum) G.nextPortalNum = (G.factoryFloors.length || 0) + 1;
     sanitizeSave(pid);
@@ -644,6 +726,12 @@
   function onLevelUp(newLvl) {
     queueReward('single', 'level');
     if (newLvl % 10 === 0) queueReward('dual', 'milestone');
+    popArcadeBurst([
+      { type: 'label', label: 'LEVEL UP!', mega: true },
+      { type: 'label', label: 'LV.' + newLvl, mega: true, delay: 100 },
+      { type: 'label', label: 'NEW STRAIN!', mega: true, delay: 200 },
+    ]);
+    if (newLvl % 10 === 0) popArcade('label', 0, { label: 'MILESTONE PACK!', jackpot: true, delay: 400 });
     showBattleToast('LEVEL UP! LV.' + newLvl, true);
     shakeScreen();
     plantSay('level_up', true);
@@ -652,9 +740,99 @@
   function showBattleToast(msg, big) {
     UI.battleToasts = UI.battleToasts || [];
     UI.battleToasts.push({ msg: msg, big: !!big, at: Date.now() });
-    if (UI.battleToasts.length > 4) UI.battleToasts.shift();
+    if (UI.battleToasts.length > 6) UI.battleToasts.shift();
     var el = document.getElementById('battle-toast-layer');
     if (el) renderBattleToasts();
+  }
+
+  function popArcade(type, amount, opts) {
+    opts = opts || {};
+    var text;
+    if (type === 'label') text = opts.label || '';
+    else if (type === 'strain') text = opts.label || '+STRAIN';
+    else if (type === 'cash') text = '+' + fmtCash(amount);
+    else if (type === 'xp') text = '+' + Math.floor(amount) + ' XP';
+    else if (type === 'sp') text = '+' + Math.floor(amount) + ' SP';
+    else text = String(amount);
+    if (type !== 'label' && type !== 'strain' && (!amount || amount <= 0)) return;
+    UI.arcadePops = UI.arcadePops || [];
+    var big = !!(opts.big || opts.mega || opts.jackpot);
+    if (!big && type === 'cash' && amount >= 2500) big = true;
+    if (!big && type === 'xp' && amount >= 40) big = true;
+    if (!big && type === 'sp' && amount >= 10) big = true;
+    UI.arcadePops.push({
+      type: type === 'label' ? (opts.jackpot ? 'jackpot' : 'mega') : type,
+      text: text,
+      rarity: opts.rarity || null,
+      big: big,
+      mega: !!(opts.mega || opts.jackpot),
+      jackpot: !!opts.jackpot,
+      x: opts.x != null ? opts.x : (10 + Math.random() * 80),
+      y: opts.y != null ? opts.y : (28 + Math.random() * 38),
+      at: Date.now(),
+      delay: opts.delay || 0,
+      dur: opts.jackpot ? 2600 : (opts.mega ? 2100 : 1550),
+    });
+    if (UI.arcadePops.length > 20) UI.arcadePops.splice(0, UI.arcadePops.length - 20);
+    renderArcadePops();
+  }
+
+  function popCash(amt, opts) { popArcade('cash', amt, opts || {}); }
+  function popXp(amt, opts) { popArcade('xp', amt, opts || {}); }
+  function popSp(amt, opts) { popArcade('sp', amt, opts || {}); }
+
+  function popStrain(strain, opts) {
+    if (!strain) return;
+    opts = opts || {};
+    var qty = opts.qty != null ? opts.qty : 1;
+    var name = strain.name || 'Strain';
+    if (name.length > 22) name = name.slice(0, 20) + '…';
+    var text = qty > 1 ? '+' + qty + ' ' + name : '+' + name;
+    var idx = rarityIndex(strain.rarity);
+    popArcade('strain', 0, {
+      label: text,
+      rarity: strain.rarity,
+      big: opts.big || idx >= 8,
+      mega: opts.mega || idx >= 12,
+      jackpot: opts.jackpot || idx >= 16,
+      delay: opts.delay,
+      x: opts.x,
+      y: opts.y,
+    });
+  }
+
+  function popArcadeBurst(items) {
+    items.forEach(function (it, i) {
+      setTimeout(function () {
+        if (it.type === 'label') popArcade('label', 0, { label: it.label, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 18 + i * 22, y: 30 + (i % 3) * 10 });
+        else if (it.type === 'strain') popStrain(it.strain, { qty: it.qty, big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
+        else popArcade(it.type, it.amount, { big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
+      }, (it.delay || 0) + i * 85);
+    });
+  }
+
+  function renderArcadePops() {
+    var el = document.getElementById('arcade-pop-layer');
+    if (!el) return;
+    var now = Date.now();
+    UI.arcadePops = (UI.arcadePops || []).filter(function (p) { return now - p.at - (p.delay || 0) < (p.dur || 1550); });
+    el.innerHTML = UI.arcadePops.map(function (p) {
+      var age = now - p.at - (p.delay || 0);
+      if (age < 0) return '';
+      var cls = 'arcade-pop arcade-pop-' + esc(p.type) + (p.big ? ' arcade-pop-big' : '') + (p.mega ? ' arcade-pop-mega' : '') + (p.jackpot ? ' arcade-pop-jackpot' : '');
+      var style = 'left:' + p.x + '%;top:' + p.y + '%;animation-duration:' + ((p.dur || 1550) / 1000) + 's';
+      if (p.rarity) style += ';color:' + rarityDef(p.rarity).color;
+      return '<div class="' + cls + '" style="' + style + '">' + esc(p.text) + '</div>';
+    }).join('');
+  }
+
+  function maybePassiveCashPop() {
+    var now = Date.now();
+    if (now - (UI._lastPassivePop || 0) < 1800) return;
+    if ((UI._passiveCashAcc || 0) < 20) return;
+    popCash(UI._passiveCashAcc, { big: UI._passiveCashAcc >= 500 });
+    UI._passiveCashAcc = 0;
+    UI._lastPassivePop = now;
   }
 
   function renderBattleToasts() {
@@ -739,6 +917,7 @@
     if (hadCrit && (!UI._lastCritAt || Date.now() - UI._lastCritAt > 400)) {
       UI._lastCritAt = Date.now();
       flashBossHit(true);
+      popArcade('label', 0, { label: 'CRIT!', mega: true, x: 42 + Math.random() * 16, y: 38 + Math.random() * 10 });
     }
     return dps + dot;
   }
@@ -756,7 +935,19 @@
     G.cash += cashGain;
     var spGain = mega ? (12 + round * 4) : Math.max(1, Math.floor(wave / 2));
     G.sp = (G.sp || 0) + spGain;
-    addXp(mega ? (40 + round * 10) : (12 + wave * 6));
+    var xpGain = mega ? (40 + round * 10) : (12 + wave * 6);
+    addXp(xpGain, true);
+    popArcadeBurst([
+      { type: 'cash', amount: cashGain, mega: mega, jackpot: mega && cashGain >= 8000 },
+      { type: 'sp', amount: spGain, big: true, mega: mega },
+      { type: 'xp', amount: xpGain, big: true, mega: mega },
+    ]);
+    if (mega) {
+      popArcade('label', 0, { label: 'BOSS JACKPOT!', jackpot: true, delay: 280 });
+      popArcade('label', 0, { label: 'RIFT TWIN PACK!', mega: true, delay: 380 });
+    } else if (wave === 4) {
+      popArcade('label', 0, { label: 'MEGA BOSS NEXT!', mega: true, delay: 200 });
+    }
     if (mega) queueReward('dual', 'boss');
     G.bossRound = round + 1;
     spawnBoss();
@@ -845,8 +1036,12 @@
   function selectPlayer(pid) {
     if (activePlayerId && G) saveGame();
     activePlayerId = pid;
-    try { sessionStorage.setItem(SESSION_KEY, pid); } catch (e) { }
+    try {
+      sessionStorage.setItem(SESSION_KEY, pid);
+      localStorage.setItem(LAST_PLAYER_KEY, pid);
+    } catch (e) { }
     loadGame(pid);
+    saveGame();
     UI.playerSelectOpen = false;
     UI.activeTab = 'battle';
     UI.farmOpen = false;
@@ -877,7 +1072,8 @@
   function cloneRem() { return G.cloneJob ? Math.max(0, G.cloneJob.startedAt + G.cloneJob.durationMs - Date.now()) : 0; }
   function portalCost() { return PORTAL_BASE_COST * G.nextPortalNum; }
   function floorUpCost(f) { return Math.floor(5000 * f.level * f.level); }
-  function addXp(amt) {
+  function addXp(amt, skipPop) {
+    if (amt > 0 && !skipPop) popXp(amt);
     G.empireXp = (G.empireXp || 0) + amt;
     while (G.empireXp >= xpNeededForLevel(G.empireLevel)) {
       G.empireXp -= xpNeededForLevel(G.empireLevel);
@@ -889,7 +1085,10 @@
   function tick(now) {
     var d = now - G.lastTickAt;
     if (d <= 0) return;
-    G.cash += revMs() * d;
+    var cashGain = revMs() * d;
+    G.cash += cashGain;
+    UI._passiveCashAcc = (UI._passiveCashAcc || 0) + cashGain;
+    maybePassiveCashPop();
     tickPlanets(d);
     if (G.cloneJob && now >= G.cloneJob.startedAt + G.cloneJob.durationMs) completeClone();
     bossTickAcc += d;
@@ -905,6 +1104,13 @@
     if (i < 0) return;
     G.strains = G.strains.slice();
     G.strains[i] = Object.assign({}, G.strains[i], { quantity: G.strains[i].quantity + 1 });
+    var cloned = G.strains[i];
+    popArcadeBurst([
+      { type: 'label', label: 'CLONED!', mega: true },
+      { type: 'strain', strain: cloned, delay: 90 },
+      { type: 'xp', amount: 8, delay: 170 },
+    ]);
+    addXp(8, true);
     plantSay('clone');
   }
 
@@ -916,14 +1122,17 @@
     var p = PACKS.find(function (x) { return x.type === type; });
     if (!p) return false;
     var nc = G.cash, ns = G.sp || 0;
+    var spEarn = 0;
     if (type === 'omega' && G.cash < p.price && p.spCost && G.sp >= p.spCost) ns -= p.spCost;
     else if (G.cash < p.price) return false;
-    else { nc -= p.price; ns += Math.floor(p.price / 2500); }
+    else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
     var luck = blitzMod('packLuck');
     G.strains.forEach(function (st) { if (hasAbility(st, 'rift_luck')) luck += 0.05; });
     var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: luck });
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain };
+    if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
+    popArcade('label', 0, { label: 'PACK OPEN!', mega: true });
     return true;
   }
   function closePack() {
@@ -934,11 +1143,20 @@
         if (!G.focusedStrainId) G.focusedStrainId = s.id;
       });
       addXp(25 * pr.strains.length);
+      var dualItems = [{ type: 'label', label: 'DUAL PACK!', jackpot: true }];
+      pr.strains.forEach(function (s, i) {
+        dualItems.push({ type: 'strain', strain: s, delay: 100 + i * 110 });
+      });
+      popArcadeBurst(dualItems);
       plantSay('pack', true);
     } else if (pr.strain) {
       G.strains = mergeStrains(G.strains, pr.strain);
       if (!G.focusedStrainId) G.focusedStrainId = G.packReveal.strain.id;
       addXp(25);
+      var isBoss = pr.packType === 'boss' || pr.packType === 'milestone';
+      if (pr.packType === 'breed') popArcade('label', 0, { label: 'FUSION COMPLETE!', mega: true });
+      else if (isBoss) popArcade('label', 0, { label: 'LEGENDARY DROP!', jackpot: true });
+      popStrain(pr.strain, { mega: pr.packType === 'breed' || isBoss, jackpot: isBoss, delay: 120 });
       plantSay('pack', true);
     }
     G.packReveal = { open: false, packType: null, strain: null, strains: null };
@@ -979,6 +1197,7 @@
     G.strains = mergeStrains(G.strains, s);
     if (!G.focusedStrainId) G.focusedStrainId = s.id;
     addXp(15);
+    popStrain(s, { big: true });
     plantSay('pack');
     return true;
   }
@@ -989,6 +1208,7 @@
     s.name = o.strainName; s.thcPercent = o.thcPercent; s.yield = o.yield;
     G.cash -= c;
     G.strains = mergeStrains(G.strains, s);
+    popStrain(s);
     return true;
   }
   function buyPortal() {
@@ -1163,8 +1383,14 @@
     while (handVal(bj.dealer) < 17) bj.dealer.push(bj.deck.pop());
     var pv = handVal(bj.player), dv = handVal(bj.dealer);
     bj.done = true;
-    if (dv > 21 || pv > dv) { bj.win = true; G.cash += bj.bet * 2; shakeScreen(); }
-    else if (pv === dv) { bj.win = null; G.cash += bj.bet; }
+    if (dv > 21 || pv > dv) {
+      bj.win = true;
+      var winAmt = bj.bet * 2;
+      G.cash += winAmt;
+      popCash(winAmt, { mega: true, jackpot: bj.bet >= 10000 });
+      popArcade('label', 0, { label: 'BLACKJACK!', mega: true, delay: 120 });
+      shakeScreen();
+    } else if (pv === dv) { bj.win = null; G.cash += bj.bet; popCash(bj.bet, { big: true }); }
     else { bj.win = false; }
     scheduleSave();
     render();
@@ -1181,7 +1407,12 @@
     else if (reels[0] === reels[1] || reels[1] === reels[2]) win = cost * 3;
     G.cash += win;
     UI.slotResult = { reels: reels, win: win };
-    if (win > 0) shakeScreen();
+    if (win > 0) {
+      var jackpot = win >= cost * 15;
+      popCash(win, { jackpot: jackpot, mega: win >= cost * 5 });
+      if (jackpot) popArcade('label', 0, { label: 'JACKPOT!', jackpot: true, delay: 120 });
+      shakeScreen();
+    }
     return true;
   }
 
@@ -1231,6 +1462,7 @@
     var spEl = document.getElementById('hud-sp');
     if (spEl) spEl.textContent = fmtSp(G.sp || 0);
     renderBattleToasts();
+    renderArcadePops();
     document.getElementById('phone-shell').classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
     document.getElementById('voidline-app').classList.toggle('reality-warp-active', UI.realityWarp);
     document.getElementById('overlay-reality-warp').classList.toggle('active', UI.realityWarp);
@@ -1700,7 +1932,28 @@
   }
 
   var saveTimer = null;
-  function scheduleSave() { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(saveGame, 800); }
+  var lastSaveAt = 0;
+  var AUTOSAVE_MS = 2500;
+  function scheduleSave() { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 400); }
+  function flushSave() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (!G || !activePlayerId || UI.playerSelectOpen) return;
+    var ok = saveGame();
+    if (ok) lastSaveAt = Date.now();
+    // #region agent log
+    dbgLog('A', 'game.js:flushSave', 'flush', { ok: ok, pid: activePlayerId, strains: G ? (G.strains || []).length : 0 });
+    // #endregion
+  }
+  function resolveStartupPlayer() {
+    try {
+      var pid = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LAST_PLAYER_KEY);
+      if (pid && PLAYERS.some(function (p) { return p.id === pid; })) return pid;
+    } catch (e) { }
+    return null;
+  }
+  function hasAnyPlayerSave() {
+    return PLAYERS.some(function (p) { return !!readPlayerSave(p.id); });
+  }
 
   function runAction(act, val) {
     if (act==='pick-player') { selectPlayer(val); return; }
@@ -1838,18 +2091,29 @@
 
   try {
     var storedVer = localStorage.getItem(VERSION_KEY);
-    if (storedVer !== APP_VERSION) {
-      localStorage.setItem(VERSION_KEY, APP_VERSION);
-      try { sessionStorage.removeItem(SESSION_KEY); } catch (e2) { }
+    if (storedVer !== APP_VERSION) localStorage.setItem(VERSION_KEY, APP_VERSION);
+    var startPid = resolveStartupPlayer();
+    // #region agent log
+    dbgLog('B', 'game.js:startup', 'init', { startPid: startPid, lastPlayer: localStorage.getItem(LAST_PLAYER_KEY), sessionPlayer: (function () { try { return sessionStorage.getItem(SESSION_KEY); } catch (x) { return null; } })(), hasAnySave: hasAnyPlayerSave(), appVer: APP_VERSION });
+    // #endregion
+    if (startPid) {
+      selectPlayer(startPid);
+    } else if (hasAnyPlayerSave()) {
       UI.playerSelectOpen = true;
       G = freshState('aden');
       render();
     } else {
-      var sess = sessionStorage.getItem(SESSION_KEY);
-      if (sess && PLAYERS.some(function (p) { return p.id === sess; })) selectPlayer(sess);
-      else { UI.playerSelectOpen = true; G = freshState('aden'); render(); }
+      UI.playerSelectOpen = true;
+      G = freshState('aden');
+      render();
     }
   } catch (e) { UI.playerSelectOpen = true; G = freshState('aden'); render(); }
+
+  window.addEventListener('pagehide', flushSave);
+  window.addEventListener('beforeunload', flushSave);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') flushSave();
+  });
 
   setInterval(function () {
     if (!G || UI.playerSelectOpen) return;
@@ -1869,10 +2133,11 @@
     var spEl = document.getElementById('hud-sp');
     if (spEl) spEl.textContent = fmtSp(G.sp || 0);
     renderBattleToasts();
+    renderArcadePops();
     if (UI.activeTab === 'shop') { var cd = document.getElementById('blitz-timer'); if (cd) cd.textContent = fmtCd(blitzRem()); }
     if (UI.farmOpen && G.farmSubTab === 'portal' && G.cloneJob) { var cr = document.querySelector('.clone-active .font-mono.text-green'); if (cr) cr.textContent = fmtCd(cloneRem()); }
     document.getElementById('hud-cash').textContent = fmtCash(G.cash);
     if (G.cash < 10000 && Date.now() - dialogueState.lastAt > 60000) plantSay('lowcash');
-    scheduleSave();
+    if (Date.now() - lastSaveAt >= AUTOSAVE_MS) flushSave();
   }, 50);
 })();
