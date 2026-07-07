@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="index.css?v=5" />
+  <link rel="stylesheet" href="index.css?v=6" />
 </head>
 <body>
   <div id="voidline-app">
@@ -65,6 +65,7 @@
       <div id="overlay-transaction-beam" class="transaction-beam"><div class="beam-line"></div><div class="beam-label" id="beam-label"></div></div>
       <div id="overlay-card-lift"></div>
     </div>
+    <div id="overlay-auth-gate" class="overlay auth-gate-overlay"></div>
     <div id="overlay-player-select" class="overlay"></div>
     <div id="overlay-profile" class="overlay"><button type="button" class="overlay-backdrop" data-close="profile"></button><div class="overlay-panel halftone-panel glass-panel ink-border" id="profile-panel"></div></div>
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel halftone-panel glass-panel ink-border p-4" id="settings-panel"></div></div>
@@ -72,7 +73,9 @@
     <div id="overlay-merge-lab" class="overlay"></div>
     <div id="overlay-aux"></div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="cloud-auth.js?v=1"></script>
   <script src="catalog.js?v=35"></script>
-  <script src="game.js?v=44"></script>
+  <script src="game.js?v=45"></script>
 </body>
 </html>

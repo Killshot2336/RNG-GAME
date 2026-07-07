@@ -15,9 +15,9 @@
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
   var LAST_PLAYER_KEY = 'voidline_last_player';
-  var APP_VERSION = '6';
+  var APP_VERSION = '7';
   var VERSION_KEY = 'voidline_app_version';
-  var SAVE_VERSION = 6;
+  var SAVE_VERSION = 7;
   var PLANET_REGISTRY_KEY = 'voidline_planet_registry';
   var PLANET_PREFIX = ['Kepler', 'Nova', 'Rift', 'Obsidian', 'Crimson', 'Azure', 'Phantom', 'Eclipse', 'Stellar', 'Void'];
   var PLANET_SUFFIX = ['IV', 'VII', 'IX', 'Prime', 'Reach', 'Haven', 'Crown', 'Shard', 'Belt', 'Gate'];
@@ -44,12 +44,6 @@
     { id: 'dad', label: 'Dad', portrait: '/public/art/portraits/dad.svg', defaultName: 'Dad' },
     { id: 'jamie', label: 'Jamie', portrait: '/public/art/portraits/jamie.svg', defaultName: 'Jamie' },
   ];
-
-  function dbgLiftLog(location, message, data, hypothesisId) {
-    // #region agent log
-    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91cdb9'},body:JSON.stringify({sessionId:'91cdb9',location:location,message:message,data:data,hypothesisId:hypothesisId,timestamp:Date.now()})}).catch(function(){});
-    // #endregion
-  }
 
   function liftShellTierClass(strain) {
     if (!strain || !strain.rarity) return 'cr-tier-street';
@@ -170,6 +164,29 @@
     { id: 'omega', icon: 'omega', label: 'Omega Tier' }, { id: 'cloner', icon: 'clone', label: 'Clone Master' },
     { id: 'trader', icon: 'trader', label: 'Void Trader' }, { id: 'blitz', icon: 'blitz', label: 'Blitz King' },
   ];
+  var ACHIEVEMENTS = [
+    { id: 'first_strain', name: 'Green Thumb', desc: 'Collect your first strain', reward: { cash: 5000 }, trophy: 10,
+      check: function (g) { return (g.strains || []).length >= 1; } },
+    { id: 'empire_5', name: 'Rising Empire', desc: 'Reach empire level 5', reward: { sp: 20 }, trophy: 15,
+      check: function (g) { return (g.empireLevel || 1) >= 5; } },
+    { id: 'boss_3', name: 'Boss Breaker', desc: 'Clear 3 boss rounds', reward: { cash: 15000 }, trophy: 20,
+      check: function (g) { return (g.bossRound || 1) > 3; } },
+    { id: 'campaign_5', name: 'Trail Blazer', desc: 'Clear campaign node 5', reward: { sp: 30 }, trophy: 25,
+      check: function (g) { return Array.isArray(g.campaignNodeClears) && g.campaignNodeClears.indexOf(5) >= 0; } },
+    { id: 'millionaire', name: 'Void Tycoon', desc: 'Earn $1M total cash', reward: { cash: 50000 }, trophy: 30,
+      check: function (g) { return (g.totalCashEarned || 0) >= 1e6; } },
+  ];
+  var DAILY_LOGIN_REWARDS = [
+    { cash: 10000 }, { sp: 10 }, { cash: 20000 }, { sp: 15 }, { cash: 35000 }, { sp: 25 }, { cash: 75000, sp: 40 },
+  ];
+  var TROPHY_ROAD = [
+    { id: 'tr_10', pts: 10, reward: { cash: 8000 } },
+    { id: 'tr_25', pts: 25, reward: { sp: 15 } },
+    { id: 'tr_50', pts: 50, reward: { cash: 25000 } },
+    { id: 'tr_75', pts: 75, reward: { sp: 30 } },
+    { id: 'tr_100', pts: 100, reward: { cash: 50000, sp: 50 } },
+    { id: 'tr_150', pts: 150, reward: { cash: 100000 } },
+  ];
   var SECTORS = [
     { id: 'thrusters', name: 'Frictionless Thrusters', level: 0, maxLevel: 10, baseCost: 15000, scanRateBonus: 0.08 },
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
@@ -191,6 +208,9 @@
     'mutationEssence', 'mutationItems', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
     'mutationPackLuck', 'mutationGuaranteeCharges', 'strainMutationMap', 'raidEquipIds',
     'campaignNode', 'campaignNodeClears',
+    'dailyLoginStreak', 'dailyLoginLastDay', 'dailyLoginClaimedDay',
+    'achievementsUnlocked', 'achievementStats', 'trophyPoints', 'trophyRoadClaimed',
+    'cardOfDaySeed', 'cardOfDayPurchased',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -730,7 +750,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -887,6 +907,9 @@
       dailyShowcasePurchased: [false, false, false], dailyShowcaseCache: null,
       mutationPackLuck: 0, mutationGuaranteeCharges: 0, strainMutationMap: {}, raidEquipIds: [],
       campaignNode: 1, campaignNodeClears: [],
+      dailyLoginStreak: 0, dailyLoginLastDay: 0, dailyLoginClaimedDay: 0,
+      achievementsUnlocked: [], achievementStats: {}, trophyPoints: 0, trophyRoadClaimed: [],
+      cardOfDaySeed: 0, cardOfDayPurchased: false,
     };
   }
 
@@ -918,6 +941,9 @@
       localStorage.setItem(key + '_backup', blob);
       localStorage.setItem(LAST_PLAYER_KEY, activePlayerId);
       try { sessionStorage.setItem(SESSION_KEY, activePlayerId); } catch (e2) { }
+      if (window.VoidlineCloud && window.VoidlineCloud.isLoggedIn()) {
+        window.VoidlineCloud.onLocalSave(activePlayerId, p);
+      }
       return true;
     } catch (e) {
       console.error('[Voidline] Save failed — progress may not persist:', e);
@@ -1199,6 +1225,15 @@
       G.inventory = STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); });
       fixes++;
     }
+    healArr('achievementsUnlocked', []);
+    healArr('trophyRoadClaimed', []);
+    if (!G.achievementStats || typeof G.achievementStats !== 'object') { G.achievementStats = {}; fixes++; }
+    if (G.trophyPoints == null || isNaN(G.trophyPoints)) { G.trophyPoints = 0; fixes++; }
+    if (G.dailyLoginStreak == null || isNaN(G.dailyLoginStreak)) { G.dailyLoginStreak = 0; fixes++; }
+    if (G.dailyLoginLastDay == null || isNaN(G.dailyLoginLastDay)) { G.dailyLoginLastDay = 0; fixes++; }
+    if (G.dailyLoginClaimedDay == null || isNaN(G.dailyLoginClaimedDay)) { G.dailyLoginClaimedDay = 0; fixes++; }
+    if (G.cardOfDaySeed == null || isNaN(G.cardOfDaySeed)) { G.cardOfDaySeed = 0; fixes++; }
+    if (G.cardOfDayPurchased == null) { G.cardOfDayPurchased = false; fixes++; }
     return fixes;
   }
 
@@ -2042,6 +2077,8 @@
       showBattleToast('Node ' + node + ' cleared · +' + spGain + ' SP', false);
       plantSay('wave_clear', true);
     }
+    addTrophyPoints(mega ? 15 : 8);
+    checkAchievements();
     scheduleSave();
   }
 
@@ -2239,6 +2276,9 @@
     UI.playerSelectOpen = false;
     UI.activeTab = 'battle';
     UI.farmOpen = false;
+    ensureEngagementState();
+    if (canClaimDailyLogin()) UI.dailyLoginOpen = true;
+    checkAchievements();
     markAllVisualDirty();
     plantSay('welcome', true);
     render();
@@ -2953,7 +2993,6 @@
     if (shell) {
       shell.className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
       // #region agent log
-      dbgLiftLog('game.js:syncHudShell', 'shell class applied (no dimmed)', { liftedCardId: UI.liftedCardId, strainPickerFloorId: UI.strainPickerFloorId, hasDimmedClass: shell.classList.contains('dimmed') }, 'H1');
       // #endregion
     }
     var app = DOM.voidlineApp || document.getElementById('voidline-app');
@@ -3080,14 +3119,18 @@
     if (!el) return;
     if (!UI.playerSelectOpen) { el.classList.remove('open'); el.innerHTML = ''; return; }
     el.classList.add('open');
-    var h = '<div class="overlay-panel ' + SKIN_PANEL + ' p-5 text-center"><h2 class="font-display chromatic-text mb-2" style="font-size:1rem;letter-spacing:0.15em">WHO ARE YOU?</h2><p class="text-muted text-xs mb-4">Each person gets their own save on this device.</p><div class="player-pick-grid">';
+    var cloud = window.VoidlineCloud;
+    var cloudBadge = cloud && cloud.isLoggedIn()
+      ? '<div class="auth-account-badge"><span class="cloud-sync-dot"></span>CLOUD · ' + esc(cloud.getEmail() || 'synced') + '</div>'
+      : '<div class="auth-account-badge text-muted">LOCAL GUEST SAVE</div>';
+    var h = '<div class="overlay-panel ' + SKIN_PANEL + ' p-5 text-center"><h2 class="font-display chromatic-text mb-2" style="font-size:1rem;letter-spacing:0.15em">WHO ARE YOU?</h2><p class="text-muted text-xs mb-1">Each person gets their own save on this device.</p>' + cloudBadge + '<div class="player-pick-grid">';
     PLAYERS.forEach(function (pl) {
       var save = readPlayerSave(pl.id);
       var lvl = save ? save.empireLevel : 1;
       var av = avatarHtml(pl.portrait, '2.5rem');
       h += '<button type="button" class="player-pick-card" data-action="pick-player" data-pid="' + pl.id + '">' + av + '<div style="font-weight:700">' + esc(pl.label) + '</div><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(save ? (save.name || pl.label) : 'New game') + ' · Lv.' + lvl + '</div></button>';
     });
-    h += '</div></div>';
+    h += '</div><button type="button" class="game-btn w-full mt-3" data-action="auth-manage">' + farmIcon('settings') + ' ACCOUNT</button></div>';
     el.innerHTML = h;
   }
 
@@ -3208,6 +3251,158 @@
     plantSay('pack', true);
     scheduleSave();
     return true;
+  }
+
+  function engagementDaySeed() { return Math.floor(Date.now() / 86400000); }
+
+  function ensureEngagementState() {
+    if (!Array.isArray(G.achievementsUnlocked)) G.achievementsUnlocked = [];
+    if (!G.achievementStats || typeof G.achievementStats !== 'object') G.achievementStats = {};
+    if (!Array.isArray(G.trophyRoadClaimed)) G.trophyRoadClaimed = [];
+    if (G.trophyPoints == null || isNaN(G.trophyPoints)) G.trophyPoints = 0;
+    if (G.dailyLoginStreak == null || isNaN(G.dailyLoginStreak)) G.dailyLoginStreak = 0;
+    if (G.dailyLoginLastDay == null || isNaN(G.dailyLoginLastDay)) G.dailyLoginLastDay = 0;
+    if (G.dailyLoginClaimedDay == null || isNaN(G.dailyLoginClaimedDay)) G.dailyLoginClaimedDay = 0;
+  }
+
+  function grantEngagementReward(reward) {
+    if (!reward) return;
+    if (reward.cash) { G.cash += reward.cash; popLabel('+' + fmtCash(reward.cash), { mega: true }); }
+    if (reward.sp) { G.sp = (G.sp || 0) + reward.sp; popLabel('+' + reward.sp + ' SP', { mega: true }); }
+    markWalletDirty();
+  }
+
+  function addTrophyPoints(pts) {
+    if (!pts) return;
+    ensureEngagementState();
+    G.trophyPoints = (G.trophyPoints || 0) + pts;
+  }
+
+  function checkAchievements() {
+    if (!G) return;
+    ensureEngagementState();
+    var unlocked = G.achievementsUnlocked.slice();
+    var changed = false;
+    ACHIEVEMENTS.forEach(function (a) {
+      if (unlocked.indexOf(a.id) >= 0) return;
+      if (!a.check(G)) return;
+      unlocked.push(a.id);
+      grantEngagementReward(a.reward);
+      if (a.trophy) addTrophyPoints(a.trophy);
+      showBattleToast('Achievement: ' + a.name, true);
+      changed = true;
+    });
+    if (changed) { G.achievementsUnlocked = unlocked; scheduleSave(); }
+  }
+
+  function canClaimDailyLogin() {
+    ensureEngagementState();
+    return G.dailyLoginClaimedDay !== engagementDaySeed();
+  }
+
+  function claimDailyLogin() {
+    ensureEngagementState();
+    var day = engagementDaySeed();
+    if (G.dailyLoginClaimedDay === day) {
+      showBattleToast('Already claimed today', false);
+      return false;
+    }
+    var streak = G.dailyLoginStreak || 0;
+    if (G.dailyLoginLastDay === day - 1) streak += 1;
+    else if (G.dailyLoginLastDay !== day) streak = 1;
+    var idx = Math.min(streak, DAILY_LOGIN_REWARDS.length) - 1;
+    var reward = DAILY_LOGIN_REWARDS[idx] || DAILY_LOGIN_REWARDS[0];
+    grantEngagementReward(reward);
+    G.dailyLoginStreak = streak;
+    G.dailyLoginLastDay = day;
+    G.dailyLoginClaimedDay = day;
+    addTrophyPoints(5);
+    showBattleToast('Day ' + streak + ' login reward!', true);
+    UI.dailyLoginOpen = false;
+    scheduleSave();
+    checkAchievements();
+    return true;
+  }
+
+  function claimTrophyRoad(milestoneId) {
+    ensureEngagementState();
+    var m = TROPHY_ROAD.find(function (x) { return x.id === milestoneId; });
+    if (!m) return false;
+    if ((G.trophyPoints || 0) < m.pts) {
+      showBattleToast('Need ' + m.pts + ' trophy points', false);
+      return false;
+    }
+    if (G.trophyRoadClaimed.indexOf(m.id) >= 0) {
+      showBattleToast('Already claimed', false);
+      return false;
+    }
+    G.trophyRoadClaimed = G.trophyRoadClaimed.concat([m.id]);
+    grantEngagementReward(m.reward);
+    showBattleToast('Trophy Road reward claimed!', true);
+    scheduleSave();
+    return true;
+  }
+
+  function cardOfDayStrain() {
+    var day = engagementDaySeed();
+    if (G.cardOfDaySeed !== day) {
+      G.cardOfDaySeed = day;
+      G.cardOfDayPurchased = false;
+    }
+    var pid = (activePlayerId || 'aden').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    var rng = rngSeed(day * 9973 + pid);
+    var rar = pickRarity(rng, 'pulse', 0.15);
+    return { strain: genStrain(Math.floor(rng() * 0xffffffff), rar, 0.1), price: Math.floor(18000 + rarityIndex(rar) * 8000) };
+  }
+
+  function buyCardOfDay() {
+    var cod = cardOfDayStrain();
+    if (G.cardOfDayPurchased) {
+      showBattleToast('Card of the Day already acquired', false);
+      return false;
+    }
+    if (G.cash < cod.price) return false;
+    G.cash -= cod.price;
+    G.cardOfDayPurchased = true;
+    G.strains = mergeStrains(G.strains, cod.strain);
+    if (!G.focusedStrainId) G.focusedStrainId = cod.strain.id;
+    addXp(15);
+    popStrain(cod.strain, { mega: true });
+    plantSay('pack', true);
+    scheduleSave();
+    checkAchievements();
+    return true;
+  }
+
+  function engagementStripHtml() {
+    ensureEngagementState();
+    var canClaim = canClaimDailyLogin();
+    var h = '<div class="engagement-strip">';
+    h += '<button type="button" class="engagement-pill" data-action="open-daily-login">';
+    h += '<div class="engagement-pill-title">' + (canClaim ? 'DAILY REWARD' : 'LOGIN STREAK') + '</div>';
+    h += '<div class="engagement-pill-sub">' + (canClaim ? 'Tap to claim!' : 'Day ' + (G.dailyLoginStreak || 0) + ' · claimed') + '</div></button>';
+    h += '<button type="button" class="engagement-pill" data-action="open-trophy-road">';
+    h += '<div class="engagement-pill-title">TROPHY ROAD</div>';
+    h += '<div class="engagement-pill-sub">' + (G.trophyPoints || 0) + ' pts</div></button>';
+    h += '<button type="button" class="engagement-pill" data-action="open-achievements">';
+    h += '<div class="engagement-pill-title">ACHIEVEMENTS</div>';
+    h += '<div class="engagement-pill-sub">' + (G.achievementsUnlocked || []).length + '/' + ACHIEVEMENTS.length + '</div></button>';
+    h += '</div>';
+    return h;
+  }
+
+  function cardOfDaySpotlightHtml() {
+    var cod = cardOfDayStrain();
+    var s = cod.strain;
+    var sold = G.cardOfDayPurchased;
+    var h = '<div class="card-of-day-spotlight ' + SKIN_PANEL + '">';
+    h += '<div class="card-of-day-info"><div class="font-mono text-green text-xs" style="letter-spacing:0.15em">CARD OF THE DAY</div>';
+    h += '<div style="font-weight:700;font-size:0.8rem">' + esc(s.name) + '</div>';
+    h += '<div class="text-muted text-xs">' + esc(rarityName(s.rarity)) + ' · ' + fmtCash(cod.price) + '</div>';
+    if (sold) h += '<div class="text-muted text-xs mt-1">Acquired today</div>';
+    else h += '<button type="button" class="game-btn game-btn-green game-btn-sm mt-2" data-action="buy-card-of-day"' + (G.cash < cod.price ? ' disabled' : '') + '>ACQUIRE</button>';
+    h += '</div><div>' + crCardHtml(s, { noFocus: true }) + '</div></div>';
+    return h;
   }
 
   function chestLabel(r) {
@@ -3352,6 +3547,8 @@
     var h = '<div class="screen-section home-command halftone-panel boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += fightTopBarHtml(false);
     h += '<div class="home-command-body">';
+    h += engagementStripHtml();
+    h += cardOfDaySpotlightHtml();
     h += '<div class="home-arena-frame ' + SKIN_PANEL + '">';
     h += bossArenaStageHtml();
     h += '</div>';
@@ -4086,6 +4283,14 @@
     h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? farmIcon('close') + ' CLOSE HELP' : farmIcon('help') + ' GAME ENCYCLOPEDIA') + '</button>';
     if (helpOpen) h += helpEncyclopediaHtml();
     h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">' + farmIcon('swap') + ' SWITCH PLAYER</button>';
+    if (window.VoidlineCloud) {
+      var cloud = window.VoidlineCloud;
+      if (cloud.isLoggedIn()) {
+        h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-xs"><div class="font-mono text-cyan mb-1">CLOUD ACCOUNT</div><div>' + esc(cloud.getEmail() || 'Signed in') + '</div><button type="button" class="game-btn w-full mt-2" data-action="auth-signout">SIGN OUT</button></div>';
+      } else {
+        h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="auth-signin-open">SIGN IN FOR CLOUD SAVE</button>';
+      }
+    }
     document.getElementById('settings-panel').innerHTML = h;
   }
 
@@ -4113,7 +4318,13 @@
       inner += abilityListHtml(s) + '<div class="grid-3 mb-4 mt-3"><div class="' + SKIN_PANEL + ' stat-box"><div class="stat-label">THC</div><div class="stat-value">' + s.thcPercent + '%</div></div><div class="' + SKIN_PANEL + ' stat-box"><div class="stat-label">YIELD</div><div class="stat-value">' + s.yield + '</div></div><div class="' + SKIN_PANEL + ' stat-box"><div class="stat-label">POTENCY</div><div class="stat-value">' + s.potency + '</div></div></div>';
     }
     var borderC = hasDual ? '#39FF14' : rarityColor(pr.strain.rarity);
-    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card pack-reveal-aaa ' + SKIN_PANEL + '" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:3px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66, inset 0 1px 0 rgba(255,255,255,0.08)"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
+    var revealRar = hasDual ? pr.strains[0] : pr.strain;
+    var rIdx = revealRar ? rarityIndex(revealRar.rarity) : 0;
+    var revealCls = 'pack-reveal-aaa';
+    if (rIdx >= rarityIndex('legend')) revealCls += ' pack-reveal-legend';
+    else if (rIdx >= rarityIndex('bloom')) revealCls += ' pack-reveal-epic';
+    else if (rIdx >= rarityIndex('pulse')) revealCls += ' pack-reveal-rare';
+    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card ' + revealCls + ' ' + SKIN_PANEL + '" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:3px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66, inset 0 1px 0 rgba(255,255,255,0.08)"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
     document.getElementById('overlay-pack-reveal').classList.add('open');
   }
 
@@ -4196,7 +4407,6 @@
       var glow = rarityColor(strain.rarity);
       var shellCls = 'lift-shell lifted-card ' + tierCls;
       // #region agent log
-      dbgLiftLog('game.js:renderLift', 'strain lift rendered', { liftId: id, tierCls: tierCls, glow: glow, rarity: strain.rarity }, 'H2');
       // #endregion
       el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
         '<div class="' + shellCls + '" style="--glow:' + glow + '">' +
@@ -4264,6 +4474,54 @@
       h += '<input type="range" class="input-field mb-2" id="lease-percent" min="1" max="' + LEASE_MAX_PERCENT + '" value="25"><div class="text-xs text-muted mb-2">Allocation: <span id="lease-pct-label">25</span>% (max ' + LEASE_MAX_PERCENT + '%)</div>';
       h += '<input type="number" class="input-field mb-3" id="lease-price" placeholder="Cash per 5 min">';
       h += '<button type="button" class="game-btn game-btn-green w-full" data-action="lease-submit" data-id="' + esc(ld.planetId) + ':' + esc(ld.ownerId) + '">SUBMIT OFFER</button></div></div>';
+    }
+    if (UI.dailyLoginOpen) {
+      ensureEngagementState();
+      var streak = G.dailyLoginStreak || 0;
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="close-daily-login"></button><div class="overlay-panel ' + SKIN_PANEL + ' p-4"><h3 class="font-display text-sm mb-2">DAILY LOGIN REWARDS</h3>';
+      h += '<p class="text-muted text-xs mb-2">Streak: Day ' + streak + (canClaimDailyLogin() ? ' · claim ready!' : '') + '</p><div class="daily-login-grid">';
+      DAILY_LOGIN_REWARDS.forEach(function (r, i) {
+        var dayNum = i + 1;
+        var cls = 'daily-login-day';
+        if (dayNum < streak) cls += ' claimed';
+        if (dayNum === streak && canClaimDailyLogin()) cls += ' today';
+        if (dayNum === streak && !canClaimDailyLogin()) cls += ' claimed';
+        var label = r.cash ? fmtCash(r.cash) : '';
+        if (r.sp) label += (label ? ' + ' : '') + r.sp + ' SP';
+        h += '<div class="' + cls + '"><div>D' + dayNum + '</div><div>' + label + '</div></div>';
+      });
+      h += '</div>';
+      if (canClaimDailyLogin()) h += '<button type="button" class="game-btn game-btn-green w-full" data-action="claim-daily-login">CLAIM TODAY</button>';
+      else h += '<button type="button" class="game-btn w-full" data-action="close-daily-login">CLOSE</button>';
+      h += '</div></div>';
+    }
+    if (UI.trophyRoadOpen) {
+      ensureEngagementState();
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="close-trophy-road"></button><div class="overlay-panel ' + SKIN_PANEL + ' p-4" style="max-width:22rem"><h3 class="font-display text-sm mb-2">TROPHY ROAD</h3>';
+      h += '<p class="text-muted text-xs mb-2">' + (G.trophyPoints || 0) + ' trophy points · clear bosses, achievements, daily login</p><div class="trophy-road-scroll">';
+      TROPHY_ROAD.forEach(function (m) {
+        var unlocked = (G.trophyPoints || 0) >= m.pts;
+        var claimed = G.trophyRoadClaimed.indexOf(m.id) >= 0;
+        var cls = 'trophy-milestone' + (unlocked ? ' unlocked' : '') + (claimed ? ' claimed' : '');
+        var rw = m.reward.cash ? fmtCash(m.reward.cash) : '';
+        if (m.reward.sp) rw += (rw ? ' + ' : '') + m.reward.sp + ' SP';
+        h += '<div class="' + cls + '"><div class="font-mono text-cyan">' + m.pts + ' PTS</div><div class="text-xs mt-1">' + rw + '</div>';
+        if (unlocked && !claimed) h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-1" data-action="claim-trophy" data-id="' + m.id + '">CLAIM</button>';
+        else if (claimed) h += '<div class="text-green text-xs mt-1">✓</div>';
+        h += '</div>';
+      });
+      h += '</div><button type="button" class="game-btn w-full mt-2" data-action="close-trophy-road">CLOSE</button></div></div>';
+    }
+    if (UI.achievementsOpen) {
+      ensureEngagementState();
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="close-achievements"></button><div class="overlay-panel ' + SKIN_PANEL + ' p-4" style="max-height:70vh;overflow-y:auto"><h3 class="font-display text-sm mb-2">ACHIEVEMENTS</h3>';
+      ACHIEVEMENTS.forEach(function (a) {
+        var done = G.achievementsUnlocked.indexOf(a.id) >= 0;
+        var rw = a.reward.cash ? fmtCash(a.reward.cash) : '';
+        if (a.reward.sp) rw += (rw ? ' + ' : '') + a.reward.sp + ' SP';
+        h += '<div class="achievement-row' + (done ? ' done' : '') + '"><div style="flex:1"><div style="font-weight:600;font-size:0.75rem">' + esc(a.name) + '</div><div class="text-muted text-xs">' + esc(a.desc) + '</div></div><div class="text-xs text-green">' + (done ? 'DONE' : rw) + '</div></div>';
+      });
+      h += '<button type="button" class="game-btn w-full mt-2" data-action="close-achievements">CLOSE</button></div></div>';
     }
     el.innerHTML = h;
     el.classList.toggle('open', !!h);
@@ -4347,7 +4605,14 @@
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
     if (!G || !activePlayerId || UI.playerSelectOpen) return;
     var ok = saveGame();
-    if (ok) lastSaveAt = Date.now();
+    if (ok) {
+      lastSaveAt = Date.now();
+      if (window.VoidlineCloud && window.VoidlineCloud.isLoggedIn()) {
+        var p = { playerId: activePlayerId, saveVersion: SAVE_VERSION };
+        PERSIST.forEach(function (k) { p[k] = G[k]; });
+        window.VoidlineCloud.flushSave(activePlayerId, p);
+      }
+    }
   }
   var foilRaf = null;
   var foilState = { wrap: null, frame: null, xPct: 0, yPct: 0 };
@@ -4504,9 +4769,6 @@
     else if (act==='toggle-warp') UI.realityWarp = !UI.realityWarp;
     else if (act==='open-settings') { UI.settingsOpen = true; UI.profileOpen = false; }
     else if (act==='dismiss-lift') {
-      // #region agent log
-      dbgLiftLog('game.js:dismissLift', 'card lift dismissed', { liftId: UI.liftedCardId }, 'H3');
-      // #endregion
       UI.liftedCardId = null; UI.liftOnUpgrade = null;
     }
     else if (act==='lift-upgrade' && UI.liftOnUpgrade) { runAction(UI.liftOnUpgrade.split(':')[0], UI.liftOnUpgrade.split(':').slice(1).join(':')); UI.liftedCardId = null; UI.liftOnUpgrade = null; }
@@ -4600,6 +4862,33 @@
     else if (act==='mutation-mode') UI.mutationMode = val;
     else if (act==='destroy-strain') destroyStrain(val);
     else if (act==='buy-showcase') buyDailyShowcase(parseInt(val, 10));
+    else if (act==='open-daily-login') { UI.dailyLoginOpen = true; render(); return; }
+    else if (act==='close-daily-login') { UI.dailyLoginOpen = false; render(); return; }
+    else if (act==='claim-daily-login') { claimDailyLogin(); render(); return; }
+    else if (act==='open-trophy-road') { UI.trophyRoadOpen = true; render(); return; }
+    else if (act==='close-trophy-road') { UI.trophyRoadOpen = false; render(); return; }
+    else if (act==='claim-trophy') { claimTrophyRoad(val); render(); return; }
+    else if (act==='open-achievements') { UI.achievementsOpen = true; render(); return; }
+    else if (act==='close-achievements') { UI.achievementsOpen = false; render(); return; }
+    else if (act==='buy-card-of-day') { buyCardOfDay(); render(); return; }
+    else if (act==='auth-manage' || act==='auth-signin-open') {
+      UI.settingsOpen = true;
+      UI.profileOpen = false;
+      if (window.VoidlineCloud) window.VoidlineCloud.switchToAccount();
+      render();
+      return;
+    }
+    else if (act==='auth-signout') {
+      if (activePlayerId && G) flushSave();
+      if (window.VoidlineCloud) {
+        window.VoidlineCloud.signOut().then(function () {
+          UI.settingsOpen = false;
+          showBattleToast('Signed out — playing as guest', true);
+          render();
+        });
+      }
+      return;
+    }
     else if (act==='breed-pick') {
       var bp = val.split(':');
       if (bp[0] === 'a') G.breedSlotA = bp[1] || null;
@@ -4648,9 +4937,6 @@
       UI.liftedCardId = liftEl.dataset.lift;
       if (UI.liftedCardId.indexOf('planet-') === 0) UI.focusedPlanetId = UI.liftedCardId.slice(7);
       UI.liftOnUpgrade = liftEl.dataset.liftUp || null;
-      // #region agent log
-      dbgLiftLog('game.js:liftClick', 'card lift opened', { liftId: UI.liftedCardId }, 'H3');
-      // #endregion
       render();
       return;
     }
@@ -4692,23 +4978,33 @@
     }
   }, true);
 
+  function bootGame() {
+    try {
+      var startPid = resolveStartupPlayer();
+      if (startPid) {
+        selectPlayer(startPid);
+      } else if (hasAnyPlayerSave()) {
+        UI.playerSelectOpen = true;
+        G = freshState('aden');
+        render();
+      } else {
+        UI.playerSelectOpen = true;
+        G = freshState('aden');
+        render();
+      }
+    } catch (e) { UI.playerSelectOpen = true; G = freshState('aden'); render(); }
+  }
+
   try {
     cacheDomRefs();
     initArcadePool();
     startVisualLoop();
     var storedVer = localStorage.getItem(VERSION_KEY);
     if (storedVer !== APP_VERSION) localStorage.setItem(VERSION_KEY, APP_VERSION);
-    var startPid = resolveStartupPlayer();
-    if (startPid) {
-      selectPlayer(startPid);
-    } else if (hasAnyPlayerSave()) {
-      UI.playerSelectOpen = true;
-      G = freshState('aden');
-      render();
+    if (window.VoidlineCloud && typeof window.VoidlineCloud.boot === 'function') {
+      window.VoidlineCloud.boot(function () { bootGame(); });
     } else {
-      UI.playerSelectOpen = true;
-      G = freshState('aden');
-      render();
+      bootGame();
     }
   } catch (e) { UI.playerSelectOpen = true; G = freshState('aden'); render(); }
 

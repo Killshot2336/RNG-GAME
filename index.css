@@ -1478,3 +1478,80 @@
     .avatar-portrait { display: block; object-fit: cover; border-radius: 50%; }
     .hub-orb-icon .farm-icon, .shop-chest-icon .farm-icon, .index-nav-icon .farm-icon { font-size: 0.62rem; }
     .home-chest-icon .farm-icon { font-size: 0.7rem; }
+
+    /* ── Auth gate + cloud sync ── */
+    #overlay-auth-gate { z-index: 9800; }
+    .auth-gate-overlay.open { display: flex; background: rgba(8, 4, 18, 0.92); backdrop-filter: blur(8px); }
+    .auth-gate-panel { max-width: 22rem; width: 100%; }
+    .auth-gate-title { font-size: 1.1rem; letter-spacing: 0.2em; margin: 0.25rem 0 0; }
+    .auth-guest-btn {
+      font-size: 0.95rem; font-weight: 700; letter-spacing: 0.12em;
+      background: linear-gradient(135deg, rgba(57,255,20,0.2), rgba(168,85,247,0.15));
+      border: 2px solid var(--leaf); box-shadow: 0 0 24px rgba(57,255,20,0.25);
+      padding: 0.85rem 1rem;
+    }
+    .auth-guest-btn:hover { filter: brightness(1.08); }
+    .auth-divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.75rem 0 1rem; color: var(--muted); font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; }
+    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.12); }
+    .auth-msg { font-size: 0.7rem; text-align: center; min-height: 1rem; margin-bottom: 0.5rem; }
+    .auth-msg-ok { color: var(--leaf); }
+    .auth-msg-err { color: #F87171; }
+    .auth-link-btn { background: none; border: none; color: var(--cyan); font-size: 0.65rem; cursor: pointer; text-decoration: underline; padding: 0.25rem; }
+    .auth-conflict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .auth-conflict-card { padding: 0.65rem; border-radius: 0.75rem; text-align: center; }
+    .auth-account-badge { font-size: 0.5rem; letter-spacing: 0.1em; color: var(--cyan); margin-top: 0.15rem; }
+    .cloud-sync-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--leaf); margin-right: 4px; vertical-align: middle; box-shadow: 0 0 6px var(--leaf); }
+
+    /* ── Daily login + trophy road + achievements ── */
+    .engagement-strip { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+    .engagement-pill {
+      flex: 1; min-width: 7rem; padding: 0.5rem 0.65rem; border-radius: 0.75rem;
+      background: rgba(12, 8, 24, 0.65); border: 1px solid rgba(57,255,20,0.2);
+      font-size: 0.55rem; text-align: left; cursor: pointer;
+    }
+    .engagement-pill:hover { border-color: rgba(57,255,20,0.45); }
+    .engagement-pill-title { font-weight: 700; letter-spacing: 0.08em; color: var(--leaf); }
+    .engagement-pill-sub { color: var(--muted); margin-top: 0.15rem; }
+    .daily-login-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; margin: 0.75rem 0; }
+    .daily-login-day {
+      padding: 0.4rem 0.2rem; border-radius: 0.5rem; text-align: center; font-size: 0.5rem;
+      border: 1px solid rgba(255,255,255,0.1); opacity: 0.55;
+    }
+    .daily-login-day.claimed { border-color: var(--leaf); opacity: 1; background: rgba(57,255,20,0.1); }
+    .daily-login-day.today { border-color: var(--gold); opacity: 1; box-shadow: 0 0 12px rgba(250,204,21,0.25); }
+    .trophy-road-scroll { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.5rem 0; }
+    .trophy-milestone {
+      flex: 0 0 5.5rem; padding: 0.5rem; border-radius: 0.75rem; text-align: center;
+      border: 1px solid rgba(255,255,255,0.12); font-size: 0.5rem;
+    }
+    .trophy-milestone.unlocked { border-color: var(--cyan); }
+    .trophy-milestone.claimed { opacity: 0.6; }
+    .achievement-row {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; margin-bottom: 0.35rem;
+      border-radius: 0.65rem; border: 1px solid rgba(255,255,255,0.08);
+    }
+    .achievement-row.done { border-color: rgba(57,255,20,0.35); background: rgba(57,255,20,0.06); }
+    .card-of-day-spotlight {
+      display: flex; gap: 0.75rem; align-items: center; padding: 0.65rem; margin-bottom: 0.75rem;
+      border-radius: 0.85rem; border: 1px solid rgba(168,85,247,0.35);
+      background: linear-gradient(135deg, rgba(61,0,102,0.5), rgba(12,1,26,0.8));
+    }
+    .card-of-day-spotlight .cr-card-frame { max-width: 4.5rem; }
+    .card-of-day-info { flex: 1; min-width: 0; }
+
+    /* ── Rare+ pack reveal polish ── */
+    .pack-reveal-aaa.pack-reveal-rare .pack-shimmer { animation: pack-shimmer-rare 2.5s ease-in-out infinite; }
+    .pack-reveal-aaa.pack-reveal-epic { animation: pack-reveal-epic-pulse 1.8s ease-in-out infinite; }
+    .pack-reveal-aaa.pack-reveal-legend { animation: pack-reveal-legend-burst 2.2s ease-in-out infinite; }
+    @keyframes pack-shimmer-rare {
+      0%, 100% { opacity: 0.35; transform: translateX(-10%); }
+      50% { opacity: 0.85; transform: translateX(10%); }
+    }
+    @keyframes pack-reveal-epic-pulse {
+      0%, 100% { box-shadow: 0 0 40px rgba(56,189,248,0.35), inset 0 1px 0 rgba(255,255,255,0.08); }
+      50% { box-shadow: 0 0 80px rgba(168,85,247,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
+    }
+    @keyframes pack-reveal-legend-burst {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.02); filter: brightness(1.15); }
+    }
