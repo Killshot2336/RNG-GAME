@@ -1030,12 +1030,7 @@
     var list = G.strains.filter(function (s) { return equipped.indexOf(s.id) < 0; });
     var q = (UI.battleEquipSearch || '').toLowerCase();
     if (q) list = list.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0 || rarityName(s.rarity).toLowerCase().indexOf(q) >= 0; });
-    var sort = UI.battleEquipSort || 'dps';
-    if (sort === 'dps') list.sort(function (a, b) { return strainBattleDpsBase(b) - strainBattleDpsBase(a); });
-    else if (sort === 'rarity') list.sort(function (a, b) { return rarityIndex(b.rarity) - rarityIndex(a.rarity); });
-    else if (sort === 'name') list.sort(function (a, b) { return a.name.localeCompare(b.name); });
-    else list.sort(function (a, b) { return (b.discoveredAt || 0) - (a.discoveredAt || 0); });
-    return list;
+    return sortStrainList(list, UI.battleEquipSort || 'dps', true);
   }
 
   function topStrain() {
@@ -1326,14 +1321,49 @@
     return true;
   }
 
+  function sortStrainList(list, sortKey, dpsSort) {
+    if (sortKey === 'rarity') list.sort(function (a, b) { return rarityIndex(b.rarity) - rarityIndex(a.rarity); });
+    else if (sortKey === 'name') list.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    else if (sortKey === 'name-desc') list.sort(function (a, b) { return b.name.localeCompare(a.name); });
+    else if (sortKey === 'quantity') list.sort(function (a, b) { return (b.quantity || 1) - (a.quantity || 1); });
+    else if (sortKey === 'level') list.sort(function (a, b) { return strainCardLevel(b) - strainCardLevel(a); });
+    else if (dpsSort && sortKey === 'dps') list.sort(function (a, b) { return strainBattleDpsBase(b) - strainBattleDpsBase(a); });
+    else list.sort(function (a, b) { return (b.discoveredAt || 0) - (a.discoveredAt || 0); });
+    return list;
+  }
+
+  var STRAIN_SORT_CHIPS = [
+    { id: 'rarity', label: 'Rarity' },
+    { id: 'recent', label: 'Recent' },
+    { id: 'name', label: 'A→Z' },
+    { id: 'name-desc', label: 'Z→A' },
+    { id: 'quantity', label: '#' },
+    { id: 'level', label: 'Level' },
+  ];
+
+  var BATTLE_SORT_CHIPS = [
+    { id: 'dps', label: 'DPS' },
+    { id: 'rarity', label: 'Rarity' },
+    { id: 'recent', label: 'Recent' },
+    { id: 'name', label: 'A→Z' },
+    { id: 'name-desc', label: 'Z→A' },
+    { id: 'quantity', label: '#' },
+    { id: 'level', label: 'Level' },
+  ];
+
+  function sortChipsHtml(sortAction, current, chips) {
+    var actAttr = 'data-' + 'action';
+    return '<div class="sort-chip-row">' + chips.map(function (c) {
+      var cls = 'sort-chip' + (current === c.id ? ' active' : '');
+      return '<button type="button" class="' + cls + '" ' + actAttr + '="' + sortAction + '" data-id="' + c.id + '">' + c.label + '</button>';
+    }).join('') + '</div>';
+  }
+
   function filteredStrains() {
     var list = G.strains.slice();
     var q = (G.indexSearch || '').toLowerCase();
     if (q) list = list.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0; });
-    if (G.indexSort === 'rarity') list.sort(function (a, b) { return rarityIndex(b.rarity) - rarityIndex(a.rarity); });
-    else if (G.indexSort === 'name') list.sort(function (a, b) { return a.name.localeCompare(b.name); });
-    else list.sort(function (a, b) { return (b.discoveredAt || 0) - (a.discoveredAt || 0); });
-    return list;
+    return sortStrainList(list, G.indexSort || 'recent', false);
   }
 
   function filteredPickerStrains() {
@@ -1351,6 +1381,20 @@
     opts = opts || {};
     var ids = typeof strainOrIds === 'object' && strainOrIds && strainOrIds.abilities ? strainOrIds.abilities : (strainOrIds || []);
     var strain = typeof strainOrIds === 'object' && strainOrIds && strainOrIds.id ? strainOrIds : null;
+    if (opts.lift) {
+      if (!ids.length) return '<div class="text-muted text-xs text-center">No abilities on this strain.</div>';
+      return ids.map(function (aid) {
+        var a = ABILITIES.find(function (x) { return x.id === aid; });
+        if (!a) return '';
+        var lvl = strain ? abilityBoostLvl(strain, aid) : 0;
+        var upBtn = '';
+        if (opts.upgradeable && strain) {
+          var cost = 10 + lvl * 12;
+          upBtn = '<button type="button" class="game-btn game-btn-sm game-btn-green" style="flex-shrink:0;padding:4px 8px;font-size:0.48rem" data-action="up-ability" data-id="' + esc(strain.id) + ':' + aid + '"' + (G.sp < cost || lvl >= 5 ? ' disabled' : '') + '>+' + cost + ' SP</button>';
+        }
+        return '<div class="lift-ability-row"><div style="flex:1;min-width:0"><div class="text-green" style="font-weight:700;font-size:0.65rem">' + esc(a.name) + (lvl ? ' <span class="text-muted">Lv.' + lvl + '</span>' : '') + '</div><div class="text-muted" style="font-size:0.55rem;line-height:1.35;margin-top:0.15rem">' + esc(a.desc) + '</div></div>' + upBtn + '</div>';
+      }).join('');
+    }
     return (ids || []).map(function (aid) {
       var a = ABILITIES.find(function (x) { return x.id === aid; });
       if (!a) return '';
@@ -1404,7 +1448,7 @@
       '<div class="cr-card-bevel"></div>' +
       '<div class="cr-card-arena"></div>' +
       '<div class="cr-card-art">' + opts.artHtml + '</div>' +
-      opts.badgeLeft + opts.badgeRight + qtyBadge + tagBadge +
+      opts.badgeLeft + (opts.badgeCenter || '') + opts.badgeRight + qtyBadge + tagBadge +
       '<div class="cr-card-banner"><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
       '<div class="cr-card-shine"></div></div>';
   }
@@ -1455,9 +1499,11 @@
     var thcCls = thcStr.length > 3 ? ' cr-badge-sm' : '';
     var tag = s.planetExclusive ? '🌍' : ((s.parentIds && s.parentIds.length) ? '🧬' : '');
     var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '');
+    var dpsBadge = opts.showDps ? '<div class="cr-badge cr-badge-dps"><span>DPS</span>' + strainBattleDpsBase(s).toFixed(0) + '</div>' : '';
     var inner = crCardFrameInner({
       tier: tier, name: s.name, artHtml: strainCardArtImg(s),
       badgeLeft: '<div class="cr-badge cr-badge-thc' + thcCls + '">' + thcStr + '</div>',
+      badgeCenter: dpsBadge,
       badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + strainCardLevel(s) + '</div>',
       qty: s.quantity, tag: tag,
     });
@@ -1643,12 +1689,12 @@
     for (var slot = 0; slot < BATTLE_EQUIP_MAX; slot++) {
       var eid = equipped[slot];
       var es = eid ? strainById(eid) : null;
-      if (es) h += '<button type="button" class="battle-slot cr-card-wrap" data-action="equip-battle" data-id="' + esc(es.id) + '" title="Tap to unequip">' + crCardHtml(es, { noFocus: true }) + '</button>';
+      if (es) h += '<div class="battle-slot liftable-wrap" data-lift="battle-slot-' + esc(es.id) + '">' + crCardHtml(es, { noFocus: true, showDps: true }) + '</div>';
       else h += '<div class="battle-slot battle-slot-empty"><span class="text-muted text-xs">Empty</span></div>';
     }
     h += '</div><div class="section-label mb-2" style="text-align:left">EQUIP FROM INDEX</div>';
     h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="battle-equip-search" value="' + esc(UI.battleEquipSearch || '') + '">';
-    h += '<select class="input-field mb-2" data-action="battle-equip-sort"><option value="dps"' + (UI.battleEquipSort === 'dps' ? ' selected' : '') + '>Sort: DPS</option><option value="rarity"' + (UI.battleEquipSort === 'rarity' ? ' selected' : '') + '>Sort: Rarity</option><option value="name"' + (UI.battleEquipSort === 'name' ? ' selected' : '') + '>Sort: Name</option><option value="recent"' + (UI.battleEquipSort === 'recent' ? ' selected' : '') + '>Sort: Recent</option></select>';
+    h += sortChipsHtml('battle-equip-sort', UI.battleEquipSort || 'dps', BATTLE_SORT_CHIPS);
     if (!G.strains.length) h += '<div class="neon-card p-4 text-center text-muted text-sm">No strains — open a pack in Shop.</div>';
     else {
       var pool = filteredBattleEquipStrains();
@@ -1656,7 +1702,7 @@
       else {
         h += '<div class="binder-grid battle-equip-grid">';
         pool.forEach(function (s) {
-          h += '<button type="button" class="battle-equip-card" data-action="equip-battle" data-id="' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '<div class="font-mono text-green text-xs mt-1">DPS ' + strainBattleDpsBase(s).toFixed(1) + '</div></button>';
+          h += '<div class="battle-equip-card liftable-wrap" data-lift="battle-pool-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, showDps: true }) + '</div>';
         });
         h += '</div>';
       }
@@ -1753,17 +1799,15 @@
     var h = '<div class="screen-section"><div class="neon-card neon-card-green neon-card-pulse p-4 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.3em">STRAIN INDEX</div><div class="font-display chromatic-text" style="font-size:1.875rem;font-weight:700">' + G.strains.length + ' <span class="text-muted" style="font-size:1rem">/ ∞</span></div><div class="text-muted text-xs">All strains in your collection</div></div>';
     h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="index-search" value="' + esc(G.indexSearch || '') + '">';
     h += '<div class="flex-row gap-2 mb-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="open-merge-lab">🧬 MERGE STRAINS</button></div>';
-    h += '<select class="input-field mb-3" data-action="index-sort"><option value="recent"' + (G.indexSort === 'recent' ? ' selected' : '') + '>Sort: Recent</option><option value="rarity"' + (G.indexSort === 'rarity' ? ' selected' : '') + '>Sort: Rarity</option><option value="name"' + (G.indexSort === 'name' ? ' selected' : '') + '>Sort: Name</option></select>';
+    h += sortChipsHtml('index-sort', G.indexSort || 'recent', STRAIN_SORT_CHIPS);
     if (!list.length) {
       h += '<div class="neon-card p-5 text-center">' + budImg({ hue: 120 }, '2rem') + '<div class="text-muted text-sm mt-2">No strains yet.</div></div>';
     } else {
       h += '<div class="binder-grid mb-3">';
       list.forEach(function (s) {
-        h += '<div class="liftable-wrap" data-lift="index-' + esc(s.id) + '" data-lift-up="up-strain:' + esc(s.id) + '">' + crCardHtml(s, { selected: G.focusedStrainId === s.id }) + '</div>';
+        h += '<div class="liftable-wrap" data-lift="index-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
       });
       h += '</div>';
-      var foc = G.focusedStrainId ? strainById(G.focusedStrainId) : null;
-      if (foc) h += '<div class="neon-card p-4 mt-2" style="max-height:16rem;overflow-y:auto"><div class="font-mono text-green text-xs mb-2">FOCUSED GENETICS</div><div class="flex-row mb-2">' + budImg(foc, '2.5rem') + '<div><div style="font-weight:700">' + esc(foc.name) + '</div><div class="text-xs" style="color:' + rarityColor(foc.rarity) + '">' + esc(rarityName(foc.rarity)) + (foc.planetExclusive ? ' · PLANET EXCLUSIVE' : '') + '</div></div></div>' + abilityListHtml(foc, { upgradeable: true }) + '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="up-strain" data-id="' + esc(foc.id) + '">UPGRADE · ' + fmtCash(upCost(foc)) + '</button></div>';
     }
     h += '</div>';
     return h;
@@ -2071,14 +2115,44 @@
     document.getElementById('overlay-pack-reveal').classList.add('open');
   }
 
+  function strainFromLiftId(id) {
+    if (!id) return null;
+    if (id.indexOf('index-') === 0) return strainById(id.slice(6));
+    if (id.indexOf('battle-slot-') === 0 || id.indexOf('battle-pool-') === 0) return strainById(id.slice(12));
+    return null;
+  }
+
+  function strainLiftMetaHtml(s) {
+    var extras = (s.planetExclusive ? ' · 🌍 Planet' : '') + ((s.parentIds && s.parentIds.length) ? ' · 🧬 Hybrid' : '');
+    return '<div class="lift-rarity" style="color:' + rarityColor(s.rarity) + '">' + esc(rarityName(s.rarity)) + extras + '</div>' +
+      '<div>THC ' + s.thcPercent + '% · Yield ' + s.yield + ' · DPS ' + strainBattleDpsBase(s).toFixed(1) + (s.quantity > 1 ? ' · ×' + s.quantity : '') + '</div>';
+  }
+
+  function liftFooterHtml(id) {
+    if (id.indexOf('battle-pool-') === 0) {
+      var sid = id.slice(12);
+      return '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid) + '">⚔ EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+    }
+    if (id.indexOf('battle-slot-') === 0) {
+      var sid2 = id.slice(12);
+      return '<button type="button" class="game-btn" data-action="equip-battle" data-id="' + esc(sid2) + '">UNEQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+    }
+    if (id.indexOf('index-') === 0) {
+      var sid3 = id.slice(6);
+      var s = strainById(sid3);
+      if (!s) return '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+      var on = (G.equippedBattleIds || []).indexOf(sid3) >= 0;
+      var eq = on
+        ? '<button type="button" class="game-btn" data-action="equip-battle" data-id="' + esc(sid3) + '">UNEQUIP</button>'
+        : '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid3) + '">⚔ EQUIP</button>';
+      return eq + '<button type="button" class="game-btn game-btn-green" data-action="up-strain" data-id="' + esc(sid3) + '">UP · ' + fmtCash(upCost(s)) + '</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+    }
+    return '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+  }
+
   function renderLiftBody() {
     var id = UI.liftedCardId;
     if (!id) return '';
-    if (id.indexOf('index-') === 0) {
-      var s = strainById(id.slice(6));
-      if (!s) return '';
-      return crCardHtml(s, { selected: G.focusedStrainId === s.id, large: true }) + '<div class="mt-3">' + abilityListHtml(s, { upgradeable: true }) + '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="up-strain" data-id="' + esc(s.id) + '">UPGRADE · ' + fmtCash(upCost(s)) + '</button></div>';
-    }
     if (id.indexOf('planet-') === 0) {
       var pid = id.slice(7);
       var pl = (G.ownedPlanets || []).find(function (p) { return p.id === pid; });
@@ -2102,9 +2176,24 @@
   function renderLift() {
     var el = document.getElementById('overlay-card-lift');
     if (!UI.liftedCardId) { el.innerHTML = ''; return; }
+    var id = UI.liftedCardId;
+    var strain = strainFromLiftId(id);
+    if (strain) {
+      var showDps = id.indexOf('battle-') === 0;
+      el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
+        '<div class="lift-shell">' +
+        '<div class="lift-hero">' + crCardHtml(strain, { noFocus: true, large: true, showDps: showDps }) + '</div>' +
+        '<div class="lift-meta">' + strainLiftMetaHtml(strain) + '</div>' +
+        '<div class="lift-abilities">' + abilityListHtml(strain, { upgradeable: true, lift: true }) + '</div>' +
+        '<div class="lift-footer">' + liftFooterHtml(id) + '</div></div>';
+      return;
+    }
     var body = renderLiftBody();
     if (!body) { el.innerHTML = ''; UI.liftedCardId = null; UI.liftOnUpgrade = null; return; }
-    el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button><div class="lifted-card"><div class="neon-card neon-card-static" style="max-height:80vh;overflow-y:auto">' + body + (UI.liftOnUpgrade ? '<div class="lift-actions"><button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE CARD</button></div>' : '') + '</div></div>';
+    el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
+      '<div class="lift-shell"><div class="lift-hero" style="padding:1rem">' + body + '</div>' +
+      '<div class="lift-footer">' + (UI.liftOnUpgrade ? '<button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE</button>' : '') +
+      '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button></div></div>';
   }
 
   function renderBeam() {
@@ -2188,7 +2277,7 @@
     else if (act==='strain-picker-search') UI.strainPickerSearch = val;
     else if (act==='strain-picker-sort') UI.strainPickerSort = val;
     else if (act==='up-floor') upFloor(val);
-    else if (act==='equip-battle') equipBattle(val);
+    else if (act==='equip-battle') { equipBattle(val); UI.liftedCardId = null; }
     else if (act==='equip-best') equipBestBattle();
     else if (act==='battle-equip-search') UI.battleEquipSearch = val;
     else if (act==='battle-equip-sort') UI.battleEquipSort = val;

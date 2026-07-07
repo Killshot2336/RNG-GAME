@@ -142,11 +142,53 @@
     .strain-card:hover { transform: scale(1.02); }
     .strain-card.selected { outline: 2px solid #39FF14; }
     .liftable-wrap { cursor: pointer; }
-    .card-lift-backdrop { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.82); backdrop-filter: blur(8px); border: none; cursor: pointer; }
-    .lifted-card { position: fixed; z-index: 600; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(340px, 88vw); }
-    .lifted-card .neon-card { box-shadow: 0 0 40px rgba(168,85,247,0.6), 0 32px 64px rgba(0,0,0,0.7); }
-    .lift-actions { display: flex; gap: 0.75rem; padding: 0.5rem 1rem 1rem; border-top: 1px solid rgba(61,0,102,0.6); }
-    .lift-actions .game-btn { flex: 1; font-size: 0.6rem; padding: 10px 8px; }
+    .card-lift-backdrop { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.75); backdrop-filter: blur(10px); border: none; cursor: pointer; }
+    .lift-shell {
+      position: fixed; z-index: 600; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(360px, 92vw); max-height: 90vh; display: flex; flex-direction: column;
+      pointer-events: none;
+    }
+    .lift-shell > * { pointer-events: auto; }
+    .lift-hero { flex-shrink: 0; padding: 0.5rem 1rem 0; display: flex; justify-content: center; }
+    .lift-hero .cr-card { pointer-events: none; max-width: 11rem; width: 100%; }
+    .lift-hero .cr-card-lg .cr-card-frame { transform: scale(1.02); }
+    .lift-meta {
+      text-align: center; padding: 0.35rem 1rem 0.5rem; flex-shrink: 0;
+      font-family: var(--font-mono); font-size: 0.55rem; color: var(--muted);
+    }
+    .lift-meta .lift-rarity { font-weight: 700; font-size: 0.65rem; }
+    .lift-abilities {
+      flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      margin: 0 0.75rem; padding: 0.65rem 0.75rem; border-radius: 0.75rem;
+      background: rgba(0,0,0,0.45); border: 1px solid rgba(74,222,128,0.2);
+    }
+    .lift-abilities .lift-ability-row {
+      padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;
+    }
+    .lift-abilities .lift-ability-row:last-child { border-bottom: none; }
+    .lift-footer {
+      flex-shrink: 0; display: flex; gap: 0.5rem; padding: 0.75rem;
+      border-top: 1px solid rgba(74,222,128,0.15); background: rgba(15,26,10,0.95);
+      border-radius: 0 0 1rem 1rem;
+    }
+    .lift-footer .game-btn { flex: 1; font-size: 0.62rem; padding: 10px 8px; }
+    .sort-chip-row {
+      display: flex; flex-wrap: wrap; gap: 0.35rem;
+      overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.15rem;
+    }
+    .sort-chip {
+      flex-shrink: 0; padding: 0.35rem 0.65rem; border-radius: 9999px;
+      border: 1px solid rgba(74,222,128,0.25); background: rgba(0,0,0,0.35);
+      color: var(--muted); font-family: var(--font-mono); font-size: 0.52rem;
+      font-weight: 600; letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s;
+    }
+    .sort-chip.active {
+      border-color: var(--green); background: rgba(74,222,128,0.15); color: var(--green);
+      box-shadow: 0 0 12px rgba(74,222,128,0.25);
+    }
+    .sort-chip:active { transform: scale(0.96); }
+    .lifted-card { display: none; }
     .overlay { position: fixed; inset: 0; z-index: 7500; display: none; align-items: center; justify-content: center; padding: 1rem; }
     .overlay.open { display: flex; }
     .overlay-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(12px); border: none; cursor: pointer; }
@@ -243,7 +285,7 @@
     .battle-loadout-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
     .battle-slot { border: none; background: none; padding: 0; cursor: pointer; width: 100%; }
     .battle-slot-empty { min-height: 4.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.75rem; border: 1px dashed rgba(74,222,128,0.25); background: rgba(0,0,0,0.2); }
-    .battle-equip-card { border: none; background: none; padding: 0; cursor: pointer; width: 100%; text-align: center; }
+    .battle-equip-card { width: 100%; text-align: center; }
     .battle-equip-grid { max-height: 40vh; overflow-y: auto; }
     .cr-card-wrap .cr-card { pointer-events: none; }
     .planet-owned-grid { grid-template-columns: repeat(2, 1fr); }
@@ -345,6 +387,14 @@
       color: #1A1209; font-size: 0.55rem; padding: 0 0.25rem;
     }
     .cr-badge-lvl span { font-size: 0.42rem; font-weight: 600; opacity: 0.85; margin-right: 1px; }
+    .cr-badge-dps {
+      top: -0.35rem; left: 50%; transform: translateX(-50%);
+      min-width: 1.85rem; height: 1.45rem; padding: 0 0.3rem;
+      border-radius: 0.35rem; border: 2px solid #1A1209;
+      background: linear-gradient(180deg, #4ADE80 0%, #16A34A 50%, #14532D 100%);
+      color: #fff; font-size: 0.48rem; letter-spacing: 0.02em;
+    }
+    .cr-badge-dps span { font-size: 0.38rem; opacity: 0.85; display: block; line-height: 1; }
     .cr-badge-qty {
       bottom: 2rem; left: -0.25rem; min-width: 1.35rem; height: 1.35rem;
       border-radius: 50%; border: 2px solid #1A1209;
@@ -685,6 +735,6 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
   </div>
-  <script src="game.js?v=18"></script>
+  <script src="game.js?v=19"></script>
 </body>
 </html>
