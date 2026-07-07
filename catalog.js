@@ -26,11 +26,29 @@
     { id: 'blitz-fleet', name: 'Fleet Auto-Scanner', description: 'Auto-scan planets every 60s (keeps Mist+)', modifier: 0, modifierType: 'autoScan', price: 150000 },
   ];
 
+  var END_GAME_BLITZ = [
+    { id: 'blitz-eg-1', name: 'Singularity Yield Coil', description: '+40% passive revenue', modifier: 0.4, modifierType: 'revenue', price: 2500000, endGame: true, minEmpireLevel: 20 },
+    { id: 'blitz-eg-2', name: 'Void Rift Amplifier Mk-VII', description: '+45% portal floor yield', modifier: 0.45, modifierType: 'yield', price: 2800000, endGame: true, minEmpireLevel: 20 },
+    { id: 'blitz-eg-3', name: 'Deep Space Scan Matrix', description: '+55% sector scan rate', modifier: 0.55, modifierType: 'scan', price: 2600000, endGame: true, minEmpireLevel: 22 },
+    { id: 'blitz-eg-4', name: 'Oracle Pack Resonance', description: '+28% pack rarity luck', modifier: 0.28, modifierType: 'packLuck', price: 3200000, endGame: true, minEmpireLevel: 22 },
+    { id: 'blitz-eg-5', name: 'Campaign Apex Overdrive', description: '+38% campaign squad DPS', modifier: 0.38, modifierType: 'battle', price: 4000000, endGame: true, minEmpireLevel: 24 },
+    { id: 'blitz-eg-6', name: 'Raid Annihilation Core', description: '+35% raid squad DPS', modifier: 0.35, modifierType: 'raid', price: 3800000, endGame: true, minEmpireLevel: 24 },
+    { id: 'blitz-eg-7', name: 'Planet Sovereign Harvest', description: '+50% planet output', modifier: 0.5, modifierType: 'planet', price: 3500000, endGame: true, minEmpireLevel: 25 },
+    { id: 'blitz-eg-8', name: 'Temporal Clone Collapse', description: '−45% clone duration', modifier: 0.45, modifierType: 'clone', price: 2900000, endGame: true, minEmpireLevel: 23 },
+    { id: 'blitz-eg-9', name: 'Mutation Essence Forge', description: '+60% mutation essence from burns', modifier: 0.6, modifierType: 'mutationEssence', price: 4800000, endGame: true, minEmpireLevel: 26 },
+    { id: 'blitz-eg-10', name: 'Boss Bounty Singularity', description: '+35% boss kill cash', modifier: 0.35, modifierType: 'bossCash', price: 3400000, endGame: true, minEmpireLevel: 25 },
+    { id: 'blitz-eg-11', name: 'Empire Ascension Node', description: '+30% empire XP gain', modifier: 0.3, modifierType: 'xp', price: 3000000, endGame: true, minEmpireLevel: 23 },
+    { id: 'blitz-eg-12', name: 'Syndicate Points Reactor', description: '+40% SP from boss kills', modifier: 0.4, modifierType: 'sp', price: 3600000, endGame: true, minEmpireLevel: 24 },
+    { id: 'blitz-eg-13', name: 'Campaign Wave Dominator', description: '+25% boss wave rewards (cash/XP/SP)', modifier: 0.25, modifierType: 'campaignNode', price: 5000000, endGame: true, minEmpireLevel: 28 },
+    { id: 'blitz-eg-14', name: 'Void Essence Magnetar', description: '+20% void essence on prestige', modifier: 0.2, modifierType: 'voidEssence', price: 6500000, endGame: true, minEmpireLevel: 30 },
+    { id: 'blitz-eg-15', name: 'Omega Fleet Scanner', description: '−30% auto-scan interval + keeps Mist+', modifier: 0.3, modifierType: 'autoScanSpeed', price: 4200000, endGame: true, minEmpireLevel: 27 },
+  ];
+
   var AB_PREFIX = ['Void', 'Rift', 'Nebula', 'Cosmic', 'Dark', 'Crystal', 'Burning', 'Frozen', 'Royal', 'Ancient', 'Quantum', 'Stellar', 'Null', 'Hyper', 'Omega', 'Primal', 'Astral', 'Crimson', 'Emerald', 'Solar'];
   var AB_SUFFIX = ['Burst', 'Surge', 'Overdrive', 'Mist', 'Cloud', 'Echo', 'Magnet', 'Sync', 'Rush', 'Luck', 'Slayer', 'Sap', 'Pulse', 'Fang', 'Bloom', 'Drift', 'Storm', 'Ward', 'Flux', 'Nova'];
   var BLITZ_PREFIX = ['Hyper', 'Void', 'Rift', 'Omega', 'Quantum', 'Stellar', 'Nebula', 'Primal', 'Astral', 'Dark'];
   var BLITZ_CORE = ['Yield Drive', 'Amplifier', 'Scan Burst', 'Clone Coil', 'Pack Luck', 'Battle Forge', 'Planet Harvest', 'Revenue Coil', 'THC Boost', 'Boss Hunter'];
-  var BLITZ_TYPES = ['revenue', 'yield', 'scan', 'clone', 'packLuck', 'battle', 'planet', 'autoScan'];
+  var BLITZ_TYPES = ['revenue', 'yield', 'scan', 'clone', 'packLuck', 'battle', 'planet', 'autoScan', 'raid', 'mutationEssence', 'bossCash', 'xp', 'sp', 'campaignNode', 'voidEssence', 'autoScanSpeed'];
 
   function buildAbilityCatalog() {
     var list = [];
@@ -76,6 +94,11 @@
       list.push(e);
       byId[e.id] = e;
     });
+    END_GAME_BLITZ.forEach(function (b) {
+      var e = Object.assign({ purchased: false }, b);
+      list.push(e);
+      byId[e.id] = e;
+    });
     var i = list.length;
     while (list.length < 500) {
       var type = BLITZ_TYPES[i % BLITZ_TYPES.length];
@@ -93,6 +116,14 @@
         battle: '+' + (mod * 100).toFixed(0) + '% battle DPS',
         planet: '+' + (mod * 100).toFixed(0) + '% planet output',
         autoScan: 'Auto-scan fleet (Mist+ worlds)',
+        raid: '+' + (mod * 100).toFixed(0) + '% raid DPS',
+        mutationEssence: '+' + (mod * 100).toFixed(0) + '% mutation essence',
+        bossCash: '+' + (mod * 100).toFixed(0) + '% boss kill cash',
+        xp: '+' + (mod * 100).toFixed(0) + '% empire XP',
+        sp: '+' + (mod * 100).toFixed(0) + '% boss SP',
+        campaignNode: '+' + (mod * 100).toFixed(0) + '% wave rewards',
+        voidEssence: '+' + (mod * 100).toFixed(0) + '% void essence',
+        autoScanSpeed: '−' + (mod * 100).toFixed(0) + '% auto-scan interval',
       };
       var id = 'blitz-' + (i + 1);
       var entry = {
@@ -108,7 +139,7 @@
       byId[id] = entry;
       i++;
     }
-    return { list: list, byId: byId, core: CORE_BLITZ };
+    return { list: list, byId: byId, core: CORE_BLITZ, endGame: END_GAME_BLITZ };
   }
 
   var abilityCat = buildAbilityCatalog();
@@ -122,6 +153,7 @@
     blitz: blitzCat.list,
     blitzById: blitzCat.byId,
     blitzCore: blitzCat.core,
+    blitzEndGame: blitzCat.endGame,
     abilityUpgradeCost: function (lvl) {
       return Math.floor(10 + lvl * 12 * Math.pow(1.12, Math.min(lvl, 120)));
     },

@@ -27,6 +27,7 @@
   var BOSS_ART = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
   var BATTLE_EQUIP_MAX = 8;
+  var CAMPAIGN_NODE_COUNT = 24;
   var SKIN_PANEL = 'halftone-panel glass-panel ink-border';
   var MERGE_SP_COST = 15;
   var STOREFRONT_START = 6;
@@ -140,6 +141,7 @@
     'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
     'mutationEssence', 'mutationItems', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
     'mutationPackLuck', 'mutationGuaranteeCharges', 'strainMutationMap', 'raidEquipIds',
+    'campaignNode', 'campaignNodeClears',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -769,10 +771,14 @@
   function hasAutoScanFleet() {
     if ((G.purchasedBlitzIds || []).some(function (id) {
       var b = BLITZ_BY_ID[id];
-      return b && b.modifierType === 'autoScan';
+      return b && (b.modifierType === 'autoScan' || b.modifierType === 'autoScanSpeed');
     })) return true;
     var radar = (G.sectorUpgrades || []).find(function (s) { return s.id === 'radar'; });
     return !!(radar && radar.level >= radar.maxLevel);
+  }
+
+  function autoScanIntervalMs() {
+    return Math.max(30000, Math.floor(AUTO_SCAN_MS * (1 - Math.min(0.5, blitzMod('autoScanSpeed')))));
   }
 
   function freshState(pid) {
@@ -795,6 +801,7 @@
       mutationEssence: 0, mutationItems: [], dailyShowcaseDay: 0,
       dailyShowcasePurchased: [false, false, false], dailyShowcaseCache: null,
       mutationPackLuck: 0, mutationGuaranteeCharges: 0, strainMutationMap: {}, raidEquipIds: [],
+      campaignNode: 1, campaignNodeClears: [],
     };
   }
 
@@ -1084,6 +1091,8 @@
     healArr('pendingRewards', []);
     healArr('mutationItems', []);
     healArr('raidEquipIds', []);
+    healArr('campaignNodeClears', []);
+    if (G.campaignNode == null || isNaN(G.campaignNode) || G.campaignNode < 1) { G.campaignNode = 1; fixes++; }
     if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
     if (G.mutationPackLuck == null || isNaN(G.mutationPackLuck)) G.mutationPackLuck = 0;
     if (G.mutationGuaranteeCharges == null || isNaN(G.mutationGuaranteeCharges)) G.mutationGuaranteeCharges = 0;
@@ -1131,7 +1140,16 @@
     if (!G.indexSearch) G.indexSearch = '';
     if (!G.indexSort) G.indexSort = 'recent';
     if (!G.bossRound) G.bossRound = 1;
-    if (G.bossTrait == null) G.bossTrait = (G.bossRound || 1) % 4;
+    if (G.campaignNode == null || isNaN(G.campaignNode) || G.campaignNode < 1) {
+      G.campaignNode = Math.max(1, Math.min(CAMPAIGN_NODE_COUNT, Math.ceil((G.bossRound || 1) / 2)));
+    }
+    if (!Array.isArray(G.campaignNodeClears)) {
+      G.campaignNodeClears = [];
+      for (var cni = 1; cni < G.campaignNode; cni++) G.campaignNodeClears.push(cni);
+    }
+    G.campaignNode = Math.max(1, Math.min(CAMPAIGN_NODE_COUNT, G.campaignNode));
+    enforceCampaignSlotLimit();
+    if (G.bossTrait == null) G.bossTrait = (G.campaignNode || 1) % 4;
     if (!G.bossTraitState) G.bossTraitState = { solarAcc: 0, solarSilence: null };
     if (!G.bossWaveStartedAt) G.bossWaveStartedAt = Date.now();
     if (G.bossShieldHp == null) G.bossShieldHp = 0;
@@ -1173,7 +1191,12 @@
 
   function rollBlitzOffers() {
     var purchased = G.purchasedBlitzIds || [];
-    var pool = BLITZ_CATALOG.filter(function (b) { return purchased.indexOf(b.id) < 0; });
+    var empireLvl = G.empireLevel || 1;
+    var pool = BLITZ_CATALOG.filter(function (b) {
+      if (purchased.indexOf(b.id) >= 0) return false;
+      if (b.endGame && empireLvl < (b.minEmpireLevel || 20)) return false;
+      return true;
+    });
     var rng = rngSeed(Date.now() + (G.empireLevel || 1) * 997);
     for (var i = pool.length - 1; i > 0; i--) {
       var j = Math.floor(rng() * (i + 1));
@@ -1230,8 +1253,103 @@
     return BOSS_PREFIX[Math.floor(rng() * BOSS_PREFIX.length)] + ' ' + BOSS_SUFFIX[Math.floor(rng() * BOSS_SUFFIX.length)];
   }
 
-  function battleWaveNum() { return ((G.bossRound || 1) - 1) % 5 + 1; }
-  function isBossWave() { return battleWaveNum() === 5; }
+  function currentCampaignNode() {
+    var n = G.campaignNode;
+    if (n == null || isNaN(n) || n < 1) return 1;
+    return Math.min(n, CAMPAIGN_NODE_COUNT);
+  }
+
+  function isCampaignNodeCleared(nodeNum) {
+    return Array.isArray(G.campaignNodeClears) && G.campaignNodeClears.indexOf(nodeNum) >= 0;
+  }
+
+  function isCampaignMegaNode(nodeNum) {
+    return nodeNum % 5 === 0;
+  }
+
+  function campaignNodeDef(nodeNum) {
+    var n = Math.max(1, Math.min(nodeNum, CAMPAIGN_NODE_COUNT));
+    var maxSlots = BATTLE_EQUIP_MAX;
+    if (n >= 24) maxSlots = 1;
+    else if (n >= 20) maxSlots = 2;
+    else if (n >= 10) maxSlots = 3;
+    var minMutations = 0;
+    if (n >= 22) minMutations = -1;
+    else if (n >= 18) minMutations = 3;
+    else if (n >= 12) minMutations = 2;
+    else if (n >= 5) minMutations = 1;
+    var minRarityIdx = 0;
+    if (n >= 22) minRarityIdx = rarityIndex('surge');
+    else if (n >= 18) minRarityIdx = rarityIndex('mist');
+    else if (n >= 14) minRarityIdx = rarityIndex('spark');
+    else if (n >= 8) minRarityIdx = rarityIndex('haze');
+    var minRarity = minRarityIdx > 0 ? RARITIES[minRarityIdx].id : null;
+    var pid = G.playerId || activePlayerId || '';
+    var bossSeed = n * 7919 + pid.split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    return {
+      node: n,
+      isMega: isCampaignMegaNode(n),
+      maxSlots: maxSlots,
+      minMutations: minMutations,
+      minRarity: minRarity,
+      minRarityIdx: minRarityIdx,
+      hpMult: 1 + (n - 1) * 0.12,
+      rewardMult: 1 + (n - 1) * 0.08,
+      bossSeed: bossSeed,
+      bossHue: bossSeed % 360,
+    };
+  }
+
+  function campaignMaxSlots(nodeNum) {
+    return campaignNodeDef(nodeNum || currentCampaignNode()).maxSlots;
+  }
+
+  function countEquippedMutations() {
+    var count = 0;
+    (G.equippedBattleIds || []).forEach(function (id) {
+      if (mutationItemForStrain(id)) count++;
+    });
+    return count;
+  }
+
+  function campaignGateFailures(nodeNum) {
+    var def = campaignNodeDef(nodeNum);
+    var failures = [];
+    var ids = (G.equippedBattleIds || []).slice(0, def.maxSlots);
+    if (!ids.length) failures.push('Equip campaign squad in Index');
+    if (def.minMutations === -1) {
+      ids.forEach(function (id) {
+        if (!mutationItemForStrain(id)) failures.push('All equipped strains need mutation shards');
+      });
+    } else if (def.minMutations > 0) {
+      var mc = countEquippedMutations();
+      if (mc < def.minMutations) failures.push('Need ' + def.minMutations + '+ mutations (' + mc + '/' + def.minMutations + ')');
+    }
+    if (def.minRarity) {
+      ids.forEach(function (id) {
+        var s = strainById(id);
+        if (s && rarityIndex(s.rarity) < def.minRarityIdx) failures.push('Min rarity ' + rarityName(def.minRarity) + '+ required');
+      });
+    }
+    var seen = {};
+    return failures.filter(function (f) { if (seen[f]) return false; seen[f] = true; return true; });
+  }
+
+  function campaignPassesGates(nodeNum) {
+    return campaignGateFailures(nodeNum).length === 0;
+  }
+
+  function enforceCampaignSlotLimit() {
+    var max = campaignMaxSlots();
+    if (!Array.isArray(G.equippedBattleIds)) G.equippedBattleIds = [];
+    if (G.equippedBattleIds.length > max) {
+      G.equippedBattleIds = G.equippedBattleIds.slice(0, max);
+      scheduleSave();
+    }
+  }
+
+  function battleWaveNum() { return ((currentCampaignNode() - 1) % 5) + 1; }
+  function isBossWave() { return isCampaignMegaNode(currentCampaignNode()); }
   function xpNeededForLevel(lvl) { return (lvl || 1) * XP_LVL; }
   function packLuckBonus() {
     var luck = blitzMod('packLuck');
@@ -1378,7 +1496,7 @@
 
   function triggerVoidPrestige() {
     if (!G) return false;
-    var essenceGain = Math.floor((G.totalCashEarned || 0) / 1000000);
+    var essenceGain = Math.floor((G.totalCashEarned || 0) / 1000000 * (1 + blitzMod('voidEssence')));
     G.voidEssence = (G.voidEssence || 0) + essenceGain;
     var sorted = G.strains.slice().sort(function (a, b) {
       var d = rarityIndex(b.rarity) - rarityIndex(a.rarity);
@@ -1391,6 +1509,8 @@
     G.cash = 250000;
     G.sp = 100;
     G.bossRound = 1;
+    G.campaignNode = 1;
+    G.campaignNodeClears = [];
     G.totalCashEarned = 0;
     G.equippedBattleIds = [];
     G.raidEquipIds = [];
@@ -1603,24 +1723,27 @@
   }
 
   function spawnBoss() {
-    var round = G.bossRound || 1;
-    var wave = battleWaveNum();
-    var mega = wave === 5;
-    var seed = Date.now() + round * 7919 + (activePlayerId || '').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    var node = currentCampaignNode();
+    var def = campaignNodeDef(node);
+    var mega = def.isMega;
+    var round = node;
+    G.bossRound = round;
+    var seed = def.bossSeed + Date.now() % 10000;
     var rng = rngSeed(seed);
-    var rar = pickRarity(rng, undefined, scanMult() * 0.01 + blitzMod('packLuck') * 0.5);
+    var scanLuck = scanMult() * 0.01 + blitzMod('packLuck') * 0.5 + (node - 1) * 0.008;
+    var rar = pickRarity(rng, undefined, scanLuck);
     G.bossSeed = seed;
     G.bossRarity = rar;
     G.bossIsMega = mega;
     if (mega) {
       G.bossName = genBossName(rng);
-      G.bossMaxHp = Math.floor(800 * round * rMult(rar) * (1 + round * 0.15) * 2.2);
+      G.bossMaxHp = Math.floor(800 * def.hpMult * rMult(rar) * 2.2);
     } else {
-      G.bossName = MINION_NAMES[wave - 1] || MINION_NAMES[0];
-      G.bossMaxHp = Math.floor(180 * round * rMult(rar) * (0.45 + wave * 0.12));
+      G.bossName = MINION_NAMES[battleWaveNum() - 1] || MINION_NAMES[0];
+      G.bossMaxHp = Math.floor(180 * def.hpMult * rMult(rar) * (0.55 + battleWaveNum() * 0.1));
     }
     G.bossHp = G.bossMaxHp;
-    G.bossTrait = round % 4;
+    G.bossTrait = node % 4;
     G.bossWaveStartedAt = Date.now();
     G.bossTraitState = { solarAcc: 0, solarSilence: null };
     if (G.bossTrait === 2) {
@@ -1654,7 +1777,7 @@
 
   function battleDamageBreakdown(dt, forTick) {
     var rng = rngSeed(G.bossSeed + Math.floor(Date.now() / 200));
-    var ids = (G.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
+    var ids = (G.equippedBattleIds || []).slice(0, campaignMaxSlots());
     var wave = battleWaveNum();
     var regenMult = 1;
     var dotPerSec = 0;
@@ -1706,106 +1829,118 @@
   }
 
   function killBoss() {
-    var round = G.bossRound || 1;
+    var node = currentCampaignNode();
+    var def = campaignNodeDef(node);
+    var mega = def.isMega;
     var wave = battleWaveNum();
-    var mega = wave === 5;
     var mult = 1;
     (G.equippedBattleIds || []).forEach(function (id) {
       var s = strainById(id);
       mult += abilityBonus(s, 'cash_magnet', 0.08);
     });
-    var cashGain = Math.floor((mega ? 5000 : 750) * round * rMult(G.bossRarity) * mult * (mega ? 1 : 0.35 + wave * 0.1) * voidEssenceMult());
+    var cashGain = Math.floor((mega ? 5000 : 750) * def.rewardMult * rMult(G.bossRarity) * mult * (mega ? 1 : 0.35 + wave * 0.1) * voidEssenceMult() * (1 + blitzMod('bossCash')) * (1 + blitzMod('campaignNode')));
     creditCash(cashGain);
-    var spGain = mega ? (12 + round * 4) : Math.max(1, Math.floor(wave / 2));
+    var spGain = Math.floor((mega ? (12 + node * 4) : Math.max(1, Math.floor(wave / 2) + Math.floor(node / 4))) * (1 + blitzMod('sp')) * (1 + blitzMod('campaignNode')));
     G.sp = (G.sp || 0) + spGain;
-    var xpGain = mega ? (40 + round * 10) : (12 + wave * 6);
+    var xpGain = Math.floor((mega ? (40 + node * 10) : (12 + wave * 6 + node * 2)) * (1 + blitzMod('campaignNode')));
+    var xpFinal = Math.floor(xpGain * (1 + blitzMod('xp')));
     addXp(xpGain, true);
     popArcadeBurst([
       { type: 'cash', amount: cashGain, mega: mega, jackpot: mega && cashGain >= 8000 },
       { type: 'sp', amount: spGain, big: true, mega: mega },
-      { type: 'xp', amount: xpGain, big: true, mega: mega },
+      { type: 'xp', amount: xpFinal, big: true, mega: mega },
     ]);
     if (mega) {
       popArcade('label', 0, { label: 'BOSS JACKPOT!', jackpot: true, delay: 280 });
       popArcade('label', 0, { label: 'RIFT TWIN PACK!', mega: true, delay: 380 });
       UI.battleWaveFlash = 'boss-kill-celebrate';
-    } else if (wave === 4) {
-      popArcade('label', 0, { label: 'MEGA BOSS NEXT!', mega: true, delay: 200 });
-      UI.battleWaveFlash = 'boss-wave-advance';
     } else {
       UI.battleWaveFlash = 'boss-wave-clear';
     }
     if (mega) queueReward('dual', 'boss');
-    G.bossRound = round + 1;
+    if (!isCampaignNodeCleared(node)) {
+      if (!Array.isArray(G.campaignNodeClears)) G.campaignNodeClears = [];
+      G.campaignNodeClears.push(node);
+    }
+    if (node < CAMPAIGN_NODE_COUNT) {
+      G.campaignNode = node + 1;
+      G.bossRound = G.campaignNode;
+      enforceCampaignSlotLimit();
+    }
     spawnBoss();
     shakeScreen();
     flashBossHit(mega);
     setTimeout(function () { UI.battleWaveFlash = null; render(); }, mega ? 900 : 550);
     if (mega) {
-      showBattleToast('BOSS DOWN! +' + spGain + ' SP · RIFT TWIN PACK!', true);
+      showBattleToast('NODE ' + node + ' CLEARED! +' + spGain + ' SP · RIFT TWIN PACK!', true);
       plantSay('boss_kill', true);
     } else {
-      showBattleToast('Wave ' + wave + '/5 · +' + spGain + ' SP', false);
+      showBattleToast('Node ' + node + ' cleared · +' + spGain + ' SP', false);
       plantSay('wave_clear', true);
     }
     scheduleSave();
   }
 
   function tickBoss(dt) {
-    if (!G.bossMaxHp || G.bossHp <= 0) return;
-    var trait = getBossTrait();
-    if (trait === 1) {
-      G.bossTraitState = G.bossTraitState || { solarAcc: 0, solarSilence: null };
-      G.bossTraitState.solarAcc = (G.bossTraitState.solarAcc || 0) + dt;
-      if (G.bossTraitState.solarAcc >= 4000) {
-        G.bossTraitState.solarAcc = 0;
-        var eqIds = (G.equippedBattleIds || []).filter(function (id) { return !!strainById(id); });
-        if (eqIds.length) {
-          var pick = eqIds[Math.floor(Math.random() * eqIds.length)];
-          G.bossTraitState.solarSilence = { id: pick, until: Date.now() + 2000 };
+    try {
+      if (!G.bossMaxHp || G.bossHp <= 0) return;
+      if (!campaignPassesGates(currentCampaignNode())) return;
+      var trait = getBossTrait();
+      if (trait === 1) {
+        G.bossTraitState = G.bossTraitState || { solarAcc: 0, solarSilence: null };
+        G.bossTraitState.solarAcc = (G.bossTraitState.solarAcc || 0) + dt;
+        if (G.bossTraitState.solarAcc >= 4000) {
+          G.bossTraitState.solarAcc = 0;
+          var eqIds = (G.equippedBattleIds || []).filter(function (id) { return !!strainById(id); });
+          if (eqIds.length) {
+            var pick = eqIds[Math.floor(Math.random() * eqIds.length)];
+            G.bossTraitState.solarSilence = { id: pick, until: Date.now() + 2000 };
+          }
         }
       }
-    }
-    var sapReduce = 0;
-    (G.equippedBattleIds || []).forEach(function (id) {
-      var s = strainById(id);
-      sapReduce += abilityBonus(s, 'shield_sap', 0.08);
-    });
-    var regenRate = 0.0015;
-    if (trait === 3) {
-      var elapsed = (Date.now() - (G.bossWaveStartedAt || Date.now())) / 1000;
-      if (elapsed > 15) regenRate *= 3;
-    }
-    var regen = G.bossMaxHp * regenRate * Math.max(0, 1 - sapReduce);
-    if (regen > 0) G.bossHp = Math.min(G.bossMaxHp, G.bossHp + regen * (dt / 1000));
-    var dmg = battleDamageBreakdown(dt, true);
-    if (dmg.total <= 0) return;
-    if (trait === 2 && (G.bossShieldHp || 0) > 0) {
-      var shieldHit = Math.min(G.bossShieldHp, dmg.crit);
-      G.bossShieldHp -= shieldHit;
-      var critOverflow = dmg.crit - shieldHit;
-      if (G.bossShieldHp <= 0) {
-        G.bossHp = Math.max(0, G.bossHp - critOverflow - dmg.normal - dmg.dot);
+      var sapReduce = 0;
+      (G.equippedBattleIds || []).forEach(function (id) {
+        var s = strainById(id);
+        sapReduce += abilityBonus(s, 'shield_sap', 0.08);
+      });
+      var regenRate = 0.0015;
+      if (trait === 3) {
+        var elapsed = (Date.now() - (G.bossWaveStartedAt || Date.now())) / 1000;
+        if (elapsed > 15) regenRate *= 3;
       }
-    } else {
-      G.bossHp = Math.max(0, G.bossHp - dmg.total);
-    }
-    if (dmg.hadCrit) flashBossHit(true);
-    else {
-      UI._bossHitAcc = (UI._bossHitAcc || 0) + dmg.total;
-      if (UI._bossHitAcc >= G.bossMaxHp * 0.015) {
-        UI._bossHitAcc = 0;
-        flashBossHit(false);
+      var regen = G.bossMaxHp * regenRate * Math.max(0, 1 - sapReduce);
+      if (regen > 0) G.bossHp = Math.min(G.bossMaxHp, G.bossHp + regen * (dt / 1000));
+      var dmg = battleDamageBreakdown(dt, true);
+      if (dmg.total <= 0) return;
+      if (trait === 2 && (G.bossShieldHp || 0) > 0) {
+        var shieldHit = Math.min(G.bossShieldHp, dmg.crit);
+        G.bossShieldHp -= shieldHit;
+        var critOverflow = dmg.crit - shieldHit;
+        if (G.bossShieldHp <= 0) {
+          G.bossHp = Math.max(0, G.bossHp - critOverflow - dmg.normal - dmg.dot);
+        }
+      } else {
+        G.bossHp = Math.max(0, G.bossHp - dmg.total);
       }
+      if (dmg.hadCrit) flashBossHit(true);
+      else {
+        UI._bossHitAcc = (UI._bossHitAcc || 0) + dmg.total;
+        if (UI._bossHitAcc >= G.bossMaxHp * 0.015) {
+          UI._bossHitAcc = 0;
+          flashBossHit(false);
+        }
+      }
+      if (G.bossHp <= 0) killBoss();
+    } catch (err) {
+      console.error('tickBoss', err);
     }
-    if (G.bossHp <= 0) killBoss();
   }
 
   function equipBattle(sid) {
     var ids = (G.equippedBattleIds || []).slice();
     var idx = ids.indexOf(sid);
     if (idx >= 0) { ids.splice(idx, 1); G.equippedBattleIds = ids; scheduleSave(); return true; }
-    if (ids.length >= BATTLE_EQUIP_MAX) return false;
+    if (ids.length >= campaignMaxSlots()) return false;
     if (!strainById(sid)) return false;
     G.raidEquipIds = (G.raidEquipIds || []).filter(function (x) { return x !== sid; });
     ids.push(sid);
@@ -1816,8 +1951,9 @@
 
   function equipBestBattle() {
     var raid = G.raidEquipIds || [];
+    var max = campaignMaxSlots();
     var sorted = G.strains.slice().filter(function (s) { return raid.indexOf(s.id) < 0; }).sort(function (a, b) { return strainBattleDpsBase(b) - strainBattleDpsBase(a); });
-    G.equippedBattleIds = sorted.slice(0, BATTLE_EQUIP_MAX).map(function (s) { return s.id; });
+    G.equippedBattleIds = sorted.slice(0, max).map(function (s) { return s.id; });
     scheduleSave();
     return true;
   }
@@ -1858,7 +1994,7 @@
     (G.raidEquipIds || []).forEach(function (id) {
       total += strainBattleDps(strainById(id), rng);
     });
-    return total;
+    return total * (1 + blitzMod('raid'));
   }
 
   function filteredBattleEquipStrains() {
@@ -1985,6 +2121,7 @@
   function portalCost() { return PORTAL_BASE_COST * G.nextPortalNum; }
   function floorUpCost(f) { return Math.floor(5000 * f.level * f.level); }
   function addXp(amt, skipPop) {
+    if (amt > 0) amt = Math.floor(amt * (1 + blitzMod('xp')));
     if (amt > 0 && !skipPop) popXp(amt);
     G.empireXp = (G.empireXp || 0) + amt;
     while (G.empireXp >= xpNeededForLevel(G.empireLevel)) {
@@ -2010,7 +2147,7 @@
     bossTickAcc += d;
     if (bossTickAcc >= 100) { tickBoss(bossTickAcc); bossTickAcc = 0; }
     autoScanAcc += d;
-    if (autoScanAcc >= AUTO_SCAN_MS) { autoScanAcc = 0; processAutoScan(); }
+    if (autoScanAcc >= autoScanIntervalMs()) { autoScanAcc = 0; processAutoScan(); }
     processLeaseBilling();
     G.lastTickAt = now;
   }
@@ -2688,7 +2825,7 @@
       if (G.breedSlotB === id) G.breedSlotB = null;
       if (G.strainMutationMap && G.strainMutationMap[id]) delete G.strainMutationMap[id];
     }
-    var power = 1 + rarityIndex(s.rarity);
+    var power = Math.floor((1 + rarityIndex(s.rarity)) * (1 + blitzMod('mutationEssence')));
     G.mutationEssence = (G.mutationEssence || 0) + power;
     G.mutationItems = (G.mutationItems || []).concat([{
       id: 'mut_' + Date.now() + '_' + Math.floor(Math.random() * 9999),
@@ -2759,36 +2896,39 @@
     var bc = rarityColor(G.bossRarity);
     var dps = totalBattleDps();
     var mega = isBossWave();
-    var wave = battleWaveNum();
-    var bossHue = G.bossSeed % 360;
+    var node = currentCampaignNode();
+    var def = campaignNodeDef(node);
+    var bossHue = def.bossHue;
+    var gates = campaignGateFailures(node);
     var h = '<div class="boss-stage glass-inset' + (mega ? ' boss-stage-mega' : '') + '">';
     h += '<div class="boss-stage-sky"></div>';
-    h += '<div class="boss-stage-nebula" style="filter:hue-rotate(' + bossHue + 'deg)"></div>';
+    h += '<div class="boss-stage-nebula campaign-boss-hue-' + (bossHue % 12) + '"></div>';
     h += '<div class="boss-stage-floor"></div>';
     h += '<div class="boss-stage-entity boss-arena-art">';
-    h += '<div class="boss-aura-ring" style="--boss-color:' + bc + '"></div>';
+    h += '<div class="boss-aura-ring campaign-boss-accent-' + (bossHue % 8) + '"></div>';
     var bossSvgSz = mega ? { w: 140, h: 154 } : { w: 120, h: 132 };
     var bossSvg = generateBossSvgMarkup({ seed: G.bossSeed, hue: bossHue, width: bossSvgSz.w, height: bossSvgSz.h });
-    bossSvg = bossSvg.replace('class="cr-art-fallback boss-svg-fallback"', 'class="boss-sprite boss-svg-fallback" style="filter:hue-rotate(' + bossHue + 'deg) drop-shadow(0 0 12px ' + bc + '66)"');
+    bossSvg = bossSvg.replace('class="cr-art-fallback boss-svg-fallback"', 'class="boss-sprite boss-svg-fallback campaign-boss-hue-' + (bossHue % 12) + '"');
     h += bossSvg;
     h += '</div>';
-    h += '<div class="boss-wave-strip">';
-    for (var w = 1; w <= 5; w++) {
-      h += '<div class="boss-wave-pip' + (w < wave ? ' done' : '') + (w === wave ? ' active' : '') + (w === 5 && mega ? ' mega' : '') + '"></div>';
-    }
-    h += '</div>';
+    h += '<div class="campaign-arena-node-badge">NODE ' + node + (mega ? ' · MEGA' : '') + '</div>';
     h += '<div class="boss-stage-hud">';
     if (mega) h += '<div class="boss-mega-tag">⚡ MEGA BOSS · RIFT TWIN PACK</div>';
     h += '<div class="boss-stage-name font-display">' + esc(G.bossName) + '</div>';
-    h += '<div class="boss-stage-tier">' + esc(rarityName(G.bossRarity)) + ' tier · Wave ' + wave + '/5</div>';
-    h += '<div class="boss-hp-bar"><div class="boss-hp-fill boss-hp-fill-anim" style="width:' + hpPct + '%;background:' + bc + ';color:' + bc + '"></div></div>';
+    h += '<div class="boss-stage-tier">' + esc(rarityName(G.bossRarity)) + ' tier · Campaign ' + node + '/' + CAMPAIGN_NODE_COUNT + '</div>';
+    h += '<div class="boss-hp-bar"><div class="boss-hp-fill boss-hp-fill-anim campaign-hp-pct-' + Math.floor(hpPct / 5) + '"></div></div>';
     if (getBossTrait() === 2 && (G.bossShieldMax || 0) > 0) {
       var shPct = Math.max(0, (G.bossShieldHp / G.bossShieldMax) * 100);
-      h += '<div class="boss-shield-bar"><div class="boss-shield-fill" style="width:' + shPct + '%"></div></div>';
+      h += '<div class="boss-shield-bar"><div class="boss-shield-fill campaign-shield-pct-' + Math.floor(shPct / 5) + '"></div></div>';
     }
     h += '<div class="boss-hp-text"><span class="text-green">' + Math.ceil(G.bossHp).toLocaleString() + ' HP</span><span class="text-muted">' + G.bossMaxHp.toLocaleString() + '</span></div>';
     h += '<div class="boss-trait-badge"><span class="boss-trait-name">' + esc(bossTraitLabel(getBossTrait())) + '</span><span class="boss-trait-state">' + esc(bossTraitStatusText()) + '</span></div>';
-    h += '<div class="boss-stage-dps">⚔ ' + dps.toFixed(1) + ' DPS</div>';
+    if (gates.length) {
+      h += '<div class="campaign-arena-gate-warn">';
+      gates.slice(0, 2).forEach(function (g) { h += '<div class="campaign-gate-line">' + esc(g) + '</div>'; });
+      h += '</div>';
+    }
+    h += '<div class="boss-stage-dps">⚔ ' + dps.toFixed(1) + ' DPS · ' + def.maxSlots + ' slots</div>';
     h += '</div></div>';
     return h;
   }
@@ -2818,16 +2958,70 @@
   function fightTopBarHtml(farmMode) {
     var h = '<div class="fight-top-bar mb-2 ' + SKIN_PANEL + ' p-2">';
     if (farmMode) {
-      h += '<div class="flex-between gap-2 w-full"><div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div>';
+      h += '<div class="flex-between gap-2 w-full"><div class="fight-top-info"><h2 class="font-display chromatic-text fight-top-title">PORTAL FARM</h2>';
+      h += '<p class="font-mono text-muted text-xs fight-top-sub">Passive ' + fmtRev(revSecTotal()) + '</p></div>';
       h += '<button type="button" class="game-btn game-btn-sm" data-action="toggle-farm">✕ CLOSE</button></div>';
     } else {
-      var wave = battleWaveNum();
+      var node = currentCampaignNode();
       var mega = isBossWave();
-      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div>';
+      var cleared = Array.isArray(G.campaignNodeClears) ? G.campaignNodeClears.length : 0;
+      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text fight-top-title">' + (mega ? 'MEGA NODE ' + node : 'CAMPAIGN TRAIL') + '</h2>';
+      h += '<p class="font-mono text-muted text-xs fight-top-sub">Node ' + node + '/' + CAMPAIGN_NODE_COUNT + ' · ' + cleared + ' cleared' + (mega ? ' · MEGA BOSS' : '') + '</p></div>';
     }
     h += '</div>';
+    return h;
+  }
+
+  function campaignNodePreviewHtml(def) {
+    var mini = generateBossSvgMarkup({ seed: def.bossSeed, hue: def.bossHue, width: 48, height: 52 });
+    mini = mini.replace('class="cr-art-fallback boss-svg-fallback"', 'class="campaign-node-boss-svg campaign-boss-hue-' + (def.bossHue % 12) + '"');
+    return mini;
+  }
+
+  function renderCampaignTrail() {
+    var cur = currentCampaignNode();
+    var h = '<div class="campaign-trail-wrap halftone-panel ink-border">';
+    h += '<div class="section-label section-label-green campaign-trail-heading">CAMPAIGN TRAIL</div>';
+    h += '<div class="campaign-trail-scroll" id="campaign-trail-scroll">';
+    for (var n = CAMPAIGN_NODE_COUNT; n >= 1; n--) {
+      var def = campaignNodeDef(n);
+      var cleared = isCampaignNodeCleared(n);
+      var isCurrent = n === cur;
+      var locked = n > cur;
+      var gates = isCurrent ? campaignGateFailures(n) : [];
+      var stateClass = cleared ? 'campaign-node-cleared' : (isCurrent ? 'campaign-node-current' : 'campaign-node-locked');
+      if (isCurrent && gates.length) stateClass += ' campaign-node-gated';
+      h += '<button type="button" class="campaign-node ' + stateClass + '" id="campaign-node-' + n + '" data-action="campaign-focus-node" data-id="' + n + '"' + (locked ? ' disabled' : '') + '>';
+      h += '<div class="campaign-node-orb">';
+      h += '<span class="campaign-node-num">' + n + '</span>';
+      if (cleared) h += '<span class="campaign-node-check">✓</span>';
+      if (def.isMega) h += '<span class="campaign-node-mega">⚡</span>';
+      h += '</div>';
+      h += '<div class="campaign-node-body">';
+      h += '<div class="campaign-node-title">' + (def.isMega ? 'MEGA BOSS' : 'Skirmish') + '</div>';
+      h += '<div class="campaign-node-preview">' + campaignNodePreviewHtml(def) + '</div>';
+      h += '<div class="campaign-node-rules">';
+      if (def.maxSlots < BATTLE_EQUIP_MAX) h += '<span class="campaign-rule-chip">MAX ' + def.maxSlots + '</span>';
+      if (def.minMutations > 0) h += '<span class="campaign-rule-chip">MUT×' + def.minMutations + '</span>';
+      if (def.minMutations === -1) h += '<span class="campaign-rule-chip">ALL MUT</span>';
+      if (def.minRarity) h += '<span class="campaign-rule-chip">' + esc(rarityName(def.minRarity).toUpperCase()) + '+</span>';
+      if (def.maxSlots >= BATTLE_EQUIP_MAX && def.minMutations === 0 && !def.minRarity) h += '<span class="campaign-rule-chip campaign-rule-open">OPEN</span>';
+      h += '</div>';
+      if (isCurrent) {
+        if (gates.length) {
+          h += '<div class="campaign-node-gate-warn">';
+          gates.slice(0, 2).forEach(function (g) { h += '<div class="campaign-gate-line">' + esc(g) + '</div>'; });
+          h += '</div>';
+        } else {
+          h += '<div class="campaign-node-fight-tag">FIGHTING NOW</div>';
+        }
+      } else if (cleared) {
+        h += '<div class="campaign-node-cleared-tag">CLEARED</div>';
+      }
+      h += '</div></button>';
+      if (n > 1) h += '<div class="campaign-trail-connector' + (cleared || isCurrent ? ' campaign-trail-connector-live' : '') + '"></div>';
+    }
+    h += '</div></div>';
     return h;
   }
 
@@ -2839,6 +3033,7 @@
     h += '<div class="home-arena-frame ' + SKIN_PANEL + '">';
     h += bossArenaStageHtml();
     h += '</div>';
+    h += renderCampaignTrail();
     h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', '🗼') + hubOrbBtn('RAID', 'hub-raid', '⚔') + hubOrbBtn('MUTATION LAB', 'hub-mutation-lab', '🧬') + '</div>';
     h += '<div class="home-chest-rail ' + SKIN_PANEL + '">';
     h += '<div class="section-label section-label-green" style="margin:0 0 0.5rem;text-align:left">PENDING CHESTS · INSTANT OPEN</div>';
@@ -2948,7 +3143,7 @@
     h += '</div>';
     h += '<div class="' + SKIN_PANEL + ' neon-card-green neon-card-pulse p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
     blitzShopRows().forEach(function (u) {
-      h += '<div class="flex-between shop-blitz-row ' + SKIN_PANEL + (u.purchased ? ' purchased' : '') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
+      h += '<div class="flex-between shop-blitz-row ' + SKIN_PANEL + (u.purchased ? ' purchased' : '') + (u.endGame ? ' shop-blitz-endgame' : '') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + (u.endGame ? ' <span class="shop-blitz-eg-tag">ENDGAME</span>' : '') + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + (u.minEmpireLevel ? ' · LV.' + u.minEmpireLevel + '+' : '') + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
     h += '</div><div class="section-label mb-2" style="text-align:left">GENERAL STORE</div>';
     G.inventory.forEach(function (it) {
@@ -3031,7 +3226,7 @@
       h += '<p class="text-muted text-xs mb-2">Burn strains into permanent mutation shards. Higher rarity = more essence.</p>';
       h += '<div class="binder-grid mutation-burn-grid mb-2" style="max-height:42vh;overflow-y:auto">';
       G.strains.filter(function (s) { return !s.planetExclusive || (s.quantity || 1) > 1; }).forEach(function (s) {
-        var gain = 1 + rarityIndex(s.rarity);
+        var gain = Math.floor((1 + rarityIndex(s.rarity)) * (1 + blitzMod('mutationEssence')));
         h += '<button type="button" class="mutation-burn-card" data-action="destroy-strain" data-id="' + esc(s.id) + '">';
         h += crCardHtml(s, { noFocus: true }) + '<div class="mutation-burn-tag">+' + gain + ' ESS</div></button>';
       });
@@ -3316,7 +3511,7 @@
   }
 
   function profileModifiersHtml() {
-    var ids = (G.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
+    var ids = (G.equippedBattleIds || []).slice(0, campaignMaxSlots());
     var wave = battleWaveNum();
     var h = '<div class="profile-stats-scroll">';
     var dpsSources = [];
@@ -3334,6 +3529,7 @@
       if (hasAbility(s, 'blitz_rush')) dpsSources.push('Blitz Rush (' + esc(s.name) + '): +' + modPct(0.1 * abilityBoostMult(s, 'blitz_rush')) + ' blitz amp');
     });
     if (blitzMod('battle') > 0) dpsSources.push('Blitz Battle: +' + modPct(blitzMod('battle')));
+    if (blitzMod('raid') > 0) dpsSources.push('Blitz Raid: +' + modPct(blitzMod('raid')) + ' (raid squad)');
     if (blitzRushMult() > 1) dpsSources.push('Blitz Rush total: ×' + blitzRushMult().toFixed(2) + ' on all blitz mods');
     if ((G.voidEssence || 0) > 0) dpsSources.push('Void Essence: ×' + voidEssenceMult().toFixed(2) + ' (' + G.voidEssence + ' essence)');
     h += '<div class="section-label section-label-green mb-2">BATTLE DPS</div>';
@@ -3401,6 +3597,19 @@
     h += '<div class="section-label mb-2 mt-2">CLONE SPEED</div>';
     h += modSectionCard('Clone Time', fmtCd(CLONE_MS * (1 - blitzMod('clone'))), cloneSources.length ? cloneSources : ['Base 60s — blitz & Clone Echo reduce time']);
 
+    var endGameSources = [];
+    if (blitzMod('mutationEssence') > 0) endGameSources.push('Mutation Essence: +' + modPct(blitzMod('mutationEssence')) + ' from burns');
+    if (blitzMod('bossCash') > 0) endGameSources.push('Boss Cash: +' + modPct(blitzMod('bossCash')));
+    if (blitzMod('sp') > 0) endGameSources.push('Boss SP: +' + modPct(blitzMod('sp')));
+    if (blitzMod('xp') > 0) endGameSources.push('Empire XP: +' + modPct(blitzMod('xp')));
+    if (blitzMod('campaignNode') > 0) endGameSources.push('Campaign Node Rewards: +' + modPct(blitzMod('campaignNode')));
+    if (blitzMod('voidEssence') > 0) endGameSources.push('Void Prestige Essence: +' + modPct(blitzMod('voidEssence')));
+    if (blitzMod('raid') > 0) endGameSources.push('Raid DPS: +' + modPct(blitzMod('raid')));
+    if (endGameSources.length) {
+      h += '<div class="section-label mb-2 mt-2">END-GAME BLITZ</div>';
+      h += modSectionCard('Power Mods', String(endGameSources.length) + ' active', endGameSources);
+    }
+
     var blitzSources = [];
     (G.purchasedBlitzIds || []).forEach(function (bid) {
       var b = BLITZ_BY_ID[bid];
@@ -3420,7 +3629,7 @@
     }
     if (hasAutoScanFleet()) {
       h += '<div class="section-label mb-2 mt-2">AUTO-SCAN FLEET</div>';
-      h += modSectionCard('Fleet Status', 'ACTIVE', ['Scans every 60s · auto-keeps ' + rarityName(AUTO_SCAN_MIN_RARITY) + '+ worlds']);
+      h += modSectionCard('Fleet Status', 'ACTIVE', ['Scans every ' + Math.round(autoScanIntervalMs() / 1000) + 's · auto-keeps ' + rarityName(AUTO_SCAN_MIN_RARITY) + '+ worlds']);
     }
 
     h += '</div>';
@@ -3433,7 +3642,7 @@
     var invRev = inventoryRevPerSec();
     var rows = [
       ['Cash', fmtCash(G.cash)], ['SP', fmtSp(G.sp || 0)], ['XP', Math.floor(G.empireXp) + ' / ' + xpNeededForLevel(G.empireLevel)],
-      ['Level', 'LV.' + G.empireLevel], ['Boss Round', 'R' + (G.bossRound || 1)], ['Battle DPS', dps.toFixed(1) + '/sec'],
+      ['Level', 'LV.' + G.empireLevel], ['Campaign Node', String(currentCampaignNode()) + '/' + CAMPAIGN_NODE_COUNT], ['Battle DPS', dps.toFixed(1) + '/sec'],
       ['Passive Rev', fmtRev(revSecTotal())], ['Inventory Rev', '+' + invRev.toFixed(1) + '/sec'],
       ['Planets', String((G.ownedPlanets || []).length)], ['Strains', String(G.strains.length)],
       ['Portal Floors', String(G.factoryFloors.length)], ['Blitz Mods', String(blitzCount) + ' / ' + BLITZ_CATALOG.length],
@@ -3448,7 +3657,7 @@
     });
     h += '</div>';
     h += '<div class="' + SKIN_PANEL + ' p-4 mt-3"><div class="section-label section-label-green mb-2">VOID PRESTIGE</div>';
-    h += '<p class="text-muted text-xs mb-3">Reset cash, SP, and strains (keeps top 3 + all blitz). Next essence: +' + Math.floor((G.totalCashEarned || 0) / 1000000) + ' (1 per $1M earned this run).</p>';
+    h += '<p class="text-muted text-xs mb-3">Reset cash, SP, and strains (keeps top 3 + all blitz). Next essence: +' + Math.floor((G.totalCashEarned || 0) / 1000000 * (1 + blitzMod('voidEssence'))) + ' (1 per $1M earned this run).</p>';
     h += '<button type="button" class="game-btn game-btn-green w-full" data-action="void-prestige">ASCEND · VOID PRESTIGE</button></div></div>';
     return h;
   }
@@ -3769,6 +3978,19 @@
     renderStrainPicker();
     renderMergeLab();
     renderAuxOverlays();
+    scrollCampaignTrailToCurrent();
+  }
+
+  function scrollCampaignTrailToCurrent() {
+    if (!G || UI.activeTab !== 'battle' || UI.farmOpen) return;
+    try {
+      setTimeout(function () {
+        var el = document.getElementById('campaign-node-' + currentCampaignNode());
+        if (el) el.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }, 60);
+    } catch (err) {
+      console.error('scrollCampaignTrailToCurrent', err);
+    }
   }
 
   var saveTimer = null;
@@ -4007,6 +4229,15 @@
     else if (act==='open-chest') { openChestSlot(val); return; }
     else if (act==='hub-raid') { UI.activeTab = 'index'; UI.indexPane = 'decks'; UI.farmOpen = false; }
     else if (act==='hub-mutation-lab') { UI.activeTab = 'index'; UI.indexPane = 'mutations'; UI.farmOpen = false; UI.mergeLab = { open: false, phase: 'idle', child: null, error: '' }; }
+    else if (act==='campaign-focus-node') {
+      var nodeNum = parseInt(val, 10);
+      if (!isNaN(nodeNum) && nodeNum <= currentCampaignNode()) {
+        try {
+          var trailEl = document.getElementById('campaign-node-' + nodeNum);
+          if (trailEl) trailEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } catch (err) { console.error('campaign-focus-node', err); }
+      }
+    }
     else if (act==='mutation-buy-luck') spendMutationPackLuck();
     else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
     else if (act==='equip-mutation') { var em = val.split(':'); equipMutationItem(em[0], em[1]); UI.mutationEquipPick = null; }
@@ -5027,6 +5258,15 @@ etPlayerId: function () { return activePlayerId; },
       if (params.get('qa') === 'full' || params.get('qa') === '1') {
         VoidlineEngineQA.runAll();
       }
+      if (params.get('swarm') === '1' || params.get('swarm') === 'run') {
+        VoidlineSwarm.start({ sandbox: true, cashMult: 150, maxSteps: 250000 });
+      }
+    } catch (e) {
+      console.error('[VoidlineEngineQA] bootstrap failed:', e);
+    }
+  }, 350);
+})();
+
       if (params.get('swarm') === '1' || params.get('swarm') === 'run') {
         VoidlineSwarm.start({ sandbox: true, cashMult: 150, maxSteps: 250000 });
       }
