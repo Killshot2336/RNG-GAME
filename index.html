@@ -178,10 +178,11 @@
       overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.15rem;
     }
     .sort-chip {
-      flex-shrink: 0; padding: 0.35rem 0.65rem; border-radius: 9999px;
+      flex-shrink: 0; min-height: 2rem; padding: 0.35rem 0.65rem; border-radius: 9999px;
       border: 1px solid rgba(74,222,128,0.25); background: rgba(0,0,0,0.35);
       color: var(--muted); font-family: var(--font-mono); font-size: 0.52rem;
       font-weight: 600; letter-spacing: 0.04em; cursor: pointer; transition: all 0.15s;
+      touch-action: manipulation;
     }
     .sort-chip.active {
       border-color: var(--green); background: rgba(74,222,128,0.15); color: var(--green);
@@ -890,7 +891,7 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
   </div>
-  <script src="catalog.js?v=22"></script>
-  <script src="game.js?v=22"></script>
+  <script src="catalog.js?v=23"></script>
+  <script src="game.js?v=23"></script>
 </body>
 </html>

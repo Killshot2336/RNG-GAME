@@ -2190,30 +2190,46 @@
       var s = strainById(id);
       if (!s) return;
       dpsSources.push(esc(s.name) + ': ' + strainBattleDpsBase(s).toFixed(1) + '/s base');
-      if (hasAbility(s, 'poison_cloud')) dpsSources.push('Poison Cloud (' + esc(s.name) + '): +' + (5 * s.quantity).toFixed(1) + ' DoT');
+      if (hasAbility(s, 'crit_burst')) dpsSources.push('Crit Burst (' + esc(s.name) + '): 15% ×3 hit');
+      if (hasAbility(s, 'boss_slayer')) dpsSources.push('Boss Slayer (' + esc(s.name) + '): ×' + abilityPotency(s, 'boss_slayer', 1.3).toFixed(2));
+      if (hasAbility(s, 'thc_overdrive')) dpsSources.push('THC Overdrive (' + esc(s.name) + '): ×' + abilityPotency(s, 'thc_overdrive', 1.15).toFixed(2));
+      if (hasAbility(s, 'poison_cloud')) dpsSources.push('Poison Cloud (' + esc(s.name) + '): +' + (5 * s.quantity * abilityBoostMult(s, 'poison_cloud')).toFixed(1) + ' DoT');
       if (hasAbility(s, 'regen_mist') && wave > 1) dpsSources.push('Regen Mist (' + esc(s.name) + '): +' + modPct(0.03 * (wave - 1) * abilityBoostMult(s, 'regen_mist')));
+      if (hasAbility(s, 'shield_sap')) dpsSources.push('Shield Sap (' + esc(s.name) + '): −' + modPct(abilityBonus(s, 'shield_sap', 0.08)) + ' boss regen');
+      if (hasAbility(s, 'cash_magnet')) dpsSources.push('Cash Magnet (' + esc(s.name) + '): +' + modPct(abilityBonus(s, 'cash_magnet', 0.08)) + ' kill cash');
+      if (hasAbility(s, 'blitz_rush')) dpsSources.push('Blitz Rush (' + esc(s.name) + '): +' + modPct(0.1 * abilityBoostMult(s, 'blitz_rush')) + ' blitz amp');
     });
     if (blitzMod('battle') > 0) dpsSources.push('Blitz Battle: +' + modPct(blitzMod('battle')));
-    if (blitzRushMult() > 1) dpsSources.push('Blitz Rush: ×' + blitzRushMult().toFixed(2) + ' on all blitz mods');
+    if (blitzRushMult() > 1) dpsSources.push('Blitz Rush total: ×' + blitzRushMult().toFixed(2) + ' on all blitz mods');
     h += '<div class="section-label section-label-green mb-2">BATTLE DPS</div>';
     h += modSectionCard('Total DPS', totalBattleDps().toFixed(1) + '/s', dpsSources.length ? dpsSources : ['Equip strains on the Fight tab']);
 
     var revSources = [];
     var invRev = inventoryRevPerSec();
-    if (invRev > 0) revSources.push('General store: +' + invRev.toFixed(2) + '/sec');
+    if (invRev > 0) revSources.push('General store (nutrients/pipes): +' + invRev.toFixed(2) + '/sec');
     G.factoryFloors.forEach(function (f) {
       if (!f.equippedStrainId) return;
       var s = strainById(f.equippedStrainId);
       if (!s) return;
       var line = esc(f.name) + ' · ' + esc(s.name) + ': ' + (revSec(s) * f.level).toFixed(2) + '/sec base';
-      if (hasAbility(s, 'yield_surge')) line += ' (+Yield Surge)';
-      if (hasAbility(s, 'portal_sync')) line += ' (+Portal Sync)';
+      if (hasAbility(s, 'yield_surge')) line += ' (×' + abilityPotency(s, 'yield_surge', 1.2).toFixed(2) + ' Yield Surge)';
+      if (hasAbility(s, 'portal_sync')) line += ' (×' + abilityPotency(s, 'portal_sync', 1.12).toFixed(2) + ' Portal Sync)';
       revSources.push(line);
     });
     if (blitzMod('revenue') > 0) revSources.push('Blitz Revenue: +' + modPct(blitzMod('revenue')));
     if (blitzMod('yield') > 0) revSources.push('Blitz Yield: +' + modPct(blitzMod('yield')));
+    if (G.empireLevel > 1) revSources.push('Empire Level ' + G.empireLevel + ': milestone packs on level-up');
     h += '<div class="section-label mb-2 mt-2">PASSIVE REVENUE</div>';
     h += modSectionCard('Total Passive', fmtRev(revSecTotal()), revSources.length ? revSources : ['Equip strains on portal floors']);
+
+    var planetSources = [];
+    (G.ownedPlanets || []).forEach(function (p) {
+      var out = planetOutputPerSec(p) * 8;
+      planetSources.push(esc(planetDisplayName(p)) + ': ' + fmtRev(out) + ' · x' + (p.upgraderMult || 1));
+    });
+    if (blitzMod('planet') > 0) planetSources.push('Blitz Planet: +' + modPct(blitzMod('planet')));
+    h += '<div class="section-label mb-2 mt-2">PLANET OUTPUT</div>';
+    h += modSectionCard('Worlds', String((G.ownedPlanets || []).length) + ' claimed', planetSources.length ? planetSources : ['Scan the Map tab to claim worlds']);
 
     var scanSources = [];
     G.sectorUpgrades.forEach(function (x) {
@@ -2226,6 +2242,25 @@
     if (blitzRushMult() > 1 && scanMult() > 0) scanSources.push('Blitz Rush multiplier applied to scan total');
     h += '<div class="section-label mb-2 mt-2">SCAN RATE</div>';
     h += modSectionCard('Scan Bonus', modPct(scanMult()), scanSources.length ? scanSources : ['Upgrade sectors on the Map tab']);
+
+    var luckSources = [];
+    (G.purchasedBlitzIds || []).forEach(function (bid) {
+      var b = BLITZ_BY_ID[bid];
+      if (b && b.modifierType === 'packLuck') luckSources.push(esc(b.name) + ': +' + modPct(b.modifier));
+    });
+    G.strains.forEach(function (st) {
+      if (hasAbility(st, 'rift_luck')) luckSources.push('Rift Luck (' + esc(st.name) + '): +' + modPct(abilityBonus(st, 'rift_luck', 0.05)));
+    });
+    h += '<div class="section-label mb-2 mt-2">PACK LUCK</div>';
+    h += modSectionCard('Rarity Bonus', modPct(packLuckBonus()), luckSources.length ? luckSources : ['No pack luck modifiers yet']);
+
+    var cloneSources = [];
+    if (blitzMod('clone') > 0) cloneSources.push('Blitz Clone: −' + modPct(blitzMod('clone')) + ' duration');
+    G.strains.forEach(function (st) {
+      if (hasAbility(st, 'clone_echo')) cloneSources.push('Clone Echo (' + esc(st.name) + '): −' + modPct(1 - Math.pow(0.9, abilityBoostMult(st, 'clone_echo'))) + ' per stack');
+    });
+    h += '<div class="section-label mb-2 mt-2">CLONE SPEED</div>';
+    h += modSectionCard('Clone Time', fmtCd(CLONE_MS * (1 - blitzMod('clone'))), cloneSources.length ? cloneSources : ['Base 60s — blitz & Clone Echo reduce time']);
 
     var blitzSources = [];
     (G.purchasedBlitzIds || []).forEach(function (bid) {
@@ -2263,18 +2298,23 @@
 
   function helpEncyclopediaHtml() {
     return '<div class="help-scroll text-xs" style="line-height:1.55;color:var(--muted)">' +
-      '<p><span class="text-green">SP</span> — Strain Points from boss waves. Spend on merges (15 SP), infinite ability upgrades, and planet multipliers.</p>' +
+      '<p><span class="text-green">SP</span> — Strain Points from boss waves and planet harvests. Spend on merges (15 SP), infinite ability upgrades (cost scales per level), and planet output multipliers.</p>' +
       '<p><span class="text-green">XP</span> — Empire XP from packs, clones, harvests, and boss kills. Level up for milestone reward packs.</p>' +
-      '<p><span class="text-green">Boss</span> — 5 waves per cycle; wave 5 is a mega boss with twin-pack reward. Bosses regen 0.15% max HP/s; Shield Sap slows regen 8% per equipped copy.</p>' +
-      '<p><span class="text-green">Battle DPS</span> — Equip up to 8 strains. THC × yield × rarity drives damage. Crit Burst, Boss Slayer, THC Overdrive, Poison Cloud, and Regen Mist (+3% DPS per wave cleared) stack.</p>' +
-      '<p><span class="text-green">Strains</span> — CR-style cards with THC, yield, potency, and 1–5 abilities from a 500-trait catalog. Abilities share 12 core mechanics with infinite SP upgrade levels.</p>' +
-      '<p><span class="text-green">Abilities</span> — Crit Burst, Yield Surge, THC Overdrive, Shield Sap, Poison Cloud, Clone Echo, Cash Magnet, Portal Sync, Blitz Rush (+10% blitz per copy), Rift Luck, Boss Slayer, Regen Mist.</p>' +
+      '<p><span class="text-green">Cash</span> — Primary currency. Passive revenue from portal floors + store items; boss kills; casino wins; planet ticks.</p>' +
+      '<p><span class="text-green">Boss</span> — 5 waves per cycle; wave 5 is a mega boss with twin-pack reward. Bosses regen 0.15% max HP/s; Shield Sap slows regen 8% per equipped copy (scales with SP upgrades).</p>' +
+      '<p><span class="text-green">Battle DPS</span> — Equip up to 8 strains. THC × yield × rarity × quantity drives damage. Crit Burst (15% ×3), Boss Slayer (+30%), THC Overdrive (+15%), Poison Cloud (DoT), Regen Mist (+3% DPS per wave cleared), Cash Magnet (+8% kill cash), Blitz Rush (+10% blitz amp). All scale with infinite SP ability levels via abilityBoostMult.</p>' +
+      '<p><span class="text-green">Strains</span> — CR-style cards with THC, yield, potency, and 1–5 abilities from a 500-trait catalog sharing 12 core mechanics. Procedural variants inherit the same mechanic with scaled min-rarity.</p>' +
+      '<p><span class="text-green">Abilities</span> — Crit Burst, Yield Surge (+20% floor rev), THC Overdrive, Shield Sap, Poison Cloud, Clone Echo (−10% clone time), Cash Magnet, Portal Sync (+12% floor rev), Blitz Rush, Rift Luck (+5% pack luck), Boss Slayer, Regen Mist. Upgrade any ability infinitely with SP; cost = 10 + lvl×12×1.12^min(lvl,120).</p>' +
       '<p><span class="text-green">Merge Lab</span> — Fuse two parents in the Index for 15 SP → new F1 hybrid inheriting parent traits plus a chance at a new catalog ability.</p>' +
-      '<p><span class="text-green">Shop</span> — Mystery packs, rotating blitz window (10 offers from 500 permanent upgrades), nutrients (+0.5/sec), and pipes (+1.2–2.5/sec).</p>' +
-      '<p><span class="text-green">Blitz</span> — Cash-purchased permanent modifiers for revenue, yield, scan, clone speed, pack luck, battle DPS, and planet output. First purchase starts a 30-min blitz timer; Blitz Rush strains amplify all owned blitz effects.</p>' +
-      '<p><span class="text-green">Planets</span> — Scan the Map, claim worlds, upgrade harvesters/conveyors, spend SP on output multipliers, harvest exclusive strains.</p>' +
-      '<p><span class="text-green">Portal Floors</span> — Rocket hub → equip strains to mine passive cash. Yield Surge and Portal Sync boost floor revenue.</p>' +
-      '<p><span class="text-green">Modifiers Tab</span> — Profile → Modifiers shows live DPS, revenue, scan, and blitz breakdowns with per-source detail.</p>' +
+      '<p><span class="text-green">Shop</span> — Mystery packs (Basic, Guaranteed Rift, Omega), rotating blitz window (10 offers from 500 permanent upgrades), nutrients (+0.5/sec), and pipes (+1.2–2.5/sec).</p>' +
+      '<p><span class="text-green">Blitz</span> — Cash-purchased permanent modifiers: revenue, yield, scan, clone speed, pack luck, battle DPS, planet output. First purchase starts a 30-min window; timer rolls new shop offers. Blitz Rush strains amplify all owned blitz effects up to ×1.5.</p>' +
+      '<p><span class="text-green">Planets</span> — Scan the Map, claim worlds, upgrade harvesters/conveyors, spend SP on output multipliers (up to ×8), harvest exclusive strains. Planet output = base × harvester × conveyor × upgrader × blitz planet.</p>' +
+      '<p><span class="text-green">Portal Floors</span> — Rocket hub → equip strains to mine passive cash. Revenue = strain yield × THC × floor level × blitz revenue × blitz yield × ability multipliers.</p>' +
+      '<p><span class="text-green">Scan Rate</span> — Sector upgrades + blitz scan modifiers improve pack rarity rolls and boss tier generation.</p>' +
+      '<p><span class="text-green">Pack Luck</span> — Blitz pack luck + Rift Luck abilities on owned strains shift rarity thresholds upward.</p>' +
+      '<p><span class="text-green">Clone</span> — Base 60s; reduced by blitz clone and Clone Echo per owned strain. Clone a strain to duplicate quantity.</p>' +
+      '<p><span class="text-green">Rarities</span> — 26 tiers from Dust (×1.0) to VoidGod (×5.0). Higher tiers unlock stronger abilities and card VFX tiers (Rare→Epic→Legend→Champion→God).</p>' +
+      '<p><span class="text-green">Modifiers Tab</span> — Profile → Modifiers shows live DPS, revenue, planets, scan, pack luck, clone, and blitz breakdowns with per-source detail.</p>' +
       '<p><span class="text-green">Co-op</span> — Family board shows each player\'s progress; Share Board listings let you buy strains from other saves.</p>' +
       '<p><span class="text-green">Casino</span> — Blackjack, slots, and poker rooms for bonus cash (bet responsibly in-game!).</p></div>';
   }

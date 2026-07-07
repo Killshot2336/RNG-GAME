@@ -70,6 +70,9 @@ async function main() {
   await click(page, '[data-action="open-profile"]', 'profile');
   const modTab = page.locator('[data-action="profile-tab"][data-id="modifiers"]');
   if (!(await modTab.count())) errors.push('missing modifiers profile tab');
+  await click(page, '[data-action="profile-tab"][data-id="modifiers"]', 'profile modifiers tab');
+  const modScroll = page.locator('.profile-stats-scroll');
+  if (!(await modScroll.count())) errors.push('missing modifiers content');
   await click(page, '[data-action="profile-tab"][data-id="stats"]', 'profile stats tab');
   const statsGrid = page.locator('.profile-stat-grid');
   if (!(await statsGrid.count())) errors.push('missing profile stats grid');
