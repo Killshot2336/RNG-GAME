@@ -887,7 +887,7 @@
 
   function flashBossHit(crit) {
     UI.battleFlash = crit ? 'crit' : 'hit';
-    var art = document.querySelector('.boss-arena-art');
+    var art = document.querySelector('.boss-stage-entity');
     if (art) {
       art.classList.remove('boss-hit-flash', 'boss-crit-flash');
       void art.offsetWidth;
@@ -1415,7 +1415,53 @@
     if (idx >= 18) return 'cr-tier-legend';
     if (idx >= 10) return 'cr-tier-epic';
     if (idx >= 4) return 'cr-tier-rare';
-    return 'cr-tier-common';
+    return 'cr-tier-street';
+  }
+
+  function cardTierIndex(rarity) { return rarityIndex(rarity); }
+
+  function strainVisualSeed(s) {
+    var raw = String(s.genomeId || s.seed || s.id || '0').split('').reduce(function (a, c) {
+      return ((a << 5) - a + c.charCodeAt(0)) | 0;
+    }, 0);
+    return Math.abs(raw);
+  }
+
+  function strainCardVisuals(s) {
+    var v = strainVisualSeed(s);
+    var roll = function (n) { return ((v * 1103515245 + 12345 + n * 97) & 0x7fffffff) / 0x7fffffff; };
+    return {
+      hue: Math.round((s.hue || 0) * 0.12 + roll(1) * 36 - 18),
+      sat: (1 + roll(2) * 0.4).toFixed(2),
+      scale: (0.9 + roll(3) * 0.18).toFixed(2),
+      flip: roll(4) > 0.8,
+      artSkew: ((roll(5) - 0.5) * 6).toFixed(1),
+      arenaIdx: Math.floor(roll(6) * 12),
+      particlePhase: (roll(7) * 2.5).toFixed(1),
+    };
+  }
+
+  var ABILITY_ICONS = {
+    crit_burst: '💥', yield_surge: '📈', thc_overdrive: '⚡', shield_sap: '🛡',
+    poison_cloud: '☠', clone_echo: '🧬', cash_magnet: '💰', portal_sync: '🌀',
+    blitz_rush: '🔥', rift_luck: '🎲', boss_slayer: '👹', regen_mist: '💨',
+  };
+
+  function abilityPipsHtml(s) {
+    var ab = (s.abilities || []).slice(0, 4);
+    if (!ab.length) return '';
+    return '<div class="cr-ability-pips">' + ab.map(function (aid) {
+      var a = ABILITIES.find(function (x) { return x.id === aid; });
+      return '<span class="cr-ability-pip" title="' + esc(a ? a.name : aid) + '">' + (ABILITY_ICONS[aid] || '✦') + '</span>';
+    }).join('') + '</div>';
+  }
+
+  function cardFxHtml(tierIdx, vis, rc) {
+    var h = '';
+    if (tierIdx >= 10) h += '<div class="cr-card-particles" style="--phase:' + vis.particlePhase + 's"></div>';
+    if (tierIdx >= 18) h += '<div class="cr-card-aura" style="background:radial-gradient(ellipse at 50% 80%, ' + rc + '44 0%, transparent 65%)"></div>';
+    if (tierIdx >= 25) h += '<div class="cr-card-holo"></div>';
+    return h;
   }
 
   function cardTierArtIndex(rarity) {
@@ -1437,19 +1483,28 @@
   }
 
   function strainCardArtImg(s) {
-    var hue = Math.round((s.hue || 0) * 0.12);
-    return '<img src="' + strainCardArt(s) + '" alt="" draggable="false"' + (hue ? ' style="filter:hue-rotate(' + hue + 'deg)"' : '') + '>';
+    var vis = strainCardVisuals(s);
+    var artIdx = cardTierArtIndex(s.rarity);
+    var wrapParts = ['scale(' + vis.scale + ')', 'skewX(' + vis.artSkew + 'deg)'];
+    if (vis.flip) wrapParts.push('scaleX(-1)');
+    var wrapStyle = 'transform:' + wrapParts.join(' ') + ';animation-delay:' + ((strainVisualSeed(s) % 30) / 10) + 's';
+    var imgStyle = 'filter:hue-rotate(' + vis.hue + 'deg) saturate(' + vis.sat + ') drop-shadow(0 6px 8px rgba(0,0,0,0.45))';
+    return '<span class="cr-art-wrap cr-art-v' + (artIdx % 6) + '" style="' + wrapStyle + '"><img src="' + strainCardArt(s) + '" alt="" draggable="false" style="' + imgStyle + '"></span>';
   }
 
   function crCardFrameInner(opts) {
     var qtyBadge = (opts.qty && opts.qty > 1) ? '<div class="cr-badge cr-badge-qty">x' + opts.qty + '</div>' : '';
     var tagBadge = opts.tag ? '<div class="cr-badge cr-badge-tag">' + opts.tag + '</div>' : '';
-    return '<div class="cr-card-frame ' + opts.tier + (opts.frameExtra || '') + '">' +
+    var arenaCls = 'cr-card-arena' + (opts.arenaIdx != null ? ' cr-arena-' + opts.arenaIdx : '');
+    var bannerStyle = opts.bannerColor ? ' style="border-top-color:' + opts.bannerColor + '88"' : '';
+    return '<div class="cr-card-frame ' + opts.tier + (opts.frameExtra || '') + '"' + (opts.frameStyle || '') + '>' +
       '<div class="cr-card-bevel"></div>' +
-      '<div class="cr-card-arena"></div>' +
+      '<div class="' + arenaCls + '"></div>' +
       '<div class="cr-card-art">' + opts.artHtml + '</div>' +
+      (opts.cardFx || '') +
       opts.badgeLeft + (opts.badgeCenter || '') + opts.badgeRight + qtyBadge + tagBadge +
-      '<div class="cr-card-banner"><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
+      (opts.abilityPips || '') +
+      '<div class="cr-card-banner cr-card-banner-accent"' + bannerStyle + '><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
       '<div class="cr-card-shine"></div></div>';
   }
 
@@ -1494,11 +1549,14 @@
   function crCardHtml(s, opts) {
     opts = opts || {};
     var tier = cardTierClass(s.rarity);
+    var tierIdx = cardTierIndex(s.rarity);
+    var vis = strainCardVisuals(s);
+    var rc = rarityColor(s.rarity);
     var thc = parseFloat(s.thcPercent || 0);
     var thcStr = thc % 1 === 0 ? String(Math.floor(thc)) : thc.toFixed(1);
     var thcCls = thcStr.length > 3 ? ' cr-badge-sm' : '';
     var tag = s.planetExclusive ? '🌍' : ((s.parentIds && s.parentIds.length) ? '🧬' : '');
-    var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '');
+    var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '') + (tierIdx >= 25 ? ' cr-card-godlift' : '');
     var dpsBadge = opts.showDps ? '<div class="cr-badge cr-badge-dps"><span>DPS</span>' + strainBattleDpsBase(s).toFixed(0) + '</div>' : '';
     var inner = crCardFrameInner({
       tier: tier, name: s.name, artHtml: strainCardArtImg(s),
@@ -1506,6 +1564,11 @@
       badgeCenter: dpsBadge,
       badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + strainCardLevel(s) + '</div>',
       qty: s.quantity, tag: tag,
+      arenaIdx: vis.arenaIdx,
+      abilityPips: abilityPipsHtml(s),
+      cardFx: cardFxHtml(tierIdx, vis, rc),
+      bannerColor: rc,
+      frameStyle: tierIdx >= 4 ? ' style="--cr-border:' + rc + '"' : '',
     });
     if (opts.noFocus) return '<div class="' + cls + '">' + inner + '</div>';
     return '<button type="button" class="' + cls + '" data-strain-focus="' + esc(s.id) + '">' + inner + '</button>';
@@ -1676,14 +1739,32 @@
     var dps = totalBattleDps();
     var mega = isBossWave();
     var equipped = G.equippedBattleIds || [];
+    var wave = battleWaveNum();
+    var bossHue = G.bossSeed % 360;
     var h = '<div class="screen-section battle-screen boss-arena' + (mega ? ' boss-arena-mega' : '') + '">';
     h += fightTopBarHtml(false);
     h += '<div class="battle-layout"><div class="battle-main">';
-    h += '<div class="neon-card neon-card-static p-4 mb-3 text-center' + (mega ? ' boss-card-mega' : '') + '"><div class="boss-arena-art"><img src="' + BOSS_ART + '" alt="" style="width:' + (mega ? '7rem' : '5rem') + ';height:' + (mega ? '7rem' : '5rem') + ';filter:hue-rotate(' + (G.bossSeed % 360) + 'deg)"></div><div class="font-display mt-2" style="font-size:1rem;color:' + bc + '">' + esc(G.bossName) + '</div><div class="font-mono text-xs text-muted">' + esc(rarityName(G.bossRarity)) + ' tier</div>';
-    if (mega) h += '<div class="font-mono text-green text-xs mt-1">RIFT TWIN PACK on kill</div>';
-    h += '<div class="progress-bar mt-3 mb-1"><div class="progress-fill boss-hp-fill" style="width:' + hpPct + '%;background:' + bc + '"></div></div>';
-    h += '<div class="font-mono text-xs flex-between"><span class="text-green">' + Math.ceil(G.bossHp).toLocaleString() + ' HP</span><span class="text-muted">' + G.bossMaxHp.toLocaleString() + '</span></div>';
-    h += '<div class="font-mono text-green text-xs mt-2">DPS ' + dps.toFixed(1) + '/sec</div></div></div>';
+    h += '<div class="boss-stage' + (mega ? ' boss-stage-mega' : '') + '">';
+    h += '<div class="boss-stage-sky"></div>';
+    h += '<div class="boss-stage-nebula" style="filter:hue-rotate(' + bossHue + 'deg)"></div>';
+    h += '<div class="boss-stage-floor"></div>';
+    h += '<div class="boss-stage-entity boss-arena-art">';
+    h += '<div class="boss-aura-ring" style="--boss-color:' + bc + '"></div>';
+    h += '<img class="boss-sprite" src="' + BOSS_ART + '" alt="" style="filter:hue-rotate(' + bossHue + 'deg) drop-shadow(0 0 12px ' + bc + '66)">';
+    h += '</div>';
+    h += '<div class="boss-wave-strip">';
+    for (var w = 1; w <= 5; w++) {
+      h += '<div class="boss-wave-pip' + (w < wave ? ' done' : '') + (w === wave ? ' active' : '') + (w === 5 && mega ? ' mega' : '') + '"></div>';
+    }
+    h += '</div>';
+    h += '<div class="boss-stage-hud">';
+    if (mega) h += '<div class="boss-mega-tag">⚡ MEGA BOSS · RIFT TWIN PACK</div>';
+    h += '<div class="boss-stage-name font-display">' + esc(G.bossName) + '</div>';
+    h += '<div class="boss-stage-tier">' + esc(rarityName(G.bossRarity)) + ' tier · Wave ' + wave + '/5</div>';
+    h += '<div class="boss-hp-bar"><div class="boss-hp-fill boss-hp-fill-anim" style="width:' + hpPct + '%;background:' + bc + ';color:' + bc + '"></div></div>';
+    h += '<div class="boss-hp-text"><span class="text-green">' + Math.ceil(G.bossHp).toLocaleString() + ' HP</span><span class="text-muted">' + G.bossMaxHp.toLocaleString() + '</span></div>';
+    h += '<div class="boss-stage-dps">⚔ ' + dps.toFixed(1) + ' DPS</div>';
+    h += '</div></div></div>';
     h += '<div class="battle-side"><div class="flex-between mb-2"><div class="section-label section-label-green" style="margin:0;text-align:left">BATTLE LOADOUT</div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="equip-best">EQUIP BEST</button></div>';
     h += '<div class="battle-loadout-grid mb-3">';
     for (var slot = 0; slot < BATTLE_EQUIP_MAX; slot++) {
@@ -2442,8 +2523,8 @@
     if (UI.activeTab === 'battle' && !UI.farmOpen) {
       var hp = document.querySelector('.boss-hp-fill');
       if (hp && G.bossMaxHp) hp.style.width = Math.max(0, G.bossHp / G.bossMaxHp * 100) + '%';
-      var dpsEl = document.querySelector('.boss-arena .font-mono.text-green.text-xs.mt-2');
-      if (dpsEl) dpsEl.textContent = 'DPS ' + totalBattleDps().toFixed(1) + '/sec';
+      var dpsEl = document.querySelector('.boss-stage-dps');
+      if (dpsEl) dpsEl.textContent = '⚔ ' + totalBattleDps().toFixed(1) + ' DPS';
     }
     var xpNeed = xpNeededForLevel(G.empireLevel);
     var xpFill = document.getElementById('hud-xp-fill');

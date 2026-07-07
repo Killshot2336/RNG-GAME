@@ -307,6 +307,78 @@
     .merge-pick-card { border: none; background: none; padding: 0; cursor: pointer; width: 100%; }
     .merge-pick-grid { gap: 0.5rem; }
     .boss-arena { position: relative; }
+    .boss-stage {
+      position: relative; border-radius: 1rem; overflow: hidden; margin-bottom: 0.75rem;
+      min-height: 14rem; padding: 1rem 0.75rem 0.85rem;
+      border: 2px solid rgba(74,222,128,0.2);
+      background: linear-gradient(180deg, rgba(8,20,8,0.95) 0%, rgba(12,1,26,0.98) 100%);
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .boss-stage-mega {
+      border-color: rgba(236,72,153,0.5);
+      box-shadow: inset 0 0 100px rgba(236,72,153,0.12), 0 0 40px rgba(236,72,153,0.2), 0 8px 32px rgba(0,0,0,0.4);
+      animation: boss-mega-pulse 3s ease-in-out infinite;
+    }
+    @keyframes boss-mega-pulse { 0%,100%{border-color:rgba(236,72,153,0.4)} 50%{border-color:rgba(250,204,21,0.6)} }
+    .boss-stage-sky {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(74,222,128,0.12) 0%, transparent 55%),
+                  radial-gradient(ellipse 80% 50% at 80% 20%, rgba(168,85,247,0.08) 0%, transparent 50%);
+    }
+    .boss-stage-nebula {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+      background: radial-gradient(circle at 30% 40%, hsla(var(--boss-hue, 120), 60%, 45%, 0.15) 0%, transparent 45%),
+                  radial-gradient(circle at 70% 60%, hsla(calc(var(--boss-hue, 120) + 80), 50%, 40%, 0.1) 0%, transparent 40%);
+      animation: boss-nebula-drift 12s ease-in-out infinite alternate;
+    }
+    @keyframes boss-nebula-drift { 0%{transform:scale(1) translateX(0)} 100%{transform:scale(1.08) translateX(3%)} }
+    .boss-stage-floor {
+      position: absolute; left: 5%; right: 5%; bottom: 38%; height: 3px; pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(74,222,128,0.4), rgba(168,85,247,0.3), transparent);
+      box-shadow: 0 0 20px rgba(74,222,128,0.3);
+    }
+    .boss-stage-entity {
+      position: relative; z-index: 2; display: flex; align-items: center; justify-content: center;
+      min-height: 6.5rem; margin-bottom: 0.5rem;
+    }
+    .boss-aura-ring {
+      position: absolute; width: 7rem; height: 7rem; border-radius: 50%;
+      border: 2px solid var(--boss-color, #39FF14);
+      opacity: 0.35; animation: boss-aura-spin 8s linear infinite;
+    }
+    .boss-stage-mega .boss-aura-ring { width: 9rem; height: 9rem; opacity: 0.5; border-width: 3px; }
+    .boss-stage-mega .boss-aura-ring::after {
+      content: ""; position: absolute; inset: -8px; border-radius: 50%;
+      border: 1px dashed rgba(250,204,21,0.35); animation: boss-aura-spin 12s linear infinite reverse;
+    }
+    @keyframes boss-aura-spin { to { transform: rotate(360deg); } }
+    .boss-sprite {
+      position: relative; z-index: 1; width: 5rem; height: 5rem; object-fit: contain;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.6));
+      animation: boss-idle 4s ease-in-out infinite;
+    }
+    .boss-stage-mega .boss-sprite { width: 7rem; height: 7rem; }
+    @keyframes boss-idle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .boss-wave-strip { display: flex; justify-content: center; gap: 0.35rem; margin-bottom: 0.5rem; position: relative; z-index: 2; }
+    .boss-wave-pip {
+      width: 1.5rem; height: 0.35rem; border-radius: 9999px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.08);
+    }
+    .boss-wave-pip.done { background: rgba(74,222,128,0.35); border-color: rgba(74,222,128,0.4); }
+    .boss-wave-pip.active { background: linear-gradient(90deg, var(--green), var(--gold)); box-shadow: 0 0 10px rgba(74,222,128,0.5); transform: scaleY(1.4); }
+    .boss-wave-pip.mega.active { background: linear-gradient(90deg, #EC4899, #FACC15); box-shadow: 0 0 14px rgba(236,72,153,0.6); }
+    .boss-stage-hud { position: relative; z-index: 2; text-align: center; }
+    .boss-stage-name { font-size: 1rem; letter-spacing: 0.1em; margin-bottom: 0.15rem; }
+    .boss-stage-tier { font-family: var(--font-mono); font-size: 0.55rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .boss-hp-bar {
+      height: 0.65rem; border-radius: 9999px; overflow: hidden; margin-bottom: 0.35rem;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+    }
+    .boss-hp-fill { height: 100%; border-radius: 9999px; transition: width 0.25s ease-out; box-shadow: 0 0 12px currentColor; }
+    .boss-hp-text { font-family: var(--font-mono); font-size: 0.55rem; display: flex; justify-content: space-between; margin-bottom: 0.35rem; }
+    .boss-stage-dps { font-family: var(--font-mono); font-size: 0.6rem; color: var(--green); font-weight: 700; }
+    .boss-mega-tag { font-family: var(--font-mono); font-size: 0.5rem; color: var(--gold); letter-spacing: 0.15em; margin-bottom: 0.25rem; animation: merge-q-pulse 2s ease-in-out infinite; }
     .rocket-shaft {
       background: linear-gradient(180deg, rgba(12,1,26,0.9), rgba(61,0,102,0.4));
       border: 1px solid rgba(168,85,247,0.4); border-radius: 1rem; padding: 1rem;
@@ -354,14 +426,18 @@
       padding: 0 0.15rem;
     }
     .cr-card-art img, .cr-card-art .cr-planet-orb {
-      width: 92%; max-height: 100%; object-fit: contain;
+      width: 100%; max-height: 100%; object-fit: contain;
       filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45));
+    }
+    .cr-art-wrap {
+      width: 92%; max-height: 100%; display: flex; align-items: flex-end; justify-content: center;
       transform-origin: bottom center;
       animation: cr-card-idle 3.5s ease-in-out infinite;
     }
-    .cr-tier-legend .cr-card-art img,
-    .cr-tier-champion .cr-card-art img,
-    .cr-tier-god .cr-card-art img { animation: cr-card-idle 3s ease-in-out infinite, cr-card-breathe 4s ease-in-out infinite; }
+    .cr-tier-epic .cr-art-wrap, .cr-tier-legend .cr-art-wrap,
+    .cr-tier-champion .cr-art-wrap, .cr-tier-god .cr-art-wrap {
+      animation: cr-card-idle 3s ease-in-out infinite, cr-card-breathe 4s ease-in-out infinite;
+    }
     @keyframes cr-card-idle { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-3px) scale(1.02)} }
     @keyframes cr-card-breathe { 0%,100%{filter:drop-shadow(0 6px 8px rgba(0,0,0,0.45))} 50%{filter:drop-shadow(0 8px 14px rgba(255,215,0,0.35))} }
     .cr-planet-orb {
@@ -425,27 +501,83 @@
       pointer-events: none; z-index: 2; opacity: 0;
       background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.22) 48%, transparent 65%);
     }
-    .cr-tier-legend .cr-card-shine,
-    .cr-tier-champion .cr-card-shine,
-    .cr-tier-god .cr-card-shine {
-      opacity: 1; animation: cr-shine-sweep 3.5s ease-in-out infinite;
-    }
     @keyframes cr-shine-sweep {
       0%,70%,100%{transform:translateX(-120%) skewX(-12deg);opacity:0}
       75%{opacity:1} 95%{transform:translateX(180%) skewX(-12deg);opacity:0}
     }
     /* tier borders + arenas */
-    .cr-tier-common { --cr-border: #6B7280; --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3D6B35 0%, #1F2937 55%, #111827 100%); }
+    .cr-tier-street, .cr-tier-common { --cr-border: #6B7280; --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3D6B35 0%, #1F2937 55%, #111827 100%); }
     .cr-tier-rare { --cr-border: #38BDF8; box-shadow: 0 0 14px #38bdf866, 0 10px 28px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.18); }
-    .cr-tier-rare .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #1E3A5F 55%, #0F172A 100%); }
     .cr-tier-epic { --cr-border: #A855F7; box-shadow: 0 0 18px #a855f766, 0 10px 28px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.18); }
-    .cr-tier-epic .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5B21B6 0%, #3B0764 55%, #1A0533 100%); }
     .cr-tier-legend { --cr-border: #FACC15; box-shadow: 0 0 22px #facc1566, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
-    .cr-tier-legend .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #854D0E 0%, #422006 55%, #1A1209 100%); }
     .cr-tier-champion { --cr-border: #FB923C; box-shadow: 0 0 26px #fb923c88, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
-    .cr-tier-champion .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #C2410C 0%, #7C2D12 55%, #1A1209 100%); }
     .cr-tier-god { --cr-border: #fff; box-shadow: 0 0 32px rgba(255,255,255,0.45), 0 0 48px rgba(168,85,247,0.35), 0 14px 36px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.3); animation: cr-god-pulse 2.5s ease-in-out infinite; }
+    .cr-tier-rare .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #1E3A5F 55%, #0F172A 100%); }
+    .cr-tier-epic .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5B21B6 0%, #3B0764 55%, #1A0533 100%); }
+    .cr-tier-legend .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #854D0E 0%, #422006 55%, #1A1209 100%); }
+    .cr-tier-champion .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #C2410C 0%, #7C2D12 55%, #1A1209 100%); }
     .cr-tier-god .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4C1D95 0%, #1E1B4B 40%, #0C011A 100%); }
+    .cr-tier-epic .cr-card-shine, .cr-tier-legend .cr-card-shine, .cr-tier-champion .cr-card-shine, .cr-tier-god .cr-card-shine {
+      opacity: 1; animation: cr-shine-sweep 3.5s ease-in-out infinite;
+    }
+    .cr-tier-epic .cr-card-art img, .cr-tier-legend .cr-card-art img,
+    .cr-tier-champion .cr-card-art img, .cr-tier-god .cr-card-art img {
+      animation: cr-card-idle 3s ease-in-out infinite, cr-card-breathe 4s ease-in-out infinite;
+    }
+    /* procedural arena presets */
+    .cr-arena-0 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #2D5A27 0%, #1A1209 70%); }
+    .cr-arena-1 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E4D3A 0%, #0F2922 70%); }
+    .cr-arena-2 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3D2E5C 0%, #1A1028 70%); }
+    .cr-arena-3 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4A3728 0%, #1A1209 70%); }
+    .cr-arena-4 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1A3A4A 0%, #0A1A22 70%); }
+    .cr-arena-5 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5C2D4A 0%, #2A1020 70%); }
+    .cr-arena-6 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #2A4A1A 0%, #142208 70%); }
+    .cr-arena-7 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4A3A1A 0%, #221808 70%); }
+    .cr-arena-8 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1A2A5C 0%, #0A1028 70%); }
+    .cr-arena-9 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3A1A4A 0%, #180A20 70%); }
+    .cr-arena-10 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5A1A2A 0%, #280A12 70%); }
+    .cr-arena-11 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1A5A4A 0%, #082820 70%); }
+    .cr-card-particles {
+      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
+      pointer-events: none; z-index: 2; overflow: hidden; opacity: 0.7;
+    }
+    .cr-card-particles::before, .cr-card-particles::after {
+      content: ""; position: absolute; width: 4px; height: 4px; border-radius: 50%;
+      background: rgba(255,255,255,0.8); box-shadow: 0 0 6px rgba(168,85,247,0.8);
+      animation: cr-particle-float 2.8s ease-in-out infinite;
+      animation-delay: var(--phase, 0s);
+    }
+    .cr-card-particles::before { left: 20%; bottom: 30%; }
+    .cr-card-particles::after { right: 25%; bottom: 45%; width: 3px; height: 3px; animation-duration: 3.4s; }
+    @keyframes cr-particle-float {
+      0%,100%{transform:translateY(0) scale(1);opacity:0.4}
+      50%{transform:translateY(-12px) scale(1.2);opacity:1}
+    }
+    .cr-card-aura {
+      position: absolute; inset: -4px; border-radius: 0.9rem; pointer-events: none; z-index: -1;
+      background: radial-gradient(ellipse at 50% 80%, var(--cr-aura, rgba(250,204,21,0.25)) 0%, transparent 65%);
+      animation: cr-aura-pulse 3s ease-in-out infinite;
+    }
+    @keyframes cr-aura-pulse { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:1;transform:scale(1.03)} }
+    .cr-card-holo {
+      position: absolute; inset: 0; border-radius: 0.75rem; pointer-events: none; z-index: 6;
+      background: linear-gradient(125deg, transparent 35%, rgba(0,240,255,0.12) 45%, rgba(255,0,255,0.12) 55%, transparent 65%);
+      animation: cr-holo-shift 4s linear infinite; mix-blend-mode: screen;
+    }
+    @keyframes cr-holo-shift {
+      0%{transform:translateX(-30%) skewX(-8deg)}
+      100%{transform:translateX(30%) skewX(-8deg)}
+    }
+    .cr-ability-pips {
+      position: absolute; left: 0; right: 0; bottom: 2.15rem; z-index: 4;
+      display: flex; justify-content: center; gap: 0.15rem; padding: 0 0.25rem;
+    }
+    .cr-ability-pip {
+      font-size: 0.45rem; line-height: 1; padding: 0.1rem 0.15rem;
+      border-radius: 0.2rem; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.15);
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+    }
+    .cr-card-banner-accent { border-top-width: 2px; border-top-style: solid; }
     @keyframes cr-god-pulse { 0%,100%{box-shadow:0 0 32px rgba(255,255,255,0.4),0 14px 36px rgba(0,0,0,0.6)} 50%{box-shadow:0 0 48px rgba(255,255,255,0.65),0 0 60px rgba(0,240,255,0.25),0 14px 36px rgba(0,0,0,0.6)} }
     .cr-card-lg .cr-card-frame { max-width: 11rem; margin: 0 auto; }
     .cr-card-lg .cr-card-name { font-size: 0.72rem; }
@@ -570,9 +702,10 @@
       35% { transform: translate(-50%, -50%) scale(1.25) rotate(4deg); }
       100% { opacity: 0; transform: translate(-50%, calc(-50% - 5rem)) scale(1.15); }
     }
-    .boss-arena-mega .boss-card-mega { border-color: rgba(236,72,153,0.55); box-shadow: 0 0 30px rgba(236,72,153,0.25); }
     .boss-hit-flash { animation: boss-hit 0.25s ease; }
     .boss-crit-flash { animation: boss-crit 0.35s ease; }
+    .boss-stage-entity.boss-hit-flash .boss-sprite { animation: boss-hit 0.25s ease; }
+    .boss-stage-entity.boss-crit-flash .boss-sprite { animation: boss-crit 0.35s ease; }
     @keyframes boss-hit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.4) drop-shadow(0 0 12px #39FF14)} }
     @keyframes boss-crit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6) drop-shadow(0 0 20px #00F0FF)} }
     .dual-pack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -735,6 +868,6 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
   </div>
-  <script src="game.js?v=19"></script>
+  <script src="game.js?v=20"></script>
 </body>
 </html>
