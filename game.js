@@ -2785,11 +2785,13 @@
     if (G.scanPending) {
       var p = G.scanPending;
       var exStrain = genExclusivePlanetStrain(p);
-      h += '<div class="section-label section-label-green mb-2">PLANET DETECTED</div>';
-      h += '<div class="liftable-wrap mb-3 holo-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
-      h += '<div class="neon-card p-3 mb-3 text-xs text-muted">Exclusive strain: <span class="text-green">' + esc(exStrain.name) + '</span> (' + esc(rarityName(p.rarity)) + ') — harvestable only on this world.</div>';
-      h += '<input type="text" class="input-field mb-2" placeholder="Name your planet (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
-      h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="planet-keep">KEEP</button><button type="button" class="game-btn" style="flex:1" data-action="planet-discard">DISCARD</button></div>';
+      h += '<div class="planet-scan-panel halftone-panel glass-inset mb-3">';
+      h += '<div class="section-label section-label-green planet-scan-label">PLANET DETECTED</div>';
+      h += '<div class="planet-scan-card-wrap liftable-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
+      h += '<div class="planet-scan-strain text-xs text-muted">Exclusive strain: <span class="text-green">' + esc(exStrain.name) + '</span> · ' + esc(rarityName(p.rarity)) + '</div>';
+      h += '<input type="text" class="input-field planet-scan-rename" placeholder="Name your planet (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
+      h += '<div class="flex-row gap-2 planet-scan-actions"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="planet-keep">KEEP</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="planet-discard">DISCARD</button></div>';
+      h += '</div>';
     }
     if (owned.length) {
       h += '<div class="section-label mb-2">OWNED WORLDS</div>';
@@ -3294,7 +3296,8 @@
       return planetCardHtml(pl, { large: true }) + '<div class="mt-3 text-xs text-muted text-center">' + fmtRev(planetOutputPerSec(pl) * 8) + ' · exclusive genetics</div>';
     }
     if (id === 'planet-scan' && G.scanPending) {
-      return planetCardHtml(G.scanPending) + '<div class="mt-3 text-xs text-muted text-center">Rarity-tier genetics exclusive to this world.</div>';
+      var ex = genExclusivePlanetStrain(G.scanPending);
+      return planetCardHtml(G.scanPending, { glow: true }) + '<div class="planet-scan-lift-meta text-xs text-muted text-center">' + esc(ex.name) + ' · ' + esc(rarityName(G.scanPending.rarity)) + '</div>';
     }
     if (id.indexOf('pack-') === 0) {
       var pt = id.slice(5);
@@ -3324,8 +3327,9 @@
     }
     var body = renderLiftBody();
     if (!body) { el.innerHTML = ''; UI.liftedCardId = null; UI.liftOnUpgrade = null; return; }
+    var shellCls = 'lift-shell' + (id === 'planet-scan' ? ' lift-shell-compact' : '');
     el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
-      '<div class="lift-shell"><div class="lift-hero" style="padding:1rem">' + body + '</div>' +
+      '<div class="' + shellCls + '"><div class="lift-hero"' + (id === 'planet-scan' ? '' : ' style="padding:1rem"') + '>' + body + '</div>' +
       '<div class="lift-footer">' + (UI.liftOnUpgrade ? '<button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE</button>' : '') +
       '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button></div></div>';
   }

@@ -801,6 +801,32 @@
     .map-scan-label { display: block; }
     .map-pulse { animation: map-pulse 1s ease-in-out infinite; }
     @keyframes map-pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
+    .planet-scan-panel {
+      max-width: min(28rem, 100%); margin: 0 auto; padding: 0.7rem 0.8rem 0.75rem;
+      border-radius: 1rem;
+    }
+    .planet-scan-label { margin-bottom: 0.45rem; font-size: 0.55rem; }
+    .planet-scan-card-wrap {
+      display: flex; justify-content: center; margin: 0 auto 0.45rem;
+      max-width: 9.25rem; cursor: pointer;
+    }
+    .planet-scan-card-wrap .cr-card { width: 100%; }
+    .planet-scan-card-wrap .cr-card:hover { transform: translateY(-4px) scale(1.02); }
+    .planet-scan-card-wrap .planet-glow-active {
+      box-shadow: 0 0 14px var(--planet-color, #4ADE80), 0 0 28px color-mix(in srgb, var(--planet-color) 35%, transparent);
+    }
+    .planet-scan-strain {
+      text-align: center; margin-bottom: 0.45rem; line-height: 1.35;
+      padding: 0.35rem 0.5rem; border-radius: 0.5rem;
+      background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(74, 222, 128, 0.18);
+    }
+    .planet-scan-rename { margin-bottom: 0.45rem; font-size: 0.68rem; padding: 0.38rem 0.55rem; }
+    .planet-scan-actions { gap: 0.45rem; }
+    .planet-scan-actions .game-btn { font-size: 0.55rem; padding: 7px 8px; letter-spacing: 0.1em; }
+    .lift-shell-compact { width: min(18rem, 88vw); }
+    .lift-shell-compact .lift-hero { padding: 0.45rem 0.75rem 0; }
+    .lift-shell-compact .lift-hero .cr-card { max-width: 9rem; }
+    .planet-scan-lift-meta { margin-top: 0.45rem; line-height: 1.35; }
     .planet-card-orb {
       flex: 1; min-height: 0; margin: 0.25rem; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12);
       box-shadow: inset -4px -8px 16px rgba(0,0,0,0.6), 0 0 20px var(--rarity-color, #A855F7);
@@ -1149,6 +1175,6 @@
     <div id="overlay-aux"></div>
   </div>
   <script src="catalog.js?v=31"></script>
-  <script src="game.js?v=31"></script>
+  <script src="game.js?v=32"></script>
 </body>
 </html>
