@@ -697,19 +697,71 @@
     return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, arcadePops: false, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
+  var DOM = {};
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
   var portalNames = ['Portal Alpha', 'Portal Beta', 'Portal Gamma', 'Portal Delta', 'Portal Epsilon', 'Portal Zeta'];
   var bossTickAcc = 0;
   var autoScanAcc = 0;
+  var visualRafId = 0;
+  var lastDamageVisualAt = 0;
+  var DAMAGE_VISUAL_MS = 130;
+  var ARCADE_POP_CAP = 10;
+  var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null };
+
+  function isWalletDirty() { return !!UI.dirty.wallet; }
+  function isHudDirty() { return !!UI.dirty.hud; }
+  function isBossHpDirty() { return !!UI.dirty.bossHp; }
+  function isBossDpsDirty() { return !!UI.dirty.bossDps; }
+  function isArcadeDirty() { return !!UI._arcadeDirty || !!UI.dirty.arcadePops; }
+  function isToastsDirty() { return !!UI.dirty.toasts; }
+  function isTabDirty() { return !!UI.dirty.activeTab; }
+  function markWalletDirty() { UI.dirty.wallet = true; }
+  function markHudDirty() { UI.dirty.hud = true; UI.dirty.shell = true; }
+  function markBossHpDirty() { UI.dirty.bossHp = true; }
+  function markBossDpsDirty() { UI.dirty.bossDps = true; }
+  function markBossTraitDirty() { UI.dirty.bossTrait = true; }
+  function markBossShieldDirty() { UI.dirty.bossShield = true; }
+  function markTabDirty() { UI.dirty.activeTab = true; }
+  function markAllVisualDirty() {
+    markWalletDirty();
+    markHudDirty();
+    markBossHpDirty();
+    markBossDpsDirty();
+    markBossTraitDirty();
+    markBossShieldDirty();
+    markTabDirty();
+    UI.dirty.arcadePops = true;
+    UI.dirty.toasts = true;
+    UI.dirty.shell = true;
+  }
+
+  function cacheDomRefs() {
+    DOM.hudCash = document.getElementById('hud-cash');
+    DOM.hudSp = document.getElementById('hud-sp');
+    DOM.hudXpFill = document.getElementById('hud-xp-fill');
+    DOM.hudXpText = document.getElementById('hud-xp-text');
+    DOM.hudAvatar = document.getElementById('hud-avatar');
+    DOM.hudName = document.getElementById('hud-name');
+    DOM.hudLevel = document.getElementById('hud-level');
+    DOM.phoneShell = document.getElementById('phone-shell');
+    DOM.voidlineApp = document.getElementById('voidline-app');
+    DOM.realityWarp = document.getElementById('overlay-reality-warp');
+    DOM.screenRoot = document.getElementById('screen-root');
+    DOM.arcadePopLayer = document.getElementById('arcade-pop-layer');
+    DOM.battleToastLayer = document.getElementById('battle-toast-layer');
+    DOM.plantMascot = document.getElementById('plant-mascot');
+    DOM.plantLabel = document.getElementById('plant-label');
+  }
 
   function creditCash(amt) {
     if (!amt) return;
     if (window.__SWARM_CASH_MULT__ > 1) amt = Math.floor(amt * window.__SWARM_CASH_MULT__);
     G.cash += amt;
     if (amt > 0) G.totalCashEarned = (G.totalCashEarned || 0) + amt;
+    markWalletDirty();
   }
 
   function voidEssenceMult() {
@@ -1580,8 +1632,7 @@
     UI.battleToasts = UI.battleToasts || [];
     UI.battleToasts.push({ msg: msg, big: !!big, at: Date.now() });
     if (UI.battleToasts.length > 6) UI.battleToasts.shift();
-    var el = document.getElementById('battle-toast-layer');
-    if (el) renderBattleToasts();
+    UI.dirty.toasts = true;
   }
 
   function popArcade(type, amount, opts) {
@@ -1612,7 +1663,7 @@
       delay: opts.delay || 0,
       dur: opts.jackpot ? 2600 : (opts.mega ? 2100 : 1550),
     });
-    if (UI.arcadePops.length > 20) UI.arcadePops.splice(0, UI.arcadePops.length - 20);
+    if (UI.arcadePops.length > ARCADE_POP_CAP) UI.arcadePops.splice(0, UI.arcadePops.length - ARCADE_POP_CAP);
     if (arcadePopsAllowed()) markArcadeDirty();
   }
 
@@ -1650,12 +1701,13 @@
     });
   }
 
-  function markArcadeDirty() { UI._arcadeDirty = true; }
+  function markArcadeDirty() { UI._arcadeDirty = true; UI.dirty.arcadePops = true; }
 
   function clearArcadePops() {
     UI.arcadePops = [];
     UI._arcadeDirty = false;
-    var el = document.getElementById('arcade-pop-layer');
+    UI.dirty.arcadePops = false;
+    var el = DOM.arcadePopLayer || document.getElementById('arcade-pop-layer');
     if (el) el.innerHTML = '';
   }
 
@@ -1664,11 +1716,12 @@
   }
 
   function renderArcadePops() {
-    var el = document.getElementById('arcade-pop-layer');
+    var el = DOM.arcadePopLayer || document.getElementById('arcade-pop-layer');
     if (!el) return;
     if (!arcadePopsAllowed()) { el.innerHTML = ''; return; }
     var now = Date.now();
     UI.arcadePops = (UI.arcadePops || []).filter(function (p) { return now - p.at - (p.delay || 0) < (p.dur || 1550); });
+    if (UI.arcadePops.length > ARCADE_POP_CAP) UI.arcadePops = UI.arcadePops.slice(-ARCADE_POP_CAP);
     el.innerHTML = UI.arcadePops.map(function (p) {
       var age = now - p.at - (p.delay || 0);
       if (age < 0) return '';
@@ -1678,10 +1731,11 @@
       return '<div class="' + cls + '" style="' + style + '">' + esc(p.text) + '</div>';
     }).join('');
     UI._arcadeDirty = false;
+    UI.dirty.arcadePops = false;
   }
 
   function renderArcadePopsIfDirty() {
-    if (UI._arcadeDirty) renderArcadePops();
+    if (isArcadeDirty()) renderArcadePops();
   }
 
   function maybePassiveCashPop() {
@@ -1694,8 +1748,9 @@
   }
 
   function renderBattleToasts() {
-    var el = document.getElementById('battle-toast-layer');
+    var el = DOM.battleToastLayer || document.getElementById('battle-toast-layer');
     if (!el) return;
+    if (UI.activeTab !== 'battle' || UI.farmOpen) { el.innerHTML = ''; return; }
     var now = Date.now();
     UI.battleToasts = (UI.battleToasts || []).filter(function (t) { return now - t.at < 2800; });
     el.innerHTML = UI.battleToasts.map(function (t) {
@@ -1753,6 +1808,9 @@
       G.bossShieldMax = 0;
       G.bossShieldHp = 0;
     }
+    markBossHpDirty();
+    markBossShieldDirty();
+    markBossTraitDirty();
   }
 
   function strainById(id) { return G.strains.find(function (s) { return s.id === id; }); }
@@ -1818,14 +1876,12 @@
     };
   }
 
+  function computeBattleDps(dt) {
+    return battleDamageBreakdown(dt || 1000, true);
+  }
+
   function totalBattleDps() {
-    var breakdown = battleDamageBreakdown(1000, true);
-    if (breakdown.hadCrit && (!UI._lastCritPop || Date.now() - UI._lastCritPop > 1200)) {
-      UI._lastCritPop = Date.now();
-      flashBossHit(true);
-      popArcade('label', 0, { label: 'CRIT!', mega: true, x: 42 + Math.random() * 16, y: 38 + Math.random() * 10 });
-    }
-    return breakdown.dps;
+    return computeBattleDps(1000).dps;
   }
 
   function killBoss() {
@@ -1842,6 +1898,8 @@
     creditCash(cashGain);
     var spGain = Math.floor((mega ? (12 + node * 4) : Math.max(1, Math.floor(wave / 2) + Math.floor(node / 4))) * (1 + blitzMod('sp')) * (1 + blitzMod('campaignNode')));
     G.sp = (G.sp || 0) + spGain;
+    markHudDirty();
+    markWalletDirty();
     var xpGain = Math.floor((mega ? (40 + node * 10) : (12 + wave * 6 + node * 2)) * (1 + blitzMod('campaignNode')));
     var xpFinal = Math.floor(xpGain * (1 + blitzMod('xp')));
     addXp(xpFinal, true);
@@ -1895,6 +1953,7 @@
           if (eqIds.length) {
             var pick = eqIds[Math.floor(Math.random() * eqIds.length)];
             G.bossTraitState.solarSilence = { id: pick, until: Date.now() + 2000 };
+            markBossDpsDirty();
           }
         }
       }
@@ -1922,14 +1981,18 @@
       } else {
         G.bossHp = Math.max(0, G.bossHp - dmg.total);
       }
-      if (dmg.hadCrit) flashBossHit(true);
-      else {
+      if (dmg.hadCrit) {
+        UI.damagePopQueue.push({ amount: dmg.crit, isCrit: true, timestamp: Date.now() });
+      } else {
         UI._bossHitAcc = (UI._bossHitAcc || 0) + dmg.total;
         if (UI._bossHitAcc >= G.bossMaxHp * 0.015) {
           UI._bossHitAcc = 0;
-          flashBossHit(false);
+          UI.damagePopQueue.push({ amount: dmg.total, isCrit: false, timestamp: Date.now() });
         }
       }
+      markBossHpDirty();
+      markBossShieldDirty();
+      markBossTraitDirty();
       if (G.bossHp <= 0) killBoss();
     } catch (err) {
       console.error('tickBoss', err);
@@ -1939,13 +2002,14 @@
   function equipBattle(sid) {
     var ids = (G.equippedBattleIds || []).slice();
     var idx = ids.indexOf(sid);
-    if (idx >= 0) { ids.splice(idx, 1); G.equippedBattleIds = ids; scheduleSave(); return true; }
+    if (idx >= 0) { ids.splice(idx, 1); G.equippedBattleIds = ids; scheduleSave(); markBossDpsDirty(); return true; }
     if (ids.length >= campaignMaxSlots()) return false;
     if (!strainById(sid)) return false;
     G.raidEquipIds = (G.raidEquipIds || []).filter(function (x) { return x !== sid; });
     ids.push(sid);
     G.equippedBattleIds = ids;
     scheduleSave();
+    markBossDpsDirty();
     return true;
   }
 
@@ -1955,6 +2019,7 @@
     var sorted = G.strains.slice().filter(function (s) { return raid.indexOf(s.id) < 0; }).sort(function (a, b) { return strainBattleDpsBase(b) - strainBattleDpsBase(a); });
     G.equippedBattleIds = sorted.slice(0, max).map(function (s) { return s.id; });
     scheduleSave();
+    markBossDpsDirty();
     return true;
   }
 
@@ -2068,6 +2133,7 @@
     UI.playerSelectOpen = false;
     UI.activeTab = 'battle';
     UI.farmOpen = false;
+    markAllVisualDirty();
     plantSay('welcome', true);
     render();
     if (G.pendingRewards && G.pendingRewards.length) render();
@@ -2129,6 +2195,7 @@
       G.empireLevel++;
       onLevelUp(G.empireLevel);
     }
+    markHudDirty();
   }
 
   function tick(now) {
@@ -2141,7 +2208,6 @@
     var cashGain = revMs() * d;
     creditCash(cashGain);
     UI._passiveCashAcc = (UI._passiveCashAcc || 0) + cashGain;
-    maybePassiveCashPop();
     tickPlanets(d);
     if (G.cloneJob && now >= G.cloneJob.startedAt + G.cloneJob.durationMs) completeClone();
     bossTickAcc += d;
@@ -2715,39 +2781,193 @@
 
   function renderHUD() {
     var pl = playerDef(activePlayerId);
-    var av = document.getElementById('hud-avatar');
+    var av = DOM.hudAvatar || document.getElementById('hud-avatar');
     if (av) {
       if (pl.portrait) av.innerHTML = '<img src="' + pl.portrait + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
       else av.textContent = G.avatar;
     }
-    document.getElementById('hud-name').textContent = G.name;
-    document.getElementById('hud-level').textContent = 'LV.' + G.empireLevel;
-    document.getElementById('hud-cash').textContent = fmtCash(G.cash);
-    var xpNeed = xpNeededForLevel(G.empireLevel);
-    var xpPct = Math.min(100, (G.empireXp / xpNeed) * 100);
-    var xpFill = document.getElementById('hud-xp-fill');
-    var xpText = document.getElementById('hud-xp-text');
-    if (xpFill) xpFill.style.width = xpPct + '%';
-    if (xpText) xpText.textContent = 'XP ' + Math.floor(G.empireXp) + ' / ' + xpNeed;
-    var spEl = document.getElementById('hud-sp');
-    if (spEl) spEl.textContent = fmtSp(G.sp || 0);
-    renderBattleToasts();
-    renderArcadePopsIfDirty();
-    var shell = document.getElementById('phone-shell');
-    shell.className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
-    shell.classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
-    document.getElementById('voidline-app').classList.toggle('reality-warp-active', UI.realityWarp);
-    document.getElementById('overlay-reality-warp').classList.toggle('active', UI.realityWarp);
-    document.querySelectorAll('.nav-btn').forEach(function (b) {
-      var tab = b.dataset.tab;
-      b.classList.toggle('active', tab === UI.activeTab && !UI.farmOpen);
-    });
-    var s = topStrain(), mascot = document.getElementById('plant-mascot'), label = document.getElementById('plant-label');
+    var nameEl = DOM.hudName || document.getElementById('hud-name');
+    var levelEl = DOM.hudLevel || document.getElementById('hud-level');
+    if (nameEl) nameEl.textContent = G.name;
+    if (levelEl) levelEl.textContent = 'LV.' + G.empireLevel;
+    syncWalletDom(true);
+    syncXpDom(true);
+    if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
+    if (isArcadeDirty()) renderArcadePopsIfDirty();
+    syncHudShell(true);
+    var s = topStrain(), mascot = DOM.plantMascot || document.getElementById('plant-mascot'), label = DOM.plantLabel || document.getElementById('plant-label');
     if (mascot) {
       if (s) mascot.innerHTML = budImg(s, '1.5rem');
       else { mascot.textContent = '🌱'; mascot.style.filter = 'none'; }
     }
     if (label) label.textContent = s ? s.name : 'No strain';
+    UI.dirty.hud = false;
+    UI.dirty.shell = false;
+  }
+
+  function syncWalletDom(force) {
+    if (!force && !isWalletDirty()) return;
+    var cashEl = DOM.hudCash || document.getElementById('hud-cash');
+    if (cashEl) {
+      var cashStr = fmtCash(G.cash);
+      if (force || UI_LAST.cash !== cashStr) {
+        cashEl.textContent = cashStr;
+        UI_LAST.cash = cashStr;
+      }
+    }
+    var spEl = DOM.hudSp || document.getElementById('hud-sp');
+    if (spEl && (force || isHudDirty())) {
+      var spStr = fmtSp(G.sp || 0);
+      if (force || UI_LAST.sp !== spStr) {
+        spEl.textContent = spStr;
+        UI_LAST.sp = spStr;
+      }
+    }
+    UI.dirty.wallet = false;
+  }
+
+  function syncXpDom(force) {
+    if (!force && !isHudDirty()) return;
+    var xpNeed = xpNeededForLevel(G.empireLevel);
+    var xpPct = Math.min(100, (G.empireXp / xpNeed) * 100);
+    var xpText = 'XP ' + Math.floor(G.empireXp) + ' / ' + xpNeed;
+    var xpFill = DOM.hudXpFill || document.getElementById('hud-xp-fill');
+    var xpTextEl = DOM.hudXpText || document.getElementById('hud-xp-text');
+    if (xpFill && (force || UI_LAST.xpPct !== xpPct)) {
+      xpFill.style.width = xpPct + '%';
+      UI_LAST.xpPct = xpPct;
+    }
+    if (xpTextEl && (force || UI_LAST.xpText !== xpText)) {
+      xpTextEl.textContent = xpText;
+      UI_LAST.xpText = xpText;
+    }
+  }
+
+  function syncHudShell(force) {
+    if (!force && !UI.dirty.shell) return;
+    var shell = DOM.phoneShell || document.getElementById('phone-shell');
+    if (shell) {
+      shell.className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
+      shell.classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
+    }
+    var app = DOM.voidlineApp || document.getElementById('voidline-app');
+    var warp = DOM.realityWarp || document.getElementById('overlay-reality-warp');
+    if (app) app.classList.toggle('reality-warp-active', UI.realityWarp);
+    if (warp) warp.classList.toggle('active', UI.realityWarp);
+    document.querySelectorAll('.nav-btn').forEach(function (b) {
+      var tab = b.dataset.tab;
+      b.classList.toggle('active', tab === UI.activeTab && !UI.farmOpen);
+    });
+    UI.dirty.shell = false;
+  }
+
+  function syncBossBattleDom() {
+    if (UI.activeTab !== 'battle' || UI.farmOpen) return;
+    if (isBossHpDirty()) {
+      var hp = document.querySelector('.boss-hp-fill');
+      if (hp && G.bossMaxHp) {
+        var hpPct = Math.max(0, G.bossHp / G.bossMaxHp * 100);
+        if (UI_LAST.bossHpPct !== hpPct) {
+          hp.style.width = hpPct + '%';
+          UI_LAST.bossHpPct = hpPct;
+        }
+      }
+      UI.dirty.bossHp = false;
+    }
+    if (isBossShieldDirty()) {
+      var shieldBar = document.querySelector('.boss-shield-fill');
+      if (shieldBar && G.bossShieldMax > 0) {
+        var shieldPct = Math.max(0, (G.bossShieldHp / G.bossShieldMax) * 100);
+        if (UI_LAST.bossShieldPct !== shieldPct) {
+          shieldBar.style.width = shieldPct + '%';
+          UI_LAST.bossShieldPct = shieldPct;
+        }
+      }
+      UI.dirty.bossShield = false;
+    }
+    if (isBossTraitDirty()) {
+      var traitState = document.querySelector('.boss-trait-state');
+      if (traitState) {
+        var traitText = bossTraitStatusText();
+        if (UI_LAST.bossTrait !== traitText) {
+          traitState.textContent = traitText;
+          UI_LAST.bossTrait = traitText;
+        }
+      }
+      UI.dirty.bossTrait = false;
+    }
+    if (isBossDpsDirty()) {
+      var dpsEl = document.querySelector('.boss-stage-dps');
+      if (dpsEl) {
+        var dpsVal = totalBattleDps();
+        var dpsStr = '⚔ ' + dpsVal.toFixed(1) + ' DPS';
+        if (UI_LAST.dps !== dpsStr) {
+          dpsEl.textContent = dpsStr;
+          UI_LAST.dps = dpsStr;
+        }
+      }
+      UI.dirty.bossDps = false;
+    }
+  }
+
+  function syncTabTimers() {
+    if (UI.activeTab === 'shop') {
+      var cd = document.getElementById('blitz-timer');
+      if (cd) {
+        var blitzStr = fmtCd(blitzRem());
+        if (UI_LAST.blitzCd !== blitzStr) {
+          cd.textContent = blitzStr;
+          UI_LAST.blitzCd = blitzStr;
+        }
+      }
+    }
+    if (UI.farmOpen && G.farmSubTab === 'portal' && G.cloneJob) {
+      var cr = document.querySelector('.clone-active .font-mono.text-green');
+      if (cr) {
+        var cloneStr = fmtCd(cloneRem());
+        if (UI_LAST.cloneCd !== cloneStr) {
+          cr.textContent = cloneStr;
+          UI_LAST.cloneCd = cloneStr;
+        }
+      }
+    }
+  }
+
+  function processDamagePopQueue(now) {
+    if (!UI.damagePopQueue.length) return;
+    if (now - lastDamageVisualAt < DAMAGE_VISUAL_MS) return;
+    lastDamageVisualAt = now;
+    var batch = UI.damagePopQueue.splice(0, UI.damagePopQueue.length);
+    var hadCrit = false;
+    batch.forEach(function (entry) { if (entry.isCrit) hadCrit = true; });
+    if (hadCrit) {
+      if (!UI._lastCritPop || now - UI._lastCritPop > 1200) {
+        UI._lastCritPop = now;
+        popArcade('label', 0, { label: 'CRIT!', mega: true, x: 42 + Math.random() * 16, y: 38 + Math.random() * 10 });
+      }
+      flashBossHit(true);
+    } else if (batch.length) {
+      flashBossHit(false);
+    }
+  }
+
+  function visualLoop() {
+    visualRafId = requestAnimationFrame(visualLoop);
+    if (!G || UI.playerSelectOpen) return;
+    var now = Date.now();
+    processDamagePopQueue(now);
+    maybePassiveCashPop();
+    syncWalletDom(false);
+    syncXpDom(false);
+    syncHudShell(false);
+    syncBossBattleDom();
+    syncTabTimers();
+    if (isArcadeDirty()) renderArcadePopsIfDirty();
+    if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
+  }
+
+  function startVisualLoop() {
+    if (!visualRafId) visualRafId = requestAnimationFrame(visualLoop);
   }
 
   function renderPlayerSelect() {
@@ -3952,21 +4172,39 @@
     return idx < 0 ? 2 : idx;
   }
 
+  function renderActiveTabPanel(root, scrollTop) {
+    if (!root) return;
+    var idx = tabCarouselIndex();
+    var activeTab = UI.activeTab;
+    var panels = TAB_ORDER.map(function (tab) {
+      var inner = tab === activeTab ? screenRenderer(tab)() : '';
+      return '<div class="cr-screen-panel tab-bg-' + tab + '"><div class="cr-screen-inner">' + inner + '</div></div>';
+    }).join('');
+    root.innerHTML = '<div class="screen-router-wrapper cr-screen-carousel" style="transform:translate3d(-' + (idx * 20) + '%,0,0)">' + panels + '</div>';
+    root.scrollTop = scrollTop;
+    bindCardParallax();
+    bindImageFallbacks();
+    UI.dirty.activeTab = false;
+    markBossHpDirty();
+    markBossDpsDirty();
+    markBossTraitDirty();
+    markBossShieldDirty();
+    UI_LAST.bossHpPct = null;
+    UI_LAST.bossShieldPct = null;
+    UI_LAST.bossTrait = null;
+    UI_LAST.dps = null;
+    UI_LAST.blitzCd = null;
+    UI_LAST.cloneCd = null;
+  }
+
   function render() {
     if (!G) return;
-    var root = document.getElementById('screen-root');
+    var root = DOM.screenRoot || document.getElementById('screen-root');
     var scrollTop = root ? root.scrollTop : 0;
     renderHUD();
     renderPlayerSelect();
     if (!UI.playerSelectOpen && root) {
-      var idx = tabCarouselIndex();
-      var panels = TAB_ORDER.map(function (tab) {
-        return '<div class="cr-screen-panel tab-bg-' + tab + '"><div class="cr-screen-inner">' + screenRenderer(tab)() + '</div></div>';
-      }).join('');
-      root.innerHTML = '<div class="screen-router-wrapper cr-screen-carousel" style="transform:translate3d(-' + (idx * 20) + '%,0,0)">' + panels + '</div>';
-      root.scrollTop = scrollTop;
-      bindCardParallax();
-      bindImageFallbacks();
+      renderActiveTabPanel(root, scrollTop);
     }
     document.getElementById('overlay-profile').classList.toggle('open', UI.profileOpen);
     document.getElementById('overlay-settings').classList.toggle('open', UI.settingsOpen);
@@ -4269,6 +4507,8 @@
       UI.farmOpen = false;
       if (tab !== UI.activeTab) clearArcadePops();
       UI.activeTab = tab;
+      markTabDirty();
+      markBossDpsDirty();
       if (tab === 'map' && !UI.focusedPlanetId && G.ownedPlanets && G.ownedPlanets.length) UI.focusedPlanetId = G.ownedPlanets[0].id;
       if (tab === 'coop') UI.coopView = UI.coopView || 'hub';
       render();
@@ -4337,6 +4577,8 @@
   }, true);
 
   try {
+    cacheDomRefs();
+    startVisualLoop();
     var storedVer = localStorage.getItem(VERSION_KEY);
     if (storedVer !== APP_VERSION) localStorage.setItem(VERSION_KEY, APP_VERSION);
     var startPid = resolveStartupPlayer();
@@ -4362,29 +4604,6 @@
   setInterval(function () {
     if (!G || UI.playerSelectOpen) return;
     tick(Date.now());
-    renderHUD();
-    if (UI.activeTab === 'battle' && !UI.farmOpen) {
-      var hp = document.querySelector('.boss-hp-fill');
-      if (hp && G.bossMaxHp) hp.style.width = Math.max(0, G.bossHp / G.bossMaxHp * 100) + '%';
-      var dpsEl = document.querySelector('.boss-stage-dps');
-      if (dpsEl) dpsEl.textContent = '⚔ ' + totalBattleDps().toFixed(1) + ' DPS';
-      var traitState = document.querySelector('.boss-trait-state');
-      if (traitState) traitState.textContent = bossTraitStatusText();
-      var shieldBar = document.querySelector('.boss-shield-fill');
-      if (shieldBar && G.bossShieldMax > 0) shieldBar.style.width = Math.max(0, (G.bossShieldHp / G.bossShieldMax) * 100) + '%';
-    }
-    var xpNeed = xpNeededForLevel(G.empireLevel);
-    var xpFill = document.getElementById('hud-xp-fill');
-    var xpText = document.getElementById('hud-xp-text');
-    if (xpFill) xpFill.style.width = Math.min(100, (G.empireXp / xpNeed) * 100) + '%';
-    if (xpText) xpText.textContent = 'XP ' + Math.floor(G.empireXp) + ' / ' + xpNeed;
-    var spEl = document.getElementById('hud-sp');
-    if (spEl) spEl.textContent = fmtSp(G.sp || 0);
-    renderBattleToasts();
-    renderArcadePopsIfDirty();
-    if (UI.activeTab === 'shop') { var cd = document.getElementById('blitz-timer'); if (cd) cd.textContent = fmtCd(blitzRem()); }
-    if (UI.farmOpen && G.farmSubTab === 'portal' && G.cloneJob) { var cr = document.querySelector('.clone-active .font-mono.text-green'); if (cr) cr.textContent = fmtCd(cloneRem()); }
-    document.getElementById('hud-cash').textContent = fmtCash(G.cash);
     if (G.cash < 10000 && Date.now() - dialogueState.lastAt > 60000) plantSay('lowcash');
     if (Date.now() - lastSaveAt >= AUTOSAVE_MS) flushSave();
   }, 50);
@@ -5390,6 +5609,8 @@
     resolveLease: respondLeaseOffer,
     processLeaseBilling: processLeaseBilling,
     battleDamageBreakdown: battleDamageBreakdown,
+    computeBattleDps: computeBattleDps,
+    totalBattleDps: totalBattleDps,
     tickBoss: tickBoss,
     getBossTrait: getBossTrait,
     onUpgrade: function (id) { SwarmBugCrusher.install(); return SwarmBugCrusher.guard(function () { return onUpgrade(id); }, 'onUpgrade'); },
