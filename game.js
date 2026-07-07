@@ -23,8 +23,10 @@
   var PLANET_SUFFIX = ['IV', 'VII', 'IX', 'Prime', 'Reach', 'Haven', 'Crown', 'Shard', 'Belt', 'Gate'];
   var PORTAL_BASE_COST = 25000;
   var SLOT_COST = 500;
-  var BUD_ART = '/public/art/strain-bud.svg';
-  var BOSS_ART = '/public/art/boss.svg';
+  var BUD_ART = '/public/art/strains/leaf-bud.png';
+  var BUD_ART_FALLBACK = '/public/art/strain-bud.svg';
+  var BOSS_ART = '/public/art/characters/boss-avatar.png';
+  var BOSS_ART_FALLBACK = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
   var BATTLE_EQUIP_MAX = 8;
   var CAMPAIGN_NODE_COUNT = 24;
@@ -38,9 +40,9 @@
   var TAB_ORDER = ['shop', 'index', 'battle', 'coop', 'map'];
 
   var PLAYERS = [
-    { id: 'aden', label: 'Aden', avatar: '🌌', portrait: '/public/art/strain-bud.svg', defaultName: 'Aden' },
-    { id: 'dad', label: 'Dad', avatar: '🛸', portrait: '/public/art/rocket.svg', defaultName: 'Dad' },
-    { id: 'jamie', label: 'Jamie', avatar: '👾', portrait: '/public/art/boss.svg', defaultName: 'Jamie' },
+    { id: 'aden', label: 'Aden', portrait: '/public/art/portraits/aden.svg', defaultName: 'Aden' },
+    { id: 'dad', label: 'Dad', portrait: '/public/art/portraits/dad.svg', defaultName: 'Dad' },
+    { id: 'jamie', label: 'Jamie', portrait: '/public/art/portraits/jamie.svg', defaultName: 'Jamie' },
   ];
 
   var RARITIES = [
@@ -78,19 +80,47 @@
   var BASE_WORDS = ['Dream', 'Kush', 'Haze', 'Skunk', 'Diesel', 'Cookies', 'Punch', 'Widow', 'Cheese', 'Glue', 'Runtz', 'Zkittlez', 'Gelato', 'Mimosa', 'Sherbet', 'Cake', 'OG', 'Breath', 'Berry', 'Lemon', 'Mint', 'Fuel', 'Storm'];
   var SUFFIX_WORDS = ['', ' OG', ' XL', ' #42', ' #69', ' #420', ' Reserve', ' Classic', ' Prime'];
 
-  var ABILITY_ICONS_LEGACY = {
-    crit_burst: '💥', yield_surge: '📈', thc_overdrive: '⚡', shield_sap: '🛡',
-    poison_cloud: '☠', clone_echo: '🧬', cash_magnet: '💰', portal_sync: '🌀',
-    blitz_rush: '🔥', rift_luck: '🎲', boss_slayer: '👹', regen_mist: '💨',
+  var ABILITY_ICON_KINDS = {
+    crit_burst: 'crit', yield_surge: 'yield', thc_overdrive: 'thc', shield_sap: 'shield',
+    poison_cloud: 'poison', clone_echo: 'clone', cash_magnet: 'magnet', portal_sync: 'sync',
+    blitz_rush: 'blitz', rift_luck: 'luck', boss_slayer: 'slayer', regen_mist: 'mist',
   };
 
+  function farmIcon(kind, opts) {
+    opts = opts || {};
+    var cls = 'farm-icon farm-icon-' + kind + (opts.lg ? ' farm-icon-lg' : '') + (opts.xl ? ' farm-icon-xl' : '') + (opts.img ? ' farm-icon-img' : '');
+    var sz = opts.size ? ' style="font-size:' + opts.size + '"' : '';
+    return '<span class="' + cls + '"' + sz + ' aria-hidden="true"></span>';
+  }
+
+  function avatarHtml(src, size) {
+    var sz = size || '100%';
+    return '<img src="' + esc(src) + '" alt="" class="avatar-portrait voidline-art" style="width:' + sz + ';height:' + sz + '">';
+  }
+
+  function migrateAvatar(av) {
+    if (!av) return AVATARS[0];
+    if (av.indexOf('/') >= 0 || av.indexOf('public/') >= 0) return av;
+    var legacy = { '\uD83C\uDF0C': AVATARS[0], '\uD83D\uDEF8': AVATARS[1], '\uD83D\uDC7E': AVATARS[2], '\uD83C\uDF3F': AVATARS[3], '\uD83D\uDCAB': AVATARS[4], '\uD83D\uDD2E': AVATARS[5], '\uD83E\uDE90': AVATARS[6], '\u26A1': AVATARS[7] };
+    return legacy[av] || AVATARS[0];
+  }
+
+  function artArenaIdx(s) {
+    if (!s) return 0;
+    if (s.arenaIdx != null) return s.arenaIdx % 12;
+    var h = (s.hue || 0) + (s.id ? s.id.charCodeAt(0) : 0);
+    return Math.abs(h) % 12;
+  }
+
   function abilityDef(aid) {
-    return ABILITY_BY_ID[aid] || { id: aid, name: String(aid), desc: 'Unknown genetic trait.', category: 'misc', mechanic: aid, icon: '✦', minRarity: 0 };
+    return ABILITY_BY_ID[aid] || { id: aid, name: String(aid), desc: 'Unknown genetic trait.', category: 'misc', mechanic: aid, icon: 'ability', minRarity: 0 };
   }
 
   function abilityIcon(aid) {
     var d = abilityDef(aid);
-    return d.icon || ABILITY_ICONS_LEGACY[d.mechanic] || ABILITY_ICONS_LEGACY[aid] || '✦';
+    var kind = ABILITY_ICON_KINDS[d.mechanic] || ABILITY_ICON_KINDS[aid] || (d.icon && d.icon.indexOf('farm-icon') < 0 ? d.icon : 'ability');
+    if (kind.indexOf('/') >= 0) return farmIcon('ability');
+    return farmIcon(kind);
   }
 
   function abilityUpgradeCost(lvl) {
@@ -104,23 +134,31 @@
   }
 
   var PACKS = [
-    { type: 'basic', name: 'Basic Void Pack', price: 5000, emoji: '📦', desc: 'Random procedural strain' },
-    { type: 'guaranteed', name: 'Guaranteed Rift Pack', price: 25000, emoji: '🎁', desc: 'Pulse+ guaranteed' },
-    { type: 'omega', name: 'Omega Rift Pack', price: 100000, spCost: 50, emoji: '🌌', desc: 'Bloom+ cosmic anomaly (cash or SP)' },
+    { type: 'basic', name: 'Basic Void Pack', price: 5000, icon: 'pack', desc: 'Random procedural strain' },
+    { type: 'guaranteed', name: 'Guaranteed Rift Pack', price: 25000, icon: 'gift', desc: 'Pulse+ guaranteed' },
+    { type: 'omega', name: 'Omega Rift Pack', price: 100000, spCost: 50, icon: 'vault', desc: 'Bloom+ cosmic anomaly (cash or SP)' },
   ];
   var CHEST_TIERS = [
-    { packType: 'basic', name: 'Wooden Crates', emoji: '🪵', tagline: 'Street-tier loot burst', accent: '#A16207' },
-    { packType: 'guaranteed', name: 'Neon Chests', emoji: '💠', tagline: 'Pulse+ guaranteed neon drop', accent: '#38BDF8' },
-    { packType: 'omega', name: 'Void Overlord Vaults', emoji: '👑', tagline: 'Bloom+ mythic siege vault', accent: '#F472B6' },
+    { packType: 'basic', name: 'Wooden Crates', icon: 'crate', tagline: 'Street-tier loot burst', accent: '#A16207' },
+    { packType: 'guaranteed', name: 'Neon Chests', icon: 'neon', tagline: 'Pulse+ guaranteed neon drop', accent: '#38BDF8' },
+    { packType: 'omega', name: 'Void Overlord Vaults', icon: 'vault', tagline: 'Bloom+ mythic siege vault', accent: '#F472B6' },
   ];
   var STORE = [
-    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 1200, emoji: '🧪', desc: 'Boosts passive revenue +0.5/sec each.', revPerSec: 0.5 },
-    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 3500, emoji: '💧', desc: 'Premium nutrients — +0.5/sec passive each.', revPerSec: 0.5 },
-    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 8000, emoji: '🔧', desc: 'Smooths portal flow — +1.2/sec passive each.', revPerSec: 1.2 },
-    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 18000, emoji: '⚙️', desc: 'Hypercharged conduit — +2.5/sec passive each.', revPerSec: 2.5 },
+    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 1200, icon: 'nutrient', desc: 'Boosts passive revenue +0.5/sec each.', revPerSec: 0.5 },
+    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 3500, icon: 'nutrient', desc: 'Premium nutrients — +0.5/sec passive each.', revPerSec: 0.5 },
+    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 8000, icon: 'pipe', desc: 'Smooths portal flow — +1.2/sec passive each.', revPerSec: 1.2 },
+    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 18000, icon: 'pipe', desc: 'Hypercharged conduit — +2.5/sec passive each.', revPerSec: 2.5 },
   ];
-  var AVATARS = ['🌌', '🛸', '👾', '🌿', '💫', '🔮', '🪐', '⚡'];
-  var BADGES = [{ id: 'harvester', emoji: '🌾', label: 'Harvester' }, { id: 'rift', emoji: '🌀', label: 'Rift Walker' }, { id: 'omega', emoji: '💎', label: 'Omega Tier' }, { id: 'cloner', emoji: '🧬', label: 'Clone Master' }, { id: 'trader', emoji: '🤝', label: 'Void Trader' }, { id: 'blitz', emoji: '⚡', label: 'Blitz King' }];
+  var AVATARS = [
+    '/public/art/portraits/aden.svg', '/public/art/portraits/dad.svg', '/public/art/portraits/jamie.svg',
+    '/public/art/strains/leaf-bud.svg', '/public/art/rocket.svg', '/public/art/characters/boss-avatar.svg',
+    '/public/art/cards/bud-tier-3.svg', '/public/art/cards/bud-tier-5.svg',
+  ];
+  var BADGES = [
+    { id: 'harvester', icon: 'harvest', label: 'Harvester' }, { id: 'rift', icon: 'rift', label: 'Rift Walker' },
+    { id: 'omega', icon: 'omega', label: 'Omega Tier' }, { id: 'cloner', icon: 'clone', label: 'Clone Master' },
+    { id: 'trader', icon: 'trader', label: 'Void Trader' }, { id: 'blitz', icon: 'blitz', label: 'Blitz King' },
+  ];
   var SECTORS = [
     { id: 'thrusters', name: 'Frictionless Thrusters', level: 0, maxLevel: 10, baseCost: 15000, scanRateBonus: 0.08 },
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
@@ -643,12 +681,12 @@
     var focusAttr = opts.asAction ? ' data-action="planet-focus" data-id="' + esc(p.id) + '"' : ' data-planet-focus="' + esc(p.id) + '"';
     var rev = Math.max(1, Math.floor(planetOutputPerSec(p) * 8));
     var lvl = Math.max(1, (p.harvesterLv || 0) + (p.conveyorLv || 0) + 1);
-    var orb = '<div class="cr-planet-orb" style="background:radial-gradient(circle at 32% 28%,' + c + 'dd,' + c + '55 42%,#1A1209 78%);filter:hue-rotate(' + (p.hue || 0) + 'deg)"></div>';
+    var orb = '<div class="planet-card-art cr-art-layered"><div class="cr-planet-terrain cr-arena-' + artArenaIdx(p) + '"></div><div class="cr-planet-orb" style="background:radial-gradient(circle at 32% 28%,' + c + 'dd,' + c + '55 42%,#1A1209 78%)"></div></div>';
     return '<button type="button" class="cr-card planet-card planet-glow' + (opts.glow ? ' planet-glow-active' : '') + (opts.selected ? ' selected' : '') + '"' + focusAttr + ' style="--planet-color:' + c + '">' +
       crCardFrameInner({ tier: tier, name: nm, artHtml: orb,
         badgeLeft: '<div class="cr-badge cr-badge-thc cr-badge-sm">' + rev + '</div>',
         badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + lvl + '</div>',
-        tag: '🪐' }) + '</button>';
+        tag: farmIcon('planet') }) + '</button>';
   }
 
   function revSec(s) { return (effectiveYield(s) * s.quantity * s.thcPercent) / 100; }
@@ -676,7 +714,9 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) {
     var id = s && s.id ? ' data-strain-id="' + esc(s.id) + '"' : '';
-    return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
+    var arena = artArenaIdx(s);
+    var w = px || '2rem';
+    return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
   var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
@@ -819,7 +859,7 @@
     var p = playerDef(pid);
     return {
       playerId: pid, saveVersion: SAVE_VERSION, cash: 250000, sp: 100, empireLevel: 1, empireXp: 0,
-      name: p.defaultName, avatar: p.avatar, badgeIds: [null, null, null],
+      name: p.defaultName, avatar: p.portrait, badgeIds: [null, null, null],
       storefrontSlots: emptySF(), storefrontSlotCount: STOREFRONT_START,
       planetLeases: { active: [], archive: [], pending: [] }, leaseOffers: [],
       strains: [], inventory: STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); }),
@@ -1157,6 +1197,7 @@
     delete G.profileViewIndex;
     var p = playerDef(pid);
     if (G.name === 'VoidPilot_Aden' || G.name === 'VoidPilot') G.name = p.defaultName;
+    G.avatar = migrateAvatar(G.avatar);
     if (G.sp == null || isNaN(G.sp)) G.sp = 100;
     if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.mutationItems) G.mutationItems = [];
@@ -2170,7 +2211,7 @@
     if (el) { el.textContent = plantLine(reason); el.classList.add('visible'); }
     if (mascot) {
       if (s) mascot.innerHTML = budImg(s, '1.5rem');
-      else { mascot.textContent = '🌱'; mascot.style.filter = 'none'; }
+      else { mascot.innerHTML = farmIcon('bud', { img: true, size: '1.5rem' }); }
       mascot.title = s ? s.name : 'No strain yet';
     }
   }
@@ -2782,8 +2823,8 @@
     var wrapParts = ['scale(' + vis.scale + ')', 'skewX(' + vis.artSkew + 'deg)'];
     if (vis.flip) wrapParts.push('scaleX(-1)');
     var wrapStyle = 'transform:' + wrapParts.join(' ') + ';animation-delay:' + ((strainVisualSeed(s) % 30) / 10) + 's';
-    var imgStyle = 'filter:hue-rotate(' + vis.hue + 'deg) saturate(' + vis.sat + ') drop-shadow(0 6px 8px rgba(0,0,0,0.45))';
-    return '<span class="cr-art-wrap cr-art-v' + (artIdx % 6) + '" style="' + wrapStyle + '"><img src="' + strainCardArt(s) + '" alt="" draggable="false" class="voidline-art" data-art-kind="strain" data-strain-id="' + esc(s.id) + '" style="' + imgStyle + '"></span>';
+    var imgStyle = 'filter:saturate(' + vis.sat + ') drop-shadow(0 6px 8px rgba(0,0,0,0.45))';
+    return '<div class="cr-art-layered cr-art-v' + (artIdx % 6) + '"><span class="cr-art-terrain cr-arena-' + vis.arenaIdx + '"></span><span class="cr-art-wrap" style="' + wrapStyle + '"><img src="' + strainCardArt(s) + '" alt="" draggable="false" class="voidline-art" data-art-kind="strain" data-strain-id="' + esc(s.id) + '" style="' + imgStyle + '"></span></div>';
   }
 
   function crCardFrameInner(opts) {
@@ -2813,7 +2854,7 @@
     var thc = parseFloat(s.thcPercent || 0);
     var thcStr = thc % 1 === 0 ? String(Math.floor(thc)) : thc.toFixed(1);
     var thcCls = thcStr.length > 3 ? ' cr-badge-sm' : '';
-    var tag = s.planetExclusive ? '🌍' : ((s.parentIds && s.parentIds.length) ? '🧬' : '');
+    var tag = s.planetExclusive ? farmIcon('planet') : ((s.parentIds && s.parentIds.length) ? farmIcon('hybrid') : '');
     var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '') + (tierIdx >= 25 ? ' cr-card-godlift' : '');
     var dpsBadge = opts.showDps ? '<div class="cr-badge cr-badge-dps"><span>DPS</span>' + strainBattleDpsBase(s).toFixed(0) + '</div>' : '';
     var inner = crCardFrameInner({
@@ -2837,8 +2878,7 @@
     var pl = playerDef(activePlayerId);
     var av = DOM.hudAvatar || document.getElementById('hud-avatar');
     if (av) {
-      if (pl.portrait) av.innerHTML = '<img src="' + pl.portrait + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
-      else av.textContent = G.avatar;
+      av.innerHTML = avatarHtml(migrateAvatar(G.avatar), '100%');
     }
     var nameEl = DOM.hudName || document.getElementById('hud-name');
     var levelEl = DOM.hudLevel || document.getElementById('hud-level');
@@ -2851,7 +2891,7 @@
     var s = topStrain(), mascot = DOM.plantMascot || document.getElementById('plant-mascot'), label = DOM.plantLabel || document.getElementById('plant-label');
     if (mascot) {
       if (s) mascot.innerHTML = budImg(s, '1.5rem');
-      else { mascot.textContent = '🌱'; mascot.style.filter = 'none'; }
+      else { mascot.innerHTML = farmIcon('bud', { img: true, size: '1.5rem' }); }
     }
     if (label) label.textContent = s ? s.name : 'No strain';
     UI.dirty.hud = false;
@@ -2953,7 +2993,7 @@
       var dpsEl = document.querySelector('.boss-stage-dps');
       if (dpsEl) {
         var dpsVal = totalBattleDps();
-        var dpsStr = '⚔ ' + dpsVal.toFixed(1) + ' DPS';
+        var dpsStr = 'DPS ' + dpsVal.toFixed(1);
         if (UI_LAST.dps !== dpsStr) {
           dpsEl.textContent = dpsStr;
           UI_LAST.dps = dpsStr;
@@ -3031,7 +3071,7 @@
     PLAYERS.forEach(function (pl) {
       var save = readPlayerSave(pl.id);
       var lvl = save ? save.empireLevel : 1;
-      var av = pl.portrait ? '<img src="' + pl.portrait + '" alt="" style="width:2.5rem;height:2.5rem;object-fit:contain">' : '<div style="font-size:2rem">' + pl.avatar + '</div>';
+      var av = avatarHtml(pl.portrait, '2.5rem');
       h += '<button type="button" class="player-pick-card" data-action="pick-player" data-pid="' + pl.id + '">' + av + '<div style="font-weight:700">' + esc(pl.label) + '</div><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(save ? (save.name || pl.label) : 'New game') + ' · Lv.' + lvl + '</div></button>';
     });
     h += '</div></div>';
@@ -3178,14 +3218,11 @@
     h += '<div class="boss-stage-floor"></div>';
     h += '<div class="boss-stage-entity boss-arena-art">';
     h += '<div class="boss-aura-ring campaign-boss-accent-' + (bossHue % 8) + '"></div>';
-    var bossSvgSz = mega ? { w: 140, h: 154 } : { w: 120, h: 132 };
-    var bossSvg = generateBossSvgMarkup({ seed: G.bossSeed, hue: bossHue, width: bossSvgSz.w, height: bossSvgSz.h });
-    bossSvg = bossSvg.replace('class="cr-art-fallback boss-svg-fallback"', 'class="boss-sprite boss-svg-fallback campaign-boss-hue-' + (bossHue % 12) + '"');
-    h += bossSvg;
+    h += '<img src="' + BOSS_ART + '" alt="" class="boss-sprite voidline-art campaign-boss-hue-' + (bossHue % 12) + '" data-art-kind="boss" onerror="this.onerror=null;this.src=\'' + BOSS_ART_FALLBACK + '\'">';
     h += '</div>';
     h += '<div class="campaign-arena-node-badge">NODE ' + node + (mega ? ' · MEGA' : '') + '</div>';
     h += '<div class="boss-stage-hud">';
-    if (mega) h += '<div class="boss-mega-tag">⚡ MEGA BOSS · RIFT TWIN PACK</div>';
+    if (mega) h += '<div class="boss-mega-tag">' + farmIcon('mega') + ' MEGA BOSS · RIFT TWIN PACK</div>';
     h += '<div class="boss-stage-name font-display">' + esc(G.bossName) + '</div>';
     h += '<div class="boss-stage-tier">' + esc(rarityName(G.bossRarity)) + ' tier · Campaign ' + node + '/' + CAMPAIGN_NODE_COUNT + '</div>';
     h += '<div class="boss-hp-bar"><div class="boss-hp-fill boss-hp-fill-anim campaign-hp-pct-' + Math.floor(hpPct / 5) + '"></div></div>';
@@ -3200,7 +3237,7 @@
       gates.slice(0, 2).forEach(function (g) { h += '<div class="campaign-gate-line">' + esc(g) + '</div>'; });
       h += '</div>';
     }
-    h += '<div class="boss-stage-dps">⚔ ' + dps.toFixed(1) + ' DPS · ' + def.maxSlots + ' slots</div>';
+    h += '<div class="boss-stage-dps">DPS ' + dps.toFixed(1) + ' · ' + def.maxSlots + ' slots</div>';
     h += '</div></div>';
     return h;
   }
@@ -3212,19 +3249,19 @@
       var r = q[i];
       if (r) {
         h += '<button type="button" class="home-chest-slot home-chest-ready halftone-panel" data-action="open-chest" data-id="' + i + '">';
-        h += '<div class="home-chest-icon">📦</div><div class="home-chest-label">' + esc(chestLabel(r)) + '</div>';
+        h += '<div class="home-chest-icon">' + farmIcon('pack') + '</div><div class="home-chest-label">' + esc(chestLabel(r)) + '</div>';
         h += '<div class="home-chest-open">OPEN</div></button>';
       } else {
-        h += '<div class="home-chest-slot home-chest-empty halftone-panel"><div class="home-chest-icon opacity-60">▫</div><div class="home-chest-label text-muted">EMPTY</div></div>';
+        h += '<div class="home-chest-slot home-chest-empty halftone-panel"><div class="home-chest-icon opacity-60">' + farmIcon('empty') + '</div><div class="home-chest-label text-muted">EMPTY</div></div>';
       }
     }
     h += '</div>';
     return h;
   }
 
-  function hubOrbBtn(label, actionName, emoji) {
+  function hubOrbBtn(label, actionName, iconKind) {
     var actAttr = 'data-action';
-    return '<button type="button" class="hub-orb-btn halftone-panel" ' + actAttr + '="' + esc(actionName) + '" title="' + esc(label) + '"><span class="hub-orb-glow"></span><span class="hub-orb-emoji">' + emoji + '</span><span class="hub-orb-label">' + esc(label) + '</span></button>';
+    return '<button type="button" class="hub-orb-btn halftone-panel" ' + actAttr + '="' + esc(actionName) + '" title="' + esc(label) + '"><span class="hub-orb-glow"></span><span class="hub-orb-icon">' + farmIcon(iconKind, { lg: true }) + '</span><span class="hub-orb-label">' + esc(label) + '</span></button>';
   }
 
   function fightTopBarHtml(farmMode) {
@@ -3232,7 +3269,7 @@
     if (farmMode) {
       h += '<div class="flex-between gap-2 w-full"><div class="fight-top-info"><h2 class="font-display chromatic-text fight-top-title">PORTAL FARM</h2>';
       h += '<p class="font-mono text-muted text-xs fight-top-sub">Passive ' + fmtRev(revSecTotal()) + '</p></div>';
-      h += '<button type="button" class="game-btn game-btn-sm" data-action="toggle-farm">✕ CLOSE</button></div>';
+      h += '<button type="button" class="game-btn game-btn-sm" data-action="toggle-farm">' + farmIcon('close') + ' CLOSE</button></div>';
     } else {
       var node = currentCampaignNode();
       var mega = isBossWave();
@@ -3266,8 +3303,8 @@
       h += '<button type="button" class="campaign-node ' + stateClass + '" id="campaign-node-' + n + '" data-action="campaign-focus-node" data-id="' + n + '"' + (locked ? ' disabled' : '') + '>';
       h += '<div class="campaign-node-orb">';
       h += '<span class="campaign-node-num">' + n + '</span>';
-      if (cleared) h += '<span class="campaign-node-check">✓</span>';
-      if (def.isMega) h += '<span class="campaign-node-mega">⚡</span>';
+      if (cleared) h += '<span class="campaign-node-check">' + farmIcon('check') + '</span>';
+      if (def.isMega) h += '<span class="campaign-node-mega">' + farmIcon('mega') + '</span>';
       h += '</div>';
       h += '<div class="campaign-node-body">';
       h += '<div class="campaign-node-title">' + (def.isMega ? 'MEGA BOSS' : 'Skirmish') + '</div>';
@@ -3306,7 +3343,7 @@
     h += bossArenaStageHtml();
     h += '</div>';
     h += renderCampaignTrail();
-    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', '🗼') + hubOrbBtn('RAID', 'hub-raid', '⚔') + hubOrbBtn('MUTATION LAB', 'hub-mutation-lab', '🧬') + '</div>';
+    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', 'tower') + hubOrbBtn('RAID', 'hub-raid', 'raid') + hubOrbBtn('MUTATION LAB', 'hub-mutation-lab', 'mutation') + '</div>';
     h += '<div class="home-chest-rail ' + SKIN_PANEL + '">';
     h += '<div class="section-label section-label-green" style="margin:0 0 0.5rem;text-align:left">PENDING CHESTS · INSTANT OPEN</div>';
     h += homeChestSlotsHtml();
@@ -3346,7 +3383,7 @@
       if (!G.factoryFloors.length) h += '<div class="rocket-floor rocket-floor-empty"><div class="text-muted text-xs">Empty shaft</div></div>';
       h += '</div><div class="section-label mb-2">PORTAL FARM</div>';
       if (!G.factoryFloors.length) {
-        h += '<div class="' + panel + ' text-center mb-3"><div style="font-size:2.5rem;margin-bottom:0.5rem">🌀</div><div class="text-muted text-sm mb-3">No portals yet. Buy your first floor to start mining.</div><button type="button" class="game-btn game-btn-green w-full" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>BUY FLOOR · ' + fmtCash(portalCost()) + '</button></div>';
+        h += '<div class="' + panel + ' text-center mb-3"><div style="margin-bottom:0.5rem">' + farmIcon('portal', { xl: true }) + '</div><div class="text-muted text-sm mb-3">No portals yet. Buy your first floor to start mining.</div><button type="button" class="game-btn game-btn-green w-full" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>BUY FLOOR · ' + fmtCash(portalCost()) + '</button></div>';
       }
       G.factoryFloors.forEach(function (f) {
         var eq = f.equippedStrainId ? strainById(f.equippedStrainId) : null;
@@ -3366,7 +3403,7 @@
       h += '<div class="' + panel + ' capsule-cloner mb-3"><div class="clone-bubbles"></div><div class="font-mono text-muted mb-2" style="font-size:0.55rem;letter-spacing:0.15em">CAPSULE CLONER</div>';
       if (G.cloneJob) {
         var cs = strainById(G.cloneJob.strainId);
-        h += '<div class="text-center py-4 clone-active"><div>' + (cs ? budImg(cs, '2.5rem') : '🧬') + '</div><div class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(cr) + '</div><div class="text-muted text-xs">Cloning ' + (cs ? esc(cs.name) : 'strain') + '...</div></div>';
+        h += '<div class="text-center py-4 clone-active"><div>' + (cs ? budImg(cs, '2.5rem') : farmIcon('clone', { xl: true })) + '</div><div class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(cr) + '</div><div class="text-muted text-xs">Cloning ' + (cs ? esc(cs.name) : 'strain') + '...</div></div>';
       } else {
         h += '<select class="input-field mb-3" id="clone-select"><option value="">— Select strain —</option>';
         G.strains.forEach(function (s) { h += '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; });
@@ -3390,7 +3427,7 @@
       if (!p) return;
       var dis = G.cash < p.price && !(p.type === 'omega' && p.spCost && G.sp >= p.spCost);
       h += '<div class="shop-chest-tier ' + SKIN_PANEL + '" style="--chest-accent:' + tier.accent + '">';
-      h += '<div class="shop-chest-tier-art"><span class="shop-chest-emoji">' + tier.emoji + '</span></div>';
+      h += '<div class="shop-chest-tier-art"><span class="shop-chest-icon">' + farmIcon(tier.icon, { lg: true }) + '</span></div>';
       h += '<div class="shop-chest-tier-body"><div class="shop-chest-tier-name font-display">' + esc(tier.name) + '</div>';
       h += '<div class="text-muted text-xs">' + esc(tier.tagline) + '</div>';
       h += '<div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div>';
@@ -3421,7 +3458,7 @@
     G.inventory.forEach(function (it) {
       var def = STORE.find(function (x) { return x.id === it.id; }) || it;
       var revBonus = def.revPerSec || (it.type === 'nutrient' ? 0.5 : it.type === 'pipe' ? 1.2 : 0);
-      h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="flex-row"><div style="font-size:1.5rem">' + it.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + '</div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
+      h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="flex-row"><div>' + farmIcon((def.icon || it.icon || 'pack'), { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + '</div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
     });
     h += '</div>';
     return h;
@@ -3549,9 +3586,9 @@
     var list = filteredStrains();
     var h = '<div class="screen-section index-screen">';
     h += '<div class="index-nav-grid mb-3">';
-    [['mutations', 'MUTATIONS', '🧬'], ['strains', 'STRAINS', '📇'], ['decks', 'DECKS', '⚔']].forEach(function (nav) {
+    [['mutations', 'MUTATIONS', 'mutation'], ['strains', 'STRAINS', 'strains'], ['decks', 'DECKS', 'decks']].forEach(function (nav) {
       h += '<button type="button" class="index-nav-card ' + SKIN_PANEL + (pane === nav[0] ? ' index-nav-active' : '') + '" data-action="index-pane" data-id="' + nav[0] + '">';
-      h += '<span class="index-nav-emoji">' + nav[2] + '</span><span class="index-nav-label font-display">' + nav[1] + '</span></button>';
+      h += '<span class="index-nav-icon">' + farmIcon(nav[2], { lg: true }) + '</span><span class="index-nav-label font-display">' + nav[1] + '</span></button>';
     });
     h += '</div>';
     if (pane === 'mutations') {
@@ -3579,7 +3616,7 @@
   function renderMap() {
     var owned = G.ownedPlanets || [];
     var h = '<div class="screen-section map-screen"><div class="flex-between mb-2"><div><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">UNIVERSE MAP</h2><p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + owned.length + ' worlds</p></div>';
-    h += '<button type="button" class="game-btn game-btn-sm" data-action="map-billings">📁 BILLINGS</button></div>';
+    h += '<button type="button" class="game-btn game-btn-sm" data-action="map-billings">' + farmIcon('bill') + ' BILLINGS</button></div>';
     h += '<div class="map-scan-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line"></div><div class="map-scan-beam"></div>';
     h += '<button type="button" class="map-scan-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">SCAN</span></button></div>';
     if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Scanning hyperspace lanes…</div>';
@@ -3637,7 +3674,7 @@
     var slot = G.storefrontSlots[slotIdx];
     var locked = slotIdx >= G.storefrontSlotCount;
     if (locked) {
-      return '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">🔒</div><div class="roadside-slot-label">LOCKED</div></div>';
+      return '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">' + farmIcon('lock') + '</div><div class="roadside-slot-label">LOCKED</div></div>';
     }
     if (!slot || !slot.strainId) {
       return '<button type="button" class="roadside-slot roadside-slot-empty" data-action="sf-pick-open" data-id="' + slotIdx + '"><span class="roadside-plus">+</span><span class="roadside-slot-label">LIST ITEM</span></button>';
@@ -3646,7 +3683,7 @@
     if (!s) return '<div class="roadside-slot roadside-slot-empty"></div>';
   var h = '<div class="roadside-slot roadside-slot-filled">';
     if (isMine) {
-      h += '<button type="button" class="roadside-slot-x" data-action="sf-remove-ask" data-id="' + slotIdx + '">✕</button>';
+      h += '<button type="button" class="roadside-slot-x" data-action="sf-remove-ask" data-id="' + slotIdx + '">' + farmIcon('close') + '</button>';
       h += '<button type="button" class="roadside-slot-info" data-action="sf-info" data-id="' + slotIdx + '">i</button>';
     }
     h += '<div class="roadside-slot-card">' + crCardHtml(s, { noFocus: true, qty: slot.quantity || 1 }) + '</div>';
@@ -3666,7 +3703,7 @@
       var slot = slots[i] || { strainId: null, price: 0, quantity: 0 };
       var prevG = G;
       G = save;
-      if (i >= count) h += '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">🔒</div></div>';
+      if (i >= count) h += '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">' + farmIcon('lock') + '</div></div>';
       else if (!slot.strainId) h += '<div class="roadside-slot roadside-slot-empty"></div>';
       else {
         var s = (save.strains || []).find(function (x) { return x.id === slot.strainId; });
@@ -3701,23 +3738,23 @@
       var pl = playerDef(pid);
       var save = readPlayerSave(pid) || {};
       h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
-      h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div style="font-size:1.5rem">' + (save.avatar || pl.avatar) + '</div><div style="font-weight:700">' + esc(save.name || pl.label) + '</div></div>';
+      h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div>' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2.5rem') + '</div><div style="font-weight:700">' + esc(save.name || pl.label) + '</div></div>';
       h += renderPlayerShopGrid(pid);
     } else {
-      h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">🏪 MY ROADSIDE SHOP</button>';
+      h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
       h += '<div class="section-label mb-2">FAMILY MEMBERS</div>';
       PLAYERS.forEach(function (pl) {
         var save = readPlayerSave(pl.id) || {};
         var badges = (save.badgeIds || []).filter(Boolean).map(function (bid) {
           var b = BADGES.find(function (x) { return x.id === bid; });
-          return b ? b.emoji : '';
+          return b ? farmIcon(b.icon) : '';
         }).join(' ');
         var dps = playerBattleDps(save).toFixed(1);
         var rev = fmtRev(playerRevSec(save));
         h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-4 mb-3' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
-        h += '<div class="flex-row gap-3 mb-2"><div class="coop-player-av">' + (save.avatar || pl.avatar) + '</div><div style="flex:1;min-width:0">';
+        h += '<div class="flex-row gap-3 mb-2"><div class="coop-player-av">' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2.5rem') + '</div><div style="flex:1;min-width:0">';
         h += '<div style="font-weight:700;font-size:0.9rem">' + esc(save.name || pl.label) + '</div>';
-        h += '<div class="font-mono text-xs text-green">⚔ ' + dps + ' DPS · ' + rev + '</div>';
+        h += '<div class="font-mono text-xs text-green">DPS ' + dps + ' · ' + rev + '</div>';
         h += '<div class="text-xs text-muted">' + badges + '</div></div></div>';
         if (pl.id !== activePlayerId) h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
         h += '</div>';
@@ -3751,7 +3788,7 @@
     var sort = UI.strainPickerSort || 'rarity';
     el.classList.add('open');
     var h = '<button type="button" class="overlay-backdrop" data-close="strain-picker"></button><div class="overlay-panel strain-picker-panel ' + SKIN_PANEL + ' p-4">';
-    h += '<div class="flex-between mb-3"><div><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.12em">SELECT STRAIN</h3><div class="font-mono text-muted text-xs">' + esc(floor.name) + ' · Floor Lv.' + floor.level + '</div></div><button type="button" class="profile-close" data-close="strain-picker" style="position:static;width:2rem;height:2rem">✕</button></div>';
+    h += '<div class="flex-between mb-3"><div><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.12em">SELECT STRAIN</h3><div class="font-mono text-muted text-xs">' + esc(floor.name) + ' · Floor Lv.' + floor.level + '</div></div><button type="button" class="profile-close" data-close="strain-picker" style="position:static;width:2rem;height:2rem">' + farmIcon('close') + '</button></div>';
     h += '<input type="search" class="input-field mb-2" placeholder="Search by name or rarity..." data-action="strain-picker-search" value="' + esc(UI.strainPickerSearch || '') + '" autocomplete="off">';
     h += '<select class="input-field mb-3" data-action="strain-picker-sort"><option value="rarity"' + (sort === 'rarity' ? ' selected' : '') + '>Sort: Rarity (high → low)</option><option value="name"' + (sort === 'name' ? ' selected' : '') + '>Sort: Name</option><option value="recent"' + (sort === 'recent' ? ' selected' : '') + '>Sort: Recent</option></select>';
     if (!G.strains.length) {
@@ -3968,7 +4005,7 @@
     var phase = ml.phase || 'idle';
     var err = ml.error || mergeLabError();
     var h = '<button type="button" class="overlay-backdrop" data-action="close-merge-lab"></button><div class="overlay-panel merge-lab-panel ' + SKIN_PANEL + ' p-4">';
-    h += '<div class="flex-between mb-3"><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.12em">MERGE LAB</h3><button type="button" class="profile-close" data-action="close-merge-lab" style="position:static;width:2rem;height:2rem">✕</button></div>';
+    h += '<div class="flex-between mb-3"><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.12em">MERGE LAB</h3><button type="button" class="profile-close" data-action="close-merge-lab" style="position:static;width:2rem;height:2rem">' + farmIcon('close') + '</button></div>';
     if (phase === 'reveal' && ml.child) {
       h += '<div class="text-center mb-3">' + crCardHtml(ml.child, { noFocus: true, large: true }) + '</div>';
       h += '<p class="text-muted text-xs text-center mb-3">New hybrid ready for the Index!</p>';
@@ -4001,7 +4038,7 @@
   function renderProfile() {
     var pl = playerDef(activePlayerId);
     var tab = UI.profileTab || 'modifiers';
-    var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">✕</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;font-size:1.5rem;border-width:3px">' + G.avatar + '</div></div></div><div class="profile-body">';
+    var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">' + farmIcon('close') + '</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;border-width:3px">' + avatarHtml(migrateAvatar(G.avatar), '100%') + '</div></div></div><div class="profile-body">';
     h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'modifiers' ? ' active' : '') + '" data-action="profile-tab" data-id="modifiers">MODIFIERS</button><button type="button" class="farm-tab' + (tab === 'stats' ? ' active' : '') + '" data-action="profile-tab" data-id="stats">STATS</button><button type="button" class="farm-tab' + (tab === 'custom' ? ' active' : '') + '" data-action="profile-tab" data-id="custom">CUSTOMIZE</button></div>';
     if (tab === 'modifiers') {
       h += profileModifiersHtml();
@@ -4010,11 +4047,11 @@
     } else {
       h += '<div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24">';
       h += '<div class="font-mono text-muted mb-2" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker">';
-      AVATARS.forEach(function (a) { h += '<button type="button" class="avatar-opt' + (G.avatar === a ? ' selected' : '') + '" data-action="set-avatar" data-av="' + a + '">' + a + '</button>'; });
+      AVATARS.forEach(function (a) { h += '<button type="button" class="avatar-opt' + (G.avatar === a ? ' selected' : '') + '" data-action="set-avatar" data-av="' + esc(a) + '">' + avatarHtml(a, '2rem') + '</button>'; });
       h += '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">BADGES</div><div class="grid-3 mb-3">';
       [0, 1, 2].forEach(function (slot) {
         h += '<select class="input-field" data-action="set-badge" data-slot="' + slot + '"><option value="">—</option>';
-        BADGES.forEach(function (b) { h += '<option value="' + b.id + '"' + (G.badgeIds[slot] === b.id ? ' selected' : '') + '>' + b.emoji + ' ' + b.label + '</option>'; });
+        BADGES.forEach(function (b) { h += '<option value="' + b.id + '"' + (G.badgeIds[slot] === b.id ? ' selected' : '') + '>' + b.label + '</option>'; });
         h += '</select>';
       });
       h += '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">STOREFRONT (3 SLOTS) — SHARE BOARD</div>';
@@ -4025,17 +4062,17 @@
         h += '</select><input type="number" class="input-field" style="width:5rem" placeholder="Price" data-action="sf-price" data-slot="' + slot + '" value="' + (sf.price || '') + '"></div>';
       });
     }
-    h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn" style="flex:1" data-action="switch-player">⇄ SWITCH PLAYER</button><button type="button" class="game-btn" style="flex:1" data-action="open-settings">⚙ SETTINGS</button></div><button type="button" class="game-btn game-btn-green w-full" data-close="profile">RESUME</button></div>';
+    h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn" style="flex:1" data-action="switch-player">' + farmIcon('swap') + ' SWITCH PLAYER</button><button type="button" class="game-btn" style="flex:1" data-action="open-settings">' + farmIcon('settings') + ' SETTINGS</button></div><button type="button" class="game-btn game-btn-green w-full" data-close="profile">RESUME</button></div>';
     document.getElementById('profile-panel').innerHTML = h;
   }
 
   function renderSettings() {
     var helpOpen = UI.helpOpen;
-    var h = '<div class="flex-between mb-3"><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.2em">SYSTEM CONFIG</h3><button type="button" data-close="settings" style="background:none;border:none;color:var(--muted);font-size:1.125rem;cursor:pointer">✕</button></div>';
+    var h = '<div class="flex-between mb-3"><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.2em">SYSTEM CONFIG</h3><button type="button" data-close="settings" style="background:none;border:none;color:var(--muted);font-size:1.125rem;cursor:pointer">' + farmIcon('close') + '</button></div>';
     h += '<div class="' + SKIN_PANEL + ' flex-between p-4 mb-3"><div><div class="chromatic-text" style="font-weight:600;font-size:0.875rem">Reality Warp Mode</div><div class="text-muted" style="font-size:0.65rem">Subtle color drift & soft pulse</div></div><button type="button" class="toggle-switch" data-action="toggle-warp" style="background:' + (UI.realityWarp ? 'linear-gradient(90deg,#39FF14,#A855F7)' : 'rgba(61,0,102,0.8)') + '"><span class="toggle-knob" style="left:' + (UI.realityWarp ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div>';
-    h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? '✕ CLOSE HELP' : '📖 GAME ENCYCLOPEDIA') + '</button>';
+    h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? farmIcon('close') + ' CLOSE HELP' : farmIcon('help') + ' GAME ENCYCLOPEDIA') + '</button>';
     if (helpOpen) h += helpEncyclopediaHtml();
-    h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">⇄ SWITCH PLAYER</button>';
+    h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">' + farmIcon('swap') + ' SWITCH PLAYER</button>';
     document.getElementById('settings-panel').innerHTML = h;
   }
 
@@ -4076,7 +4113,7 @@
   }
 
   function strainLiftMetaHtml(s) {
-    var extras = (s.planetExclusive ? ' · 🌍 Planet' : '') + ((s.parentIds && s.parentIds.length) ? ' · 🧬 Hybrid' : '');
+    var extras = (s.planetExclusive ? ' · Planet' : '') + ((s.parentIds && s.parentIds.length) ? ' · Hybrid' : '');
     return '<div class="lift-rarity" style="color:' + rarityColor(s.rarity) + '">' + esc(rarityName(s.rarity)) + extras + '</div>' +
       '<div>THC ' + s.thcPercent + '% · Yield ' + s.yield + ' · DPS ' + strainBattleDpsBase(s).toFixed(1) + (s.quantity > 1 ? ' · ×' + s.quantity : '') + '</div>';
   }
@@ -4084,7 +4121,7 @@
   function liftFooterHtml(id) {
     if (id.indexOf('battle-pool-') === 0) {
       var sid = id.slice(12);
-      return '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid) + '">⚔ EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+      return '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid) + '">' + farmIcon('equip') + ' EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
     }
     if (id.indexOf('battle-slot-') === 0) {
       var sid2 = id.slice(12);
@@ -4092,7 +4129,7 @@
     }
     if (id.indexOf('raid-pool-') === 0) {
       var rsid = id.slice(10);
-      return '<button type="button" class="game-btn game-btn-green" data-action="equip-raid" data-id="' + esc(rsid) + '">⚔ RAID EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+      return '<button type="button" class="game-btn game-btn-green" data-action="equip-raid" data-id="' + esc(rsid) + '">' + farmIcon('equip') + ' RAID EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
     }
     if (id.indexOf('raid-slot-') === 0) {
       var rsid2 = id.slice(10);
@@ -4105,7 +4142,7 @@
       var on = (G.equippedBattleIds || []).indexOf(sid3) >= 0;
       var eq = on
         ? '<button type="button" class="game-btn" data-action="equip-battle" data-id="' + esc(sid3) + '">UNEQUIP</button>'
-        : '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid3) + '">⚔ EQUIP</button>';
+        : '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid3) + '">' + farmIcon('equip') + ' EQUIP</button>';
       return eq + '<button type="button" class="game-btn game-btn-green" data-action="up-strain" data-id="' + esc(sid3) + '">UP · ' + fmtCash(upCost(s)) + '</button><button type="button" class="game-btn" data-action="gift-strain" data-id="' + esc(sid3) + '">GIFT</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
     }
     return '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
@@ -4129,7 +4166,7 @@
       var p = PACKS.find(function (x) { return x.type === pt; });
       if (!p) return '';
       var dis = G.cash < p.price && !(p.type === 'omega' && p.spCost && G.sp >= p.spCost);
-      return '<div class="flex-row"><div style="font-size:1.875rem">' + p.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(p.name) + '</div><div class="text-muted text-xs">' + esc(p.desc) + '</div><div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>OPEN</button></div>';
+      return '<div class="flex-row"><div>' + farmIcon(p.icon || 'pack', { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(p.name) + '</div><div class="text-muted text-xs">' + esc(p.desc) + '</div><div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>OPEN</button></div>';
     }
     var wrap = document.querySelector('[data-lift="' + id + '"]');
     return wrap ? wrap.innerHTML : '';
@@ -4155,7 +4192,7 @@
     var shellCls = 'lift-shell' + (id === 'planet-scan' ? ' lift-shell-compact' : '');
     el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
       '<div class="' + shellCls + '"><div class="lift-hero"' + (id === 'planet-scan' ? '' : ' style="padding:1rem"') + '>' + body + '</div>' +
-      '<div class="lift-footer">' + (UI.liftOnUpgrade ? '<button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">🔋 UPGRADE</button>' : '') +
+      '<div class="lift-footer">' + (UI.liftOnUpgrade ? '<button type="button" class="game-btn game-btn-green" data-action="lift-upgrade">' + farmIcon('upgrade') + ' UPGRADE</button>' : '') +
       '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button></div></div>';
   }
 
@@ -4687,7 +4724,7 @@
     function printReport(title, rows) {
       console.group('%c' + title, HEAD);
       console.table(rows.map(function (r) {
-        return { TEST: r.name, STATUS: r.ok ? '✓ PASS' : '✗ FAIL', DETAIL: r.detail || '' };
+        return { TEST: r.name, STATUS: r.ok ? 'PASS' : 'FAIL', DETAIL: r.detail || '' };
       }));
       rows.forEach(function (r) { logRow(r.ok ? 'PASS' : 'FAIL', r.name, r.detail); });
       console.groupEnd();
