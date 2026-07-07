@@ -43,7 +43,7 @@
       box-shadow: 0 0 60px rgba(3, 7, 18, 0.85), 0 0 120px rgba(56, 189, 248, 0.08);
       overflow: hidden; transition: filter 0.35s var(--ease-os);
     }
-    .phone-inner.dimmed { filter: brightness(0.4); }
+    /* .phone-inner.dimmed removed — lift uses warm vignette only (no shell brightness crush) */
     .void-bg { background-color: var(--void); background-image: radial-gradient(ellipse 120% 70% at 50% -10%, rgba(124, 166, 30, 0.12) 0%, transparent 55%), radial-gradient(ellipse 70% 50% at 100% 100%, rgba(245, 158, 11, 0.07) 0%, transparent 48%), repeating-linear-gradient(0deg, transparent 0 23px, rgba(0,0,0,0.04) 23px 24px); }
     .void-bg::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(2px 2px at 12% 25%, rgba(124,166,30,0.25) 0%, transparent 100%), radial-gradient(1.5px 1.5px at 68% 38%, rgba(245,158,11,0.2) 0%, transparent 100%), radial-gradient(2px 2px at 48% 72%, rgba(67,97,11,0.18) 0%, transparent 100%); animation: star-twinkle 5s ease-in-out infinite alternate; }
     .tab-bg-battle { background-image: radial-gradient(ellipse 100% 60% at 50% 0%, rgba(239,68,68,0.12) 0%, transparent 50%), radial-gradient(ellipse 80% 50% at 100% 100%, rgba(74,222,128,0.08) 0%, transparent 45%), radial-gradient(ellipse 120% 80% at 50% -20%, rgba(74,222,128,0.18) 0%, transparent 55%); }
@@ -240,25 +240,34 @@
     .strain-card:hover { transform: scale(1.02); }
     .strain-card.selected { outline: 2px solid var(--leaf); }
     .liftable-wrap { cursor: pointer; }
-    .card-lift-backdrop { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.75); border: none; cursor: pointer; }
+    .card-lift-backdrop {
+      position: fixed; inset: 0; z-index: 500; border: none; cursor: pointer;
+      background: radial-gradient(circle, rgba(43, 27, 17, 0.2) 20%, rgba(12, 8, 5, 0.6) 100%);
+    }
     .lift-shell {
       position: fixed; z-index: 600; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: min(360px, 92vw); max-height: 90vh; display: flex; flex-direction: column;
+      width: min(300px, 88vw); max-height: 88vh; display: flex; flex-direction: column;
       pointer-events: none;
+      --glow: #7ca61e;
     }
     .lift-shell > * { pointer-events: auto; }
-    .lift-hero { flex-shrink: 0; padding: 0.5rem 1rem 0; display: flex; justify-content: center; }
-    .lift-hero .cr-card { pointer-events: none; max-width: 11rem; width: 100%; }
-    .lift-hero .cr-card-lg .cr-card-frame { transform: scale(1.02); }
+    .lift-hero { flex-shrink: 0; padding: 0.35rem 0.75rem 0; display: flex; justify-content: center; }
+    .lift-hero .cr-card { pointer-events: none; max-width: 8.25rem; width: 100%; }
+    .lift-shell .cr-card-lg .cr-card-frame { max-width: 8.25rem; margin: 0 auto; }
     .lift-meta {
       text-align: center; padding: 0.35rem 1rem 0.5rem; flex-shrink: 0;
       font-family: var(--font-mono); font-size: 0.55rem; color: var(--muted);
+      text-shadow: 0 1px 0 #0c0805, 0 0 6px color-mix(in srgb, var(--glow) 35%, transparent);
     }
-    .lift-meta .lift-rarity { font-weight: 700; font-size: 0.65rem; }
+    .lift-meta .lift-rarity {
+      font-weight: 700; font-size: 0.65rem;
+      text-shadow: 0 1px 0 #0c0805, 0 0 10px var(--glow), 0 0 18px color-mix(in srgb, var(--glow) 45%, transparent);
+    }
     .lift-abilities {
       flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
       margin: 0 0.75rem; padding: 0.65rem 0.75rem; border-radius: 0.75rem;
-      background: rgba(0,0,0,0.45); border: 1px solid rgba(74,222,128,0.2);
+      background: rgba(31, 18, 10, 0.72); border: 3px solid var(--ink);
+      box-shadow: 0 4px 0 var(--ink), inset 0 0 12px color-mix(in srgb, var(--glow) 12%, transparent);
     }
     .lift-abilities .lift-ability-row {
       padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -287,7 +296,6 @@
       box-shadow: 0 0 12px rgba(74,222,128,0.25);
     }
     .sort-chip:active { transform: scale(0.96); }
-    .lifted-card { display: none; }
     .overlay { position: fixed; inset: 0; z-index: 7500; display: none; align-items: center; justify-content: center; padding: 1rem; }
     .overlay.open { display: flex; }
     .overlay-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); border: none; cursor: pointer; }
@@ -500,10 +508,12 @@
     @media (min-width: 420px) { .binder-grid { grid-template-columns: repeat(3, 1fr); gap: 0.75rem; } }
     /* —— Clash Royale style strain cards —— */
     .cr-card {
+      position: relative;
       border: none; background: none; padding: 0; cursor: pointer; text-align: center;
-      transition: transform 0.22s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.2s ease;
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
       animation: none; width: 100%; perspective: 600px;
     }
+    .binder-grid .cr-card-frame { max-width: 6.85rem; margin-left: auto; margin-right: auto; }
     .cr-card:hover { transform: translateY(-8px) rotate(-1deg) scale(1.03); filter: brightness(1.06); }
     .cr-card:active { transform: translateY(-2px) scale(0.96); transition-duration: 0.08s; }
     .cr-card.selected .cr-card-frame {
@@ -704,7 +714,68 @@
     @keyframes cr-god-pulse { 0%,100%{box-shadow:0 0 32px rgba(255,255,255,0.4),0 14px 36px rgba(0,0,0,0.6)} 50%{box-shadow:0 0 48px rgba(255,255,255,0.65),0 0 60px rgba(0,240,255,0.25),0 14px 36px rgba(0,0,0,0.6)} }
     .cr-card-lg .cr-card-frame { max-width: 11rem; margin: 0 auto; }
     .cr-card-lg .cr-card-name { font-size: 0.72rem; }
-    .lifted-card .cr-card-frame { transform: scale(1.05); }
+
+    /* —— Mythic reveal & rarity glow —— */
+    .cr-tier-rare .cr-card-frame { --glow: #22d3ee; }
+    .cr-tier-epic .cr-card-frame { --glow: #a855f7; }
+    .cr-tier-legend .cr-card-frame { --glow: #facc15; }
+    .cr-tier-champion .cr-card-frame,
+    .cr-tier-mythic .cr-card-frame { --glow: #ea580c; }
+    .cr-tier-god .cr-card-frame,
+    .cr-tier-godroll .cr-card-frame,
+    .cr-tier-voidgod .cr-card-frame { --glow: #ff00ff; }
+
+    .lift-shell.lifted-card .lift-hero .cr-card-frame {
+      transform: scale(1.08) rotate(-1deg) !important;
+      box-shadow:
+        0 0 30px var(--glow),
+        0 0 70px color-mix(in srgb, var(--glow) 50%, transparent),
+        0 15px 0 #0c0805 !important;
+      animation: cardFloatGlow 3s ease-in-out infinite alternate !important;
+    }
+    @keyframes cardFloatGlow {
+      0% { transform: scale(1.08) translateY(0) rotate(-1deg); filter: drop-shadow(0 0 10px var(--glow)); }
+      100% { transform: scale(1.1) translateY(-12px) rotate(1deg); filter: drop-shadow(0 0 25px var(--glow)); }
+    }
+
+    .cr-tier-epic .cr-card-frame::before,
+    .cr-tier-legend .cr-card-frame::before {
+      content: ""; position: absolute; inset: -4px; border-radius: 18px; pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+      animation: borderSweep 2.5s linear infinite; z-index: -1; opacity: 0.55;
+    }
+    @keyframes borderSweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .cr-tier-mythic .cr-card-arena,
+    .cr-tier-champion .cr-card-arena {
+      background: conic-gradient(from 0deg, #1f120a, #43610b, #ea580c, #b45309, #1f120a) !important;
+      background-size: 200% 200% !important;
+      animation: resinChroma 6s linear infinite !important;
+    }
+    @keyframes resinChroma {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .cr-tier-godroll .cr-card-frame,
+    .cr-tier-god .cr-card-frame,
+    .cr-tier-voidgod .cr-card-frame {
+      animation: godGlowPulse 1.5s ease-in-out infinite alternate, cardFloatGlow 2.5s ease-in-out infinite alternate !important;
+    }
+    .lift-shell.lifted-card.cr-tier-godroll .lift-hero .cr-card-frame,
+    .lift-shell.lifted-card.cr-tier-god .lift-hero .cr-card-frame,
+    .lift-shell.lifted-card.cr-tier-voidgod .lift-hero .cr-card-frame {
+      animation: godGlowPulse 1.5s ease-in-out infinite alternate, cardFloatGlow 2.5s ease-in-out infinite alternate !important;
+    }
+    @keyframes godGlowPulse {
+      0% { border-color: #fff !important; box-shadow: 0 0 40px #ff00ff, inset 0 0 15px #fff; }
+      100% { border-color: #ff00ff !important; box-shadow: 0 0 80px #fff, inset 0 0 25px #ff00ff; }
+    }
+
+    .lift-shell.lifted-card .lift-abilities .text-green {
+      text-shadow: 0 1px 0 #0c0805, 0 0 8px var(--glow);
+    }
     .coop-card { border-left: 3px solid var(--green); }
     .screen-shake { animation: screen-shake 0.4s ease; }
     @keyframes screen-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }

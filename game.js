@@ -45,6 +45,17 @@
     { id: 'jamie', label: 'Jamie', portrait: '/public/art/portraits/jamie.svg', defaultName: 'Jamie' },
   ];
 
+  function dbgLiftLog(location, message, data, hypothesisId) {
+    // #region agent log
+    fetch('http://127.0.0.1:7825/ingest/8c9ecf9b-388a-4677-b541-9cbe65b40bf1',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'91cdb9'},body:JSON.stringify({sessionId:'91cdb9',location:location,message:message,data:data,hypothesisId:hypothesisId,timestamp:Date.now()})}).catch(function(){});
+    // #endregion
+  }
+
+  function liftShellTierClass(strain) {
+    if (!strain || !strain.rarity) return 'cr-tier-street';
+    return 'cr-tier-' + String(strain.rarity).toLowerCase();
+  }
+
   var RARITIES = [
     { id: 'dust', name: 'Dust', color: '#6B7280', mult: 1.0, threshold: 0 },
     { id: 'haze', name: 'Haze', color: '#9CA3AF', mult: 1.05, threshold: 0.35 },
@@ -2613,8 +2624,8 @@
 
   function cardTierClass(rarity) {
     var idx = rarityIndex(rarity);
-    if (idx >= 25) return 'cr-tier-god';
-    if (idx >= 20) return 'cr-tier-champion';
+    if (idx >= 25) return 'cr-tier-godroll cr-tier-god';
+    if (idx >= 20) return 'cr-tier-mythic cr-tier-champion';
     if (idx >= 18) return 'cr-tier-legend';
     if (idx >= 10) return 'cr-tier-epic';
     if (idx >= 4) return 'cr-tier-rare';
@@ -2941,7 +2952,9 @@
     var shell = DOM.phoneShell || document.getElementById('phone-shell');
     if (shell) {
       shell.className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
-      shell.classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
+      // #region agent log
+      dbgLiftLog('game.js:syncHudShell', 'shell class applied (no dimmed)', { liftedCardId: UI.liftedCardId, strainPickerFloorId: UI.strainPickerFloorId, hasDimmedClass: shell.classList.contains('dimmed') }, 'H1');
+      // #endregion
     }
     var app = DOM.voidlineApp || document.getElementById('voidline-app');
     var warp = DOM.realityWarp || document.getElementById('overlay-reality-warp');
@@ -4179,8 +4192,14 @@
     var strain = strainFromLiftId(id);
     if (strain) {
       var showDps = id.indexOf('battle-') === 0;
+      var tierCls = liftShellTierClass(strain);
+      var glow = rarityColor(strain.rarity);
+      var shellCls = 'lift-shell lifted-card ' + tierCls;
+      // #region agent log
+      dbgLiftLog('game.js:renderLift', 'strain lift rendered', { liftId: id, tierCls: tierCls, glow: glow, rarity: strain.rarity }, 'H2');
+      // #endregion
       el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
-        '<div class="lift-shell">' +
+        '<div class="' + shellCls + '" style="--glow:' + glow + '">' +
         '<div class="lift-hero">' + crCardHtml(strain, { noFocus: true, large: true, showDps: showDps }) + '</div>' +
         '<div class="lift-meta">' + strainLiftMetaHtml(strain) + '</div>' +
         '<div class="lift-abilities">' + abilityListHtml(strain, { upgradeable: true, lift: true }) + '</div>' +
@@ -4484,7 +4503,12 @@
     else if (act==='sf-price') { var p3 = val.split(':'); var slot2 = parseInt(p3[0], 10); G.storefrontSlots = G.storefrontSlots.slice(); G.storefrontSlots[slot2] = Object.assign({}, G.storefrontSlots[slot2], { price: parseFloat(p3[1]) || 0 }); }
     else if (act==='toggle-warp') UI.realityWarp = !UI.realityWarp;
     else if (act==='open-settings') { UI.settingsOpen = true; UI.profileOpen = false; }
-    else if (act==='dismiss-lift') { UI.liftedCardId = null; UI.liftOnUpgrade = null; }
+    else if (act==='dismiss-lift') {
+      // #region agent log
+      dbgLiftLog('game.js:dismissLift', 'card lift dismissed', { liftId: UI.liftedCardId }, 'H3');
+      // #endregion
+      UI.liftedCardId = null; UI.liftOnUpgrade = null;
+    }
     else if (act==='lift-upgrade' && UI.liftOnUpgrade) { runAction(UI.liftOnUpgrade.split(':')[0], UI.liftOnUpgrade.split(':').slice(1).join(':')); UI.liftedCardId = null; UI.liftOnUpgrade = null; }
     else if (act==='index-search') G.indexSearch = val;
     else if (act==='index-sort') G.indexSort = val;
@@ -4624,6 +4648,9 @@
       UI.liftedCardId = liftEl.dataset.lift;
       if (UI.liftedCardId.indexOf('planet-') === 0) UI.focusedPlanetId = UI.liftedCardId.slice(7);
       UI.liftOnUpgrade = liftEl.dataset.liftUp || null;
+      // #region agent log
+      dbgLiftLog('game.js:liftClick', 'card lift opened', { liftId: UI.liftedCardId }, 'H3');
+      // #endregion
       render();
       return;
     }
