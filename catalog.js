@@ -23,13 +23,14 @@
     { id: 'blitz-3', name: 'Scan Burst', description: '+25% sector scan rate', modifier: 0.25, modifierType: 'scan', price: 60000 },
     { id: 'blitz-4', name: 'Clone Accelerator', description: '−30% clone time', modifier: 0.3, modifierType: 'clone', price: 90000 },
     { id: 'blitz-5', name: 'Pack Resonance', description: '+10% pack rarity luck', modifier: 0.1, modifierType: 'packLuck', price: 120000 },
+    { id: 'blitz-fleet', name: 'Fleet Auto-Scanner', description: 'Auto-scan planets every 60s (keeps Mist+)', modifier: 0, modifierType: 'autoScan', price: 150000 },
   ];
 
   var AB_PREFIX = ['Void', 'Rift', 'Nebula', 'Cosmic', 'Dark', 'Crystal', 'Burning', 'Frozen', 'Royal', 'Ancient', 'Quantum', 'Stellar', 'Null', 'Hyper', 'Omega', 'Primal', 'Astral', 'Crimson', 'Emerald', 'Solar'];
   var AB_SUFFIX = ['Burst', 'Surge', 'Overdrive', 'Mist', 'Cloud', 'Echo', 'Magnet', 'Sync', 'Rush', 'Luck', 'Slayer', 'Sap', 'Pulse', 'Fang', 'Bloom', 'Drift', 'Storm', 'Ward', 'Flux', 'Nova'];
   var BLITZ_PREFIX = ['Hyper', 'Void', 'Rift', 'Omega', 'Quantum', 'Stellar', 'Nebula', 'Primal', 'Astral', 'Dark'];
   var BLITZ_CORE = ['Yield Drive', 'Amplifier', 'Scan Burst', 'Clone Coil', 'Pack Luck', 'Battle Forge', 'Planet Harvest', 'Revenue Coil', 'THC Boost', 'Boss Hunter'];
-  var BLITZ_TYPES = ['revenue', 'yield', 'scan', 'clone', 'packLuck', 'battle', 'planet'];
+  var BLITZ_TYPES = ['revenue', 'yield', 'scan', 'clone', 'packLuck', 'battle', 'planet', 'autoScan'];
 
   function buildAbilityCatalog() {
     var list = [];
@@ -91,6 +92,7 @@
         packLuck: '+' + (mod * 100).toFixed(0) + '% pack luck',
         battle: '+' + (mod * 100).toFixed(0) + '% battle DPS',
         planet: '+' + (mod * 100).toFixed(0) + '% planet output',
+        autoScan: 'Auto-scan fleet (Mist+ worlds)',
       };
       var id = 'blitz-' + (i + 1);
       var entry = {

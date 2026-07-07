@@ -378,6 +378,11 @@
     }
     .boss-hp-fill { height: 100%; border-radius: 9999px; transition: width 0.25s ease-out; box-shadow: 0 0 12px currentColor; }
     .boss-hp-text { font-family: var(--font-mono); font-size: 0.55rem; display: flex; justify-content: space-between; margin-bottom: 0.35rem; }
+    .boss-shield-bar { height: 0.35rem; background: rgba(0,0,0,0.45); border-radius: 999px; overflow: hidden; margin-bottom: 0.35rem; border: 1px solid rgba(56,189,248,0.35); }
+    .boss-shield-fill { height: 100%; background: linear-gradient(90deg, #38BDF8, #00F0FF); box-shadow: 0 0 8px rgba(56,189,248,0.6); transition: width 0.15s linear; }
+    .boss-trait-badge { display: flex; flex-direction: column; gap: 0.15rem; margin: 0.35rem 0 0.5rem; padding: 0.35rem 0.5rem; border-radius: 0.5rem; background: rgba(0,0,0,0.35); border: 1px solid rgba(250,204,21,0.25); }
+    .boss-trait-name { font-family: var(--font-mono); font-size: 0.5rem; letter-spacing: 0.12em; color: var(--gold); text-transform: uppercase; }
+    .boss-trait-state { font-family: var(--font-mono); font-size: 0.55rem; color: var(--cyan); }
     .boss-stage-dps { font-family: var(--font-mono); font-size: 0.6rem; color: var(--green); font-weight: 700; }
     .boss-mega-tag { font-family: var(--font-mono); font-size: 0.5rem; color: var(--gold); letter-spacing: 0.15em; margin-bottom: 0.25rem; animation: merge-q-pulse 2s ease-in-out infinite; }
     .rocket-shaft {
@@ -891,7 +896,7 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
   </div>
-  <script src="catalog.js?v=23"></script>
-  <script src="game.js?v=23"></script>
+  <script src="catalog.js?v=24"></script>
+  <script src="game.js?v=24"></script>
 </body>
 </html>
