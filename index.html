@@ -50,7 +50,6 @@
     .tab-bg-shop { background-image: radial-gradient(ellipse 90% 55% at 20% 0%, rgba(250,204,21,0.15) 0%, transparent 50%), radial-gradient(ellipse 70% 45% at 90% 80%, rgba(56,189,248,0.08) 0%, transparent 45%); }
     .tab-bg-index { background-image: radial-gradient(ellipse 85% 50% at 50% 10%, rgba(132,204,22,0.14) 0%, transparent 48%), radial-gradient(ellipse 60% 40% at 10% 90%, rgba(250,204,21,0.08) 0%, transparent 40%); }
     .tab-bg-map { background-image: radial-gradient(ellipse 100% 55% at 50% 0%, rgba(56,189,248,0.14) 0%, transparent 50%), radial-gradient(ellipse 80% 50% at 0% 100%, rgba(74,222,128,0.1) 0%, transparent 45%); }
-    .tab-bg-casino { background-image: radial-gradient(ellipse 90% 50% at 50% 0%, rgba(236,72,153,0.12) 0%, transparent 48%), radial-gradient(ellipse 70% 45% at 100% 100%, rgba(250,204,21,0.1) 0%, transparent 42%); }
     .tab-bg-coop { background-image: radial-gradient(ellipse 85% 50% at 30% 0%, rgba(163,230,53,0.12) 0%, transparent 48%); }
     .tab-bg-farm { background-image: radial-gradient(ellipse 90% 55% at 50% 20%, rgba(56,189,248,0.12) 0%, transparent 50%), radial-gradient(ellipse 70% 45% at 80% 90%, rgba(74,222,128,0.1) 0%, transparent 45%); }
     @keyframes star-twinkle { 0%,100%{opacity:0.3} 50%{opacity:0.9} }
@@ -644,59 +643,6 @@
     .cr-card-lg .cr-card-name { font-size: 0.72rem; }
     .lifted-card .cr-card-frame { transform: scale(1.05); }
     .coop-card { border-left: 3px solid var(--green); }
-    .casino-scene {
-      position: relative; border-radius: 1rem; overflow: hidden;
-      background: radial-gradient(ellipse 120% 80% at 50% 0%, rgba(20,90,30,0.35), rgba(8,20,8,0.95) 50%, rgba(12,1,26,0.98));
-      border: 1px solid rgba(57,255,20,0.25);
-      box-shadow: inset 0 0 60px rgba(0,0,0,0.6), 0 0 40px rgba(57,255,20,0.08);
-    }
-    .casino-scene::before {
-      content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.15;
-      background: repeating-conic-gradient(rgba(57,255,20,0.4) 0 10deg, transparent 10deg 20deg);
-    }
-    .casino-table { position: relative; z-index: 1; background: transparent; border: none; }
-    .bet-picker { position: relative; z-index: 1; }
-    .bet-picker-label { font-family: var(--font-mono); font-size: 0.5rem; letter-spacing: 0.2em; color: var(--muted); text-align: center; margin-bottom: 0.5rem; }
-    .bet-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center; }
-    .bet-chip {
-      font-family: var(--font-mono); font-size: 0.48rem; padding: 0.35rem 0.5rem; border-radius: 9999px;
-      border: 2px solid rgba(168,85,247,0.5); background: radial-gradient(circle at 30% 30%, rgba(168,85,247,0.5), rgba(31,0,51,0.95));
-      color: var(--text); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12);
-    }
-    .bet-chip:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--green); }
-    .bet-chip.active { border-color: var(--green); box-shadow: 0 0 14px rgba(57,255,20,0.5); color: var(--green); }
-    .bet-chip-max { border-color: rgba(236,72,153,0.5); }
-    .bet-chip:disabled { opacity: 0.35; cursor: not-allowed; }
-    .playing-hand { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center; min-height: 4.5rem; padding: 0.25rem 0; }
-    .playing-card {
-      width: 2.75rem; height: 3.85rem; border-radius: 0.35rem; position: relative;
-      background: linear-gradient(160deg, #fff 0%, #f0f0f5 100%);
-      border: 1px solid rgba(0,0,0,0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.45);
-      color: #1a1a2e; font-family: Georgia, serif; flex-shrink: 0;
-      animation: card-deal 0.35s ease-out backwards;
-    }
-    .playing-card-red { color: #c41e3a; }
-    .playing-card-back {
-      background: linear-gradient(135deg, #1a0040, #3D0066); border-color: rgba(168,85,247,0.6); overflow: hidden;
-    }
-    .playing-card-pattern {
-      position: absolute; inset: 4px; border-radius: 0.25rem;
-      background: repeating-linear-gradient(45deg, rgba(168,85,247,0.35) 0 4px, transparent 4px 8px);
-      border: 1px solid rgba(57,255,20,0.25);
-    }
-    .playing-card-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-    .playing-card-corner.tl { top: 3px; left: 4px; }
-    .playing-card-corner.br { bottom: 3px; right: 4px; transform: rotate(180deg); }
-    .pc-rank { font-size: 0.55rem; font-weight: 700; }
-    .pc-suit { font-size: 0.5rem; }
-    .playing-card-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
-    .bj-zone { text-align: center; }
-    .bj-label { font-family: var(--font-mono); font-size: 0.5rem; letter-spacing: 0.15em; margin-bottom: 0.35rem; }
-    .bj-result { font-family: var(--font-display); font-size: 0.75rem; letter-spacing: 0.1em; }
-    @keyframes card-deal { from { opacity: 0; transform: translateY(-12px) rotate(-8deg); } to { opacity: 1; transform: none; } }
-    .slot-reels { padding: 0.75rem; border-radius: 0.75rem; background: rgba(0,0,0,0.45); border: 1px solid rgba(57,255,20,0.25); }
-    .slot-machine { max-width: 20rem; }
     .screen-shake { animation: screen-shake 0.4s ease; }
     @keyframes screen-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
     #hud-xp-strip {
@@ -811,11 +757,6 @@
     #bottom-dock { gap: 0.15rem; }
     #bottom-dock .nav-btn { padding: 0.3rem 0.35rem; font-size: 0.42rem; }
     #bottom-dock .nav-btn svg { width: 1.25rem; height: 1.25rem; }
-    .casino-toast {
-      position: fixed; top: 5rem; left: 50%; transform: translateX(-50%); z-index: 9200;
-      padding: 0.5rem 1rem; border-radius: 0.5rem; background: rgba(236,72,153,0.9);
-      font-family: var(--font-mono); font-size: 0.65rem; pointer-events: none;
-    }
     .strain-bud-img { display: inline-block; vertical-align: middle; }
     #overlay-strain-picker { z-index: 8100; }
     .strain-picker-panel { max-width: 26rem; max-height: 92vh; display: flex; flex-direction: column; }
@@ -935,9 +876,8 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
     <div id="overlay-aux"></div>
-    <div id="overlay-casino" class="overlay"><button type="button" class="overlay-backdrop" data-action="casino-close"></button><div class="overlay-panel p-3" id="casino-panel" style="max-height:85vh;overflow-y:auto"></div></div>
   </div>
-  <script src="catalog.js?v=25"></script>
-  <script src="game.js?v=25"></script>
+  <script src="catalog.js?v=27"></script>
+  <script src="game.js?v=27"></script>
 </body>
 </html>

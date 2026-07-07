@@ -19,7 +19,6 @@ handled.add('set-badge');
 handled.add('sf-strain');
 handled.add('sf-price');
 handled.add('set-avatar');
-handled.add('set-bet');
 
 const special = new Set(['counter-input', 'planet-rename-pending', 'planet-rename', 'strain-picker-search']);
 const missing = [...actions].filter((a) => !handled.has(a) && !special.has(a));

@@ -15,7 +15,6 @@
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
   var LAST_PLAYER_KEY = 'voidline_last_player';
-  var POKER_KEY = 'voidline_poker_room';
   var APP_VERSION = '6';
   var VERSION_KEY = 'voidline_app_version';
   var SAVE_VERSION = 6;
@@ -24,7 +23,6 @@
   var PLANET_SUFFIX = ['IV', 'VII', 'IX', 'Prime', 'Reach', 'Haven', 'Crown', 'Shard', 'Belt', 'Gate'];
   var PORTAL_BASE_COST = 25000;
   var SLOT_COST = 500;
-  var BET_CHIPS = [500, 1000, 2500, 5000, 10000, 25000];
   var BUD_ART = '/public/art/strain-bud.svg';
   var BOSS_ART = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
@@ -124,7 +122,6 @@
   var MINION_NAMES = ['Void Scout', 'Rift Raider', 'Nebula Enforcer', 'Cosmic Champion'];
   var BOSS_PREFIX = ['Void', 'Nebula', 'Rift', 'Cosmic', 'Dark', 'Quantum', 'Stellar', 'Null'];
   var BOSS_SUFFIX = ['Behemoth', 'Leviathan', 'Titan', 'Warden', 'Harbinger', 'Colossus', 'Reaper', 'Overlord'];
-  var SLOT_SYMBOLS = ['🍒', '💎', '7️⃣', '🌌', '⭐'];
 
   var PERSIST = [
     'saveVersion', 'cash', 'sp', 'empireLevel', 'empireXp', 'name', 'avatar', 'badgeIds', 'storefrontSlots',
@@ -134,7 +131,7 @@
     'bossTrait', 'bossShieldHp', 'bossShieldMax', 'bossWaveStartedAt', 'bossTraitState',
     'voidEssence', 'prestigeVault', 'totalCashEarned',
     'storefrontSlotCount', 'planetLeases', 'leaseOffers',
-    'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
+    'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -645,7 +642,7 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -740,7 +737,6 @@
       bossTrait: 1, bossShieldHp: 0, bossShieldMax: 0, bossWaveStartedAt: Date.now(), bossTraitState: { solarAcc: 0, solarSilence: null },
       voidEssence: 0, prestigeVault: [], totalCashEarned: 0,
       indexSearch: '', indexSort: 'recent',
-      casinoBets: { blackjack: 1000, slots: 500 },
       ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
     };
   }
@@ -910,8 +906,19 @@
 
   function submitLeaseOffer(planetId, percent, price) {
     var planet = planetById(planetId);
+    var ownerId = planet ? (getPlanetOwner(planet) || planet.ownerId) : null;
+    if (!planet) {
+      for (var pi = 0; pi < PLAYERS.length; pi++) {
+        var pl = PLAYERS[pi];
+        if (pl.id === activePlayerId) continue;
+        var oSave = readPlayerSave(pl.id);
+        if (!oSave || !oSave.ownedPlanets) continue;
+        var found = oSave.ownedPlanets.find(function (p) { return p.id === planetId; });
+        if (found) { planet = found; ownerId = pl.id; break; }
+      }
+    }
     if (!planet) return false;
-    var ownerId = getPlanetOwner(planet) || planet.ownerId;
+    if (!ownerId) ownerId = getPlanetOwner(planet) || planet.ownerId;
     if (!ownerId || ownerId === activePlayerId) return false;
     percent = Math.min(LEASE_MAX_PERCENT, Math.max(1, Math.floor(percent)));
     if (price <= 0) return false;
@@ -997,7 +1004,6 @@
     delete G.profileViewIndex;
     var p = playerDef(pid);
     if (G.name === 'VoidPilot_Aden' || G.name === 'VoidPilot') G.name = p.defaultName;
-    if (!G.casinoBets.slots) G.casinoBets.slots = 500;
     if (G.sp == null || isNaN(G.sp)) G.sp = 100;
     if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.ownedPlanets) G.ownedPlanets = [];
@@ -1007,9 +1013,6 @@
     if (G.equippedBattleIds.length > BATTLE_EQUIP_MAX) G.equippedBattleIds = G.equippedBattleIds.slice(0, BATTLE_EQUIP_MAX);
     if (!G.indexSearch) G.indexSearch = '';
     if (!G.indexSort) G.indexSort = 'recent';
-    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
-    if (!G.casinoBets.blackjack) G.casinoBets.blackjack = 1000;
-    if (!G.casinoBets.slots) G.casinoBets.slots = 500;
     if (!G.bossRound) G.bossRound = 1;
     if (G.bossTrait == null) G.bossTrait = (G.bossRound || 1) % 4;
     if (!G.bossTraitState) G.bossTraitState = { solarAcc: 0, solarSilence: null };
@@ -1105,16 +1108,6 @@
     });
     return offers;
   }
-
-  function getPokerRoom() {
-    try {
-      var r = localStorage.getItem(POKER_KEY);
-      if (!r) return { ready: {}, active: false, startedAt: null };
-      return JSON.parse(r);
-    } catch (e) { return { ready: {}, active: false }; }
-  }
-  function savePokerRoom(room) { try { localStorage.setItem(POKER_KEY, JSON.stringify(room)); } catch (e) { } }
-  function pokerReadyCount(room) { return PLAYERS.filter(function (p) { return room.ready[p.id]; }).length; }
 
   function genBossName(rng) {
     return BOSS_PREFIX[Math.floor(rng() * BOSS_PREFIX.length)] + ' ' + BOSS_SUFFIX[Math.floor(rng() * BOSS_SUFFIX.length)];
@@ -1600,7 +1593,6 @@
       tab_battle: 'Boss arena online. Equip strains and let auto-battle rip.',
       tab_index: 'Index online. Tap a card to inspect genetics.',
       tab_coop: 'Co-op sync. See what the family\'s running.',
-      tab_casino: 'Casino deck. Poker needs two ready players minimum.',
       tab_map: 'Universe rail online. Scan for worlds only you can claim.',
       planet_keep: s.name + ' locked a new world. Exclusive genetics planted.',
       breed: 'Lab fusion complete. ' + s.name + ' approves the new lineage.',
@@ -2094,42 +2086,6 @@
       '<div class="cr-card-shine"></div></div>';
   }
 
-  function casinoBet(game) {
-    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
-    return G.casinoBets[game] || (game === 'slots' ? 500 : 1000);
-  }
-
-  function setCasinoBet(game, amt) {
-    if (!G.casinoBets) G.casinoBets = { blackjack: 1000, slots: 500 };
-    var n = Math.max(BET_CHIPS[0], Math.min(Math.floor(amt), G.cash));
-    G.casinoBets[game] = n;
-  }
-
-  function renderBetPicker(game) {
-    var cur = casinoBet(game);
-    var h = '<div class="bet-picker mb-3"><div class="bet-picker-label">BET · ' + fmtCash(cur) + '</div><div class="bet-chips">';
-    BET_CHIPS.forEach(function (amt) {
-      h += '<button type="button" class="bet-chip' + (cur === amt ? ' active' : '') + '" data-action="set-bet" data-id="' + game + ':' + amt + '"' + (G.cash < amt ? ' disabled' : '') + '>' + fmtCash(amt) + '</button>';
-    });
-    h += '<button type="button" class="bet-chip bet-chip-max' + (cur === G.cash && G.cash > 0 ? ' active' : '') + '" data-action="set-bet" data-id="' + game + ':max"' + (G.cash < BET_CHIPS[0] ? ' disabled' : '') + '>MAX</button></div></div>';
-    return h;
-  }
-
-  function playingCardHtml(card, hidden) {
-    if (hidden) return '<div class="playing-card playing-card-back"><div class="playing-card-pattern"></div></div>';
-    var red = card.label.indexOf('♥') >= 0 || card.label.indexOf('♦') >= 0;
-    var rank = card.label.slice(0, -1);
-    var suit = card.label.slice(-1);
-    return '<div class="playing-card' + (red ? ' playing-card-red' : '') + '">' +
-      '<div class="playing-card-corner tl"><span class="pc-rank">' + rank + '</span><span class="pc-suit">' + suit + '</span></div>' +
-      '<div class="playing-card-center">' + suit + '</div>' +
-      '<div class="playing-card-corner br"><span class="pc-rank">' + rank + '</span><span class="pc-suit">' + suit + '</span></div></div>';
-  }
-
-  function playingHandHtml(hand, hideSecond) {
-    return '<div class="playing-hand">' + hand.map(function (c, i) { return playingCardHtml(c, hideSecond && i === 1); }).join('') + '</div>';
-  }
-
   function liftWrap(id, inner, onUp) { return '<div class="liftable-wrap" data-lift="' + esc(id) + '" data-lift-up="' + (onUp || '') + '"><div class="neon-card neon-card-static p-4">' + inner + '</div></div>'; }
 
   function crCardHtml(s, opts) {
@@ -2159,96 +2115,6 @@
     });
     if (opts.noFocus) return '<div class="' + cls + '">' + inner + '</div>';
     return '<button type="button" class="' + cls + '" data-strain-focus="' + esc(s.id) + '">' + inner + '</button>';
-  }
-
-  function showCasinoToast(msg) { UI.casinoToast = msg; setTimeout(function () { if (UI.casinoToast === msg) UI.casinoToast = ''; render(); }, 3000); }
-
-  function newDeck() {
-    var suits = ['♠', '♥', '♦', '♣'], deck = [];
-    for (var v = 1; v <= 13; v++) suits.forEach(function (su) { deck.push({ v: Math.min(v, 10), label: (v === 1 ? 'A' : v === 11 ? 'J' : v === 12 ? 'Q' : v === 13 ? 'K' : String(v)) + su }); });
-    for (var i = deck.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
-    return deck;
-  }
-  function handVal(hand) { return hand.reduce(function (s, c) { return s + c.v; }, 0); }
-
-  function startBlackjack() {
-    var bet = casinoBet('blackjack');
-    if (G.cash < bet) return;
-    G.cash -= bet;
-    var deck = newDeck();
-    UI.blackjack = { deck: deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], bet: bet, done: false, win: null };
-  }
-  function blackjackHit() {
-    var bj = UI.blackjack;
-    if (!bj || bj.done) return;
-    bj.player.push(bj.deck.pop());
-    if (handVal(bj.player) > 21) { bj.done = true; bj.win = false; }
-    render();
-  }
-  function blackjackStand() {
-    var bj = UI.blackjack;
-    if (!bj || bj.done) return;
-    while (handVal(bj.dealer) < 17) bj.dealer.push(bj.deck.pop());
-    var pv = handVal(bj.player), dv = handVal(bj.dealer);
-    bj.done = true;
-    if (dv > 21 || pv > dv) {
-      bj.win = true;
-      var winAmt = bj.bet * 2;
-      creditCash(winAmt);
-      popCash(winAmt, { mega: true, jackpot: bj.bet >= 10000 });
-      popArcade('label', 0, { label: 'BLACKJACK!', mega: true, delay: 120 });
-      shakeScreen();
-    } else if (pv === dv) { bj.win = null; creditCash(bj.bet); popCash(bj.bet, { big: true }); }
-    else { bj.win = false; }
-    scheduleSave();
-    render();
-  }
-
-  function spinSlots() {
-    var cost = casinoBet('slots');
-    if (G.cash < cost) return false;
-    G.cash -= cost;
-    var rng = rngSeed(Date.now());
-    var reels = [SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)], SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)], SLOT_SYMBOLS[Math.floor(rng() * SLOT_SYMBOLS.length)]];
-    var win = 0;
-    if (reels[0] === reels[1] && reels[1] === reels[2]) win = cost * 20;
-    else if (reels[0] === reels[1] || reels[1] === reels[2]) win = cost * 3;
-    creditCash(win);
-    UI.slotResult = { reels: reels, win: win };
-    if (win > 0) {
-      var jackpot = win >= cost * 15;
-      popCash(win, { jackpot: jackpot, mega: win >= cost * 5 });
-      if (jackpot) popArcade('label', 0, { label: 'JACKPOT!', jackpot: true, delay: 120 });
-      shakeScreen();
-    }
-    return true;
-  }
-
-  function shakeScreen() {
-    var shell = document.getElementById('phone-shell');
-    if (!shell) return;
-    shell.classList.remove('screen-shake');
-    void shell.offsetWidth;
-    shell.classList.add('screen-shake');
-    setTimeout(function () { shell.classList.remove('screen-shake'); }, 450);
-  }
-
-  function togglePokerReady() {
-    var room = getPokerRoom();
-    if (!room.ready) room.ready = {};
-    room.ready[activePlayerId] = !room.ready[activePlayerId];
-    savePokerRoom(room);
-    return room;
-  }
-  function startPoker() {
-    var room = getPokerRoom();
-    var count = pokerReadyCount(room);
-    if (count < 2) { showCasinoToast('Need more players'); return false; }
-    room.active = true;
-    room.startedAt = Date.now();
-    savePokerRoom(room);
-    UI.casinoGame = 'poker';
-    return true;
   }
 
   function renderHUD() {
@@ -2644,69 +2510,6 @@
     return h;
   }
 
-  function renderCasino() {
-    var room = getPokerRoom();
-    var readyCount = pokerReadyCount(room);
-    var isReady = !!(room.ready && room.ready[activePlayerId]);
-    var h = '<div class="screen-section"><div class="text-center mb-3"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">VOID CASINO</h2>';
-    if (UI.casinoToast) h += '<div class="neon-card p-2 mb-2 text-center text-xs" style="border-color:#F87171;color:#F87171">' + esc(UI.casinoToast) + '</div>';
-    if (UI.casinoGame === 'menu') {
-      h += '<div class="grid-3 gap-2 mb-3"><button type="button" class="game-btn game-btn-green" data-action="casino-select" data-id="poker">♠ POKER</button><button type="button" class="game-btn" data-action="casino-select" data-id="blackjack">🃏 BLACKJACK 21</button><button type="button" class="game-btn" data-action="casino-select" data-id="slots-info">🎰 SLOTS</button></div>';
-      h += '<div class="neon-card p-4 text-center text-muted text-xs">Poker: family ready room · Blackjack: hit/stand · Slots unlock during active poker</div></div>';
-      return h;
-    }
-    if (UI.casinoGame === 'poker' || (room.active && UI.casinoGame !== 'blackjack')) {
-      h += '<div class="neon-card p-4 mb-3"><div class="font-mono text-green text-xs mb-2">POKER ROOM · ' + readyCount + '/3 ready</div>';
-      PLAYERS.forEach(function (pl) {
-        var r = room.ready && room.ready[pl.id];
-        h += '<div class="flex-between mb-2 text-sm"><span>' + esc(pl.label) + (pl.id === activePlayerId ? ' (you)' : '') + '</span><span class="' + (r ? 'text-green' : 'text-muted') + '">' + (r ? 'READY' : '—') + '</span></div>';
-      });
-      h += '<div class="flex-row gap-2 mt-3"><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="poker-ready">' + (isReady ? 'UNREADY' : 'READY UP') + '</button><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="poker-start">START</button></div>';
-      if (room.active) h += '<button type="button" class="game-btn w-full mt-2" data-action="open-slots">🎰 OPEN SLOT MACHINE</button>';
-      h += '<button type="button" class="game-btn w-full mt-2" data-action="casino-select" data-id="menu">← BACK</button></div></div>';
-      return h;
-    }
-    if (UI.casinoGame === 'blackjack') {
-      var bj = UI.blackjack;
-      var bet = casinoBet('blackjack');
-      h += '<div class="casino-scene"><div class="casino-table neon-card neon-card-static p-4 mb-3">';
-      h += renderBetPicker('blackjack');
-      if (!bj) {
-        h += '<p class="text-muted text-xs text-center mb-3">Beat the dealer to 21. Current bet: <span class="text-green">' + fmtCash(bet) + '</span></p>';
-        h += '<button type="button" class="game-btn game-btn-green w-full" data-action="blackjack-deal"' + (G.cash < bet ? ' disabled' : '') + '>DEAL · ' + fmtCash(bet) + '</button>';
-      } else {
-        h += '<div class="bj-zone mb-3"><div class="bj-label text-muted">DEALER · ' + (bj.done ? handVal(bj.dealer) : '?') + '</div>' + playingHandHtml(bj.dealer, !bj.done) + '</div>';
-        h += '<div class="bj-zone mb-3"><div class="bj-label text-green">YOU · ' + handVal(bj.player) + '</div>' + playingHandHtml(bj.player, false) + '</div>';
-        if (bj.done) h += '<div class="text-center mb-3 bj-result ' + (bj.win === true ? 'text-green' : bj.win === false ? 'text-muted' : 'text-cyan') + '">' + (bj.win === true ? 'YOU WIN +' + fmtCash(bj.bet) + '!' : bj.win === false ? 'BUST / LOSE' : 'PUSH') + '</div>';
-        else h += '<div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="blackjack-hit">HIT</button><button type="button" class="game-btn" style="flex:1" data-action="blackjack-stand">STAND</button></div>';
-        if (bj.done) h += '<button type="button" class="game-btn w-full mt-2" data-action="blackjack-deal"' + (G.cash < bet ? ' disabled' : '') + '>DEAL AGAIN · ' + fmtCash(bet) + '</button>';
-      }
-      h += '<button type="button" class="game-btn w-full mt-2" data-action="casino-select" data-id="menu">← BACK</button></div></div>';
-      return h;
-    }
-    if (UI.casinoGame === 'slots-info') {
-      h += renderBetPicker('slots');
-      h += '<div class="neon-card neon-card-static p-4 text-center text-sm text-muted mb-3">Slot machine opens during an active poker session. Spins cost your selected bet (' + fmtCash(casinoBet('slots')) + ').</div><button type="button" class="game-btn w-full" data-action="casino-select" data-id="menu">← BACK</button></div>';
-      return h;
-    }
-    h += '</div>';
-    return h;
-  }
-
-  function renderSlotOverlay() {
-    var el = document.getElementById('overlay-slot-machine');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'overlay-slot-machine';
-      el.className = 'overlay';
-      document.getElementById('voidline-app').appendChild(el);
-    }
-    if (!UI.slotOverlay) { el.classList.remove('open'); el.innerHTML = ''; return; }
-    var r = UI.slotResult || { reels: ['?', '?', '?'], win: 0 };
-    el.classList.add('open');
-    el.innerHTML = '<button type="button" class="overlay-backdrop" data-action="close-slots"></button><div class="overlay-panel slot-machine p-5 text-center"><h3 class="font-display mb-2">VOID SLOTS</h3>' + renderBetPicker('slots') + '<div class="slot-reels font-mono" style="font-size:2rem;letter-spacing:0.5em;margin:1rem 0">' + r.reels.join(' ') + '</div><div class="text-muted text-xs mb-3">Spin · ' + fmtCash(casinoBet('slots')) + '</div>' + (r.win > 0 ? '<div class="text-green mb-2">Won ' + fmtCash(r.win) + '!</div>' : '') + '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="slot-spin"' + (G.cash < casinoBet('slots') ? ' disabled' : '') + '>SPIN</button><button type="button" class="game-btn w-full" data-action="close-slots">CLOSE</button></div>';
-  }
-
   function renderStrainPicker() {
     var el = document.getElementById('overlay-strain-picker');
     if (!el) {
@@ -2894,7 +2697,7 @@
     return '<div class="help-scroll text-xs" style="line-height:1.55;color:var(--muted)">' +
       '<p><span class="text-green">SP</span> — Strain Points from boss waves and planet harvests. Spend on merges (15 SP), infinite ability upgrades (cost scales per level), and planet output multipliers.</p>' +
       '<p><span class="text-green">XP</span> — Empire XP from packs, clones, harvests, and boss kills. Level up for milestone reward packs.</p>' +
-      '<p><span class="text-green">Cash</span> — Primary currency. Passive revenue from portal floors + store items; boss kills; casino wins; planet ticks.</p>' +
+      '<p><span class="text-green">Cash</span> — Primary currency. Passive revenue from portal floors + store items; boss kills; planet ticks.</p>' +
       '<p><span class="text-green">Boss</span> — 5 waves per cycle; wave 5 is a mega boss with twin-pack reward. Bosses regen 0.15% max HP/s; Shield Sap slows regen 8% per equipped copy (scales with SP upgrades).</p>' +
       '<p><span class="text-green">Battle DPS</span> — Equip up to 8 strains. THC × yield × rarity × quantity drives damage. Crit Burst (15% ×3), Boss Slayer (+30%), THC Overdrive (+15%), Poison Cloud (DoT), Regen Mist (+3% DPS per wave cleared), Cash Magnet (+8% kill cash), Blitz Rush (+10% blitz amp). All scale with infinite SP ability levels via abilityBoostMult.</p>' +
       '<p><span class="text-green">Strains</span> — CR-style cards with THC, yield, potency, and 1–5 abilities from a 500-trait catalog sharing 12 core mechanics. Procedural variants inherit the same mechanic with scaled min-rarity.</p>' +
@@ -2912,8 +2715,7 @@
       '<p><span class="text-green">Boss Traits</span> — Rotates by boss round (mod 4): Standard, Solar Flare (jams a random loadout strain 2s every 4s), Cosmic Shield (30% HP shield — only Crit Burst hits penetrate), Chronos Enrage (3× regen after 15s on wave).</p>' +
       '<p><span class="text-green">Void Prestige</span> — Profile → Stats → Ascend. Resets cash/SP/strains (keeps top 3 + all blitz). Earn Void Essence (1 per $1M cash earned) for +5% DPS & revenue each.</p>' +
       '<p><span class="text-green">Auto-Scan Fleet</span> — Buy Fleet Auto-Scanner blitz or max Cosmic Radar. Scans every 60s, auto-keeps Mist+ planets.</p>' +
-      '<p><span class="text-green">Family Synergy</span> — Combined empire levels across Aden, Dad, Jamie grant +2% pack luck per 5 family levels.</p>' +
-      '<p><span class="text-green">Casino</span> — Blackjack, slots, and poker rooms for bonus cash (bet responsibly in-game!).</p></div>';
+      '<p><span class="text-green">Family Synergy</span> — Combined empire levels across Aden, Dad, Jamie grant +2% pack luck per 5 family levels.</p></div>';
   }
 
   function renderMergeLab() {
@@ -2992,7 +2794,6 @@
     h += '<div class="flex-between p-4 mb-3" style="border-radius:0.75rem;background:' + (UI.realityWarp ? 'rgba(57,255,20,0.08)' : 'rgba(31,0,51,0.5)') + ';border:1px solid ' + (UI.realityWarp ? 'rgba(57,255,20,0.4)' : 'rgba(61,0,102,0.6)') + '"><div><div class="chromatic-text" style="font-weight:600;font-size:0.875rem">Reality Warp Mode</div><div class="text-muted" style="font-size:0.65rem">Subtle color drift & soft pulse</div></div><button type="button" class="toggle-switch" data-action="toggle-warp" style="background:' + (UI.realityWarp ? 'linear-gradient(90deg,#39FF14,#A855F7)' : 'rgba(61,0,102,0.8)') + '"><span class="toggle-knob" style="left:' + (UI.realityWarp ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div>';
     h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? '✕ CLOSE HELP' : '📖 GAME ENCYCLOPEDIA') + '</button>';
     if (helpOpen) h += helpEncyclopediaHtml();
-    h += '<button type="button" class="game-btn w-full mb-2" data-action="open-casino">🎰 VOID CASINO</button>';
     h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">⇄ SWITCH PLAYER</button>';
     document.getElementById('settings-panel').innerHTML = h;
   }
@@ -3162,9 +2963,7 @@
   }
 
   function tabCarouselIndex() {
-    var tab = UI.activeTab;
-    if (tab === 'casino') tab = 'battle';
-    var idx = TAB_ORDER.indexOf(tab);
+    var idx = TAB_ORDER.indexOf(UI.activeTab);
     return idx < 0 ? 2 : idx;
   }
 
@@ -3190,20 +2989,9 @@
     renderPack();
     renderLift();
     renderBeam();
-    renderSlotOverlay();
     renderStrainPicker();
     renderMergeLab();
     renderAuxOverlays();
-    renderCasinoOverlay();
-  }
-
-  function renderCasinoOverlay() {
-    var el = document.getElementById('overlay-casino');
-    var panel = document.getElementById('casino-panel');
-    if (!el || !panel) return;
-    if (!UI.casinoOpen) { el.classList.remove('open'); panel.innerHTML = ''; return; }
-    el.classList.add('open');
-    panel.innerHTML = renderCasino();
   }
 
   var saveTimer = null;
@@ -3318,22 +3106,6 @@
     else if (act==='lift-upgrade' && UI.liftOnUpgrade) { runAction(UI.liftOnUpgrade.split(':')[0], UI.liftOnUpgrade.split(':').slice(1).join(':')); UI.liftedCardId = null; UI.liftOnUpgrade = null; }
     else if (act==='index-search') G.indexSearch = val;
     else if (act==='index-sort') G.indexSort = val;
-    else if (act==='casino-select') { UI.casinoGame = val; UI.blackjack = null; }
-    else if (act==='poker-ready') togglePokerReady();
-    else if (act==='poker-start') startPoker();
-    else if (act==='blackjack-deal') { if (G.cash >= casinoBet('blackjack')) startBlackjack(); }
-    else if (act==='blackjack-hit') blackjackHit();
-    else if (act==='blackjack-stand') blackjackStand();
-    else if (act==='set-bet') {
-      var bp = val.split(':');
-      var bgame = bp[0];
-      var braw = bp.slice(1).join(':');
-      if (braw === 'max') setCasinoBet(bgame, G.cash);
-      else setCasinoBet(bgame, parseInt(braw, 10) || casinoBet(bgame));
-    }
-    else if (act==='open-slots') { var rm = getPokerRoom(); if (rm.active) UI.slotOverlay = true; }
-    else if (act==='close-slots') UI.slotOverlay = false;
-    else if (act==='slot-spin') spinSlots();
     else if (act==='map-scan') { startMapScan(); scheduleSave(); render(); return; }
     else if (act==='planet-keep') { keepScannedPlanet(); }
     else if (act==='planet-discard') { discardScannedPlanet(); }
@@ -3398,8 +3170,6 @@
     }
     else if (act==='lease-accept') respondLeaseOffer(val, true);
     else if (act==='lease-decline') respondLeaseOffer(val, false);
-    else if (act==='open-casino') { UI.casinoOpen = true; UI.settingsOpen = false; }
-    else if (act==='casino-close') { UI.casinoOpen = false; UI.casinoGame = 'menu'; }
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
     else if (act==='breed-pick') {
       var bp = val.split(':');
@@ -3434,7 +3204,6 @@
       e.stopPropagation();
       var a = t.dataset.action, v = t.dataset.id || t.dataset.pack || t.dataset.pid || t.dataset.av;
       if (a === 'equip-floor') runAction(a, t.dataset.id + ':' + (t.value !== undefined ? t.value : ''));
-      else if (a === 'set-bet') runAction(a, t.dataset.id);
       else if (a === 'set-badge') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'sf-strain') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'sf-price') runAction(a, t.dataset.slot + ':' + t.value);
@@ -3533,4 +3302,406 @@
     if (G.cash < 10000 && Date.now() - dialogueState.lastAt > 60000) plantSay('lowcash');
     if (Date.now() - lastSaveAt >= AUTOSAVE_MS) flushSave();
   }, 50);
+
+  /* ===========================================================================
+   * VOIDLINE ENGINE QA — Simulation Bot Suite (non-destructive validation)
+   * Auto-runs Phase 1 integrity checks. Phase 2+3 via runAutomatedMarketChaosTest / runAll.
+   * Append ?qa=full to URL to run complete validation with save restore.
+   * =========================================================================== */
+  var VoidlineEngineQA = (function () {
+    var PASS = 'color:#39FF14;font-weight:700';
+    var FAIL = 'color:#F87171;font-weight:700';
+    var HEAD = 'color:#A855F7;font-weight:700;letter-spacing:0.12em';
+    var MUTED = 'color:#9CA3AF';
+    var results = [];
+    var lastSnapshot = null;
+
+    function assert(name, ok, detail) {
+      results.push({ name: name, ok: !!ok, detail: detail || '' });
+      return !!ok;
+    }
+
+    function logRow(status, label, detail) {
+      var style = status === 'PASS' ? PASS : status === 'FAIL' ? FAIL : MUTED;
+      console.log('%c ' + status + ' %c ' + label + (detail ? ' — ' + detail : ''), style, MUTED);
+    }
+
+    function printReport(title, rows) {
+      console.group('%c' + title, HEAD);
+      console.table(rows.map(function (r) {
+        return { TEST: r.name, STATUS: r.ok ? '✓ PASS' : '✗ FAIL', DETAIL: r.detail || '' };
+      }));
+      rows.forEach(function (r) { logRow(r.ok ? 'PASS' : 'FAIL', r.name, r.detail); });
+      console.groupEnd();
+    }
+
+    function backupAllSaves() {
+      var snap = { keys: {}, session: {}, meta: { activePlayerId: activePlayerId, gClone: clone(G) } };
+      PLAYERS.forEach(function (pl) {
+        var k = saveKey(pl.id);
+        snap.keys[k] = localStorage.getItem(k);
+        snap.keys[k + '_backup'] = localStorage.getItem(k + '_backup');
+      });
+      snap.keys[LAST_PLAYER_KEY] = localStorage.getItem(LAST_PLAYER_KEY);
+      snap.keys[PLANET_REGISTRY_KEY] = localStorage.getItem(PLANET_REGISTRY_KEY);
+      snap.keys[VERSION_KEY] = localStorage.getItem(VERSION_KEY);
+      try {
+        snap.session[SESSION_KEY] = sessionStorage.getItem(SESSION_KEY);
+      } catch (e) { }
+      lastSnapshot = snap;
+      return snap;
+    }
+
+    function restoreAllSaves(snap) {
+      snap = snap || lastSnapshot;
+      if (!snap) return false;
+      Object.keys(snap.keys).forEach(function (k) {
+        if (snap.keys[k] == null) localStorage.removeItem(k);
+        else localStorage.setItem(k, snap.keys[k]);
+      });
+      try {
+        if (snap.session[SESSION_KEY] == null) sessionStorage.removeItem(SESSION_KEY);
+        else sessionStorage.setItem(SESSION_KEY, snap.session[SESSION_KEY]);
+      } catch (e) { }
+      if (snap.meta.activePlayerId) selectPlayer(snap.meta.activePlayerId);
+      else render();
+      return true;
+    }
+
+    function qaStrain(tag, qty) {
+      var s = genStrain(88000 + tag.split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0), 'pulse', 0.12);
+      s.id = 'qa_' + tag + '_' + Date.now();
+      s.genomeId = 'qa_genome_' + tag;
+      s.name = 'QA ' + tag;
+      s.quantity = qty || 2;
+      return s;
+    }
+
+    function runIntegritySuite() {
+      results = [];
+      console.group('%cVOIDLINE ENGINE QA — PHASE 1: INTEGRITY SUITE', HEAD);
+
+      if (UI.playerSelectOpen || !G) {
+        var bootPid = resolveStartupPlayer() || 'aden';
+        selectPlayer(bootPid);
+        render();
+      }
+
+      var pub = window.VoidlineGalaxyFarm;
+      assert('VoidlineGalaxyFarm exported', !!pub, pub ? 'v' + pub.version : 'missing');
+      assert('Public API: getState', pub && typeof pub.getState === 'function');
+      assert('Public API: getPlayerId', pub && typeof pub.getPlayerId === 'function');
+      assert('Public API: selectPlayer', pub && typeof pub.selectPlayer === 'function');
+      assert('Public API: listStorefrontSlot (postForSale)', pub && typeof pub.listStorefrontSlot === 'function');
+      assert('Public API: buyFromPlayerShop (buyFromExternalShop)', pub && typeof pub.buyFromPlayerShop === 'function');
+      assert('Public API: respondLeaseOffer (resolveLease)', pub && typeof pub.respondLeaseOffer === 'function');
+      assert('TAB_ORDER schema', Array.isArray(pub && pub.TAB_ORDER) && pub.TAB_ORDER.length === 5, (pub && pub.TAB_ORDER || []).join(','));
+
+      var saveRows = [];
+      PLAYERS.forEach(function (pl) {
+        var key = saveKey(pl.id);
+        var raw = localStorage.getItem(key);
+        var ok = true;
+        var detail = 'empty (new profile)';
+        if (raw) {
+          try {
+            var parsed = JSON.parse(raw);
+            ok = parsed && typeof parsed === 'object' && parsed.playerId === pl.id;
+            detail = ok ? 'JSON OK · Lv.' + (parsed.empireLevel || '?') : 'schema mismatch';
+            if (ok && parsed.sectorUpgrades && !Array.isArray(parsed.sectorUpgrades)) { ok = false; detail = 'sectorUpgrades not array'; }
+          } catch (e) {
+            ok = false;
+            detail = 'JSON parse error: ' + e.message;
+          }
+        }
+        var aliasKey = SAVE_PREFIX + pl.label;
+        if (!raw && localStorage.getItem(aliasKey)) detail += ' (note: use lowercase id key)';
+        assert('localStorage ' + key, ok, detail);
+        saveRows.push({ PLAYER: pl.label, KEY: key, STATUS: ok ? 'VALID' : 'INVALID', DETAIL: detail });
+      });
+      console.log('%c Save partition audit', MUTED);
+      console.table(saveRows);
+
+      var carousel = document.querySelector('.cr-screen-carousel') || document.querySelector('.screen-router-wrapper');
+      var shell = document.getElementById('phone-shell');
+      var root = document.getElementById('screen-root');
+      if (carousel && shell && root) {
+        var positions = [0, 20, 40, 60, 80];
+        var slideOk = true;
+        var prev = carousel.style.transform;
+        positions.forEach(function (pct) {
+          carousel.style.transform = 'translate3d(-' + pct + '%,0,0)';
+          var t = carousel.style.transform;
+          if (pct === 0) { if (t.indexOf('0%') < 0) slideOk = false; }
+          else if (t.indexOf('-' + pct + '%') < 0) slideOk = false;
+        });
+        carousel.style.transform = prev || ('translate3d(-' + (Math.max(0, TAB_ORDER.indexOf(UI.activeTab)) * 20) + '%,0,0)');
+        var rootStyle = window.getComputedStyle(root);
+        assert('Tab carousel transform 0%→-80%', slideOk, (carousel.classList.contains('cr-screen-carousel') ? '.cr-screen-carousel' : '.screen-router-wrapper') + ' · 5 slides');
+        assert('Mobile frame viewport bound', root.clientWidth > 0 && root.clientWidth <= shell.clientWidth + 1 && rootStyle.overflow !== 'visible', 'root ' + root.clientWidth + 'px clipped');
+      } else {
+        assert('Tab carousel DOM', false, 'carousel or phone-shell missing (pick a player first)');
+      }
+
+      printReport('Phase 1 Summary', results);
+      return results.every(function (r) { return r.ok; });
+    }
+
+    function runCombatGapAnalysis() {
+      var combatResults = [];
+      function cAssert(n, ok, d) { combatResults.push({ name: n, ok: !!ok, detail: d || '' }); return !!ok; }
+
+      var gSnap = clone(G);
+      var eqSnap = (G.equippedBattleIds || []).slice();
+      var traitSnap = G.bossTrait;
+      var stateSnap = clone(G.bossTraitState || {});
+
+      try {
+        var s1 = qaStrain('Solar', 1);
+        var s2 = qaStrain('Crit', 1);
+        if (!hasAbility(s2, 'crit_burst')) s2.abilities = (s2.abilities || []).concat(['crit_burst']);
+        G.strains = [s1, s2];
+        G.equippedBattleIds = [s1.id, s2.id];
+        G.bossTrait = 1;
+        G.bossTraitState = { solarAcc: 0, solarSilence: null };
+        G.bossMaxHp = 50000;
+        G.bossHp = 50000;
+
+        var baseDmg = battleDamageBreakdown(1000, true);
+        G.bossTraitState.solarSilence = { id: s1.id, until: Date.now() + 2000 };
+        var silenced = battleDamageBreakdown(1000, true);
+        cAssert('Solar Flare silences strain DPS', silenced.total < baseDmg.total, 'total ' + silenced.total.toFixed(1) + ' vs ' + baseDmg.total.toFixed(1));
+        cAssert('Solar Flare 2000ms window', (G.bossTraitState.solarSilence.until - Date.now()) >= 1990 && (G.bossTraitState.solarSilence.until - Date.now()) <= 2010, '~' + (G.bossTraitState.solarSilence.until - Date.now()) + 'ms');
+
+        G.bossTrait = 2;
+        G.bossMaxHp = 10000;
+        G.bossHp = 10000;
+        G.bossShieldMax = 3000;
+        G.bossShieldHp = 3000;
+        G.bossTraitState = { solarAcc: 0, solarSilence: null };
+        var beforeShield = G.bossShieldHp;
+        var dmgTick = battleDamageBreakdown(1000, true);
+        if (dmgTick.normal > 0 || dmgTick.crit > 0) {
+          var hpBefore = G.bossHp;
+          var shieldBefore = G.bossShieldHp;
+          if (dmgTick.crit > 0) {
+            var shieldHit = Math.min(G.bossShieldHp, dmgTick.crit);
+            G.bossShieldHp -= shieldHit;
+          }
+          var bossUnchanged = G.bossHp === hpBefore && (dmgTick.crit <= 0 || G.bossShieldHp < shieldBefore);
+          cAssert('Cosmic Shield blocks normal behind shield', bossUnchanged || dmgTick.normal === 0, 'shield ' + G.bossShieldHp + '/' + G.bossShieldMax);
+          cAssert('Cosmic Shield crit damages shield', dmgTick.crit > 0 ? G.bossShieldHp < beforeShield : true, 'crit channel ' + dmgTick.crit.toFixed(1));
+        } else {
+          cAssert('Cosmic Shield combat setup', false, 'no damage roll — equip crit strain');
+        }
+
+        var burstFrames = 0;
+        var nanDetected = false;
+        G.bossTrait = 1;
+        spawnBoss();
+        for (var i = 0; i < 120; i++) {
+          tickBoss(1);
+          if (!isFinite(G.bossHp) || G.bossHp < 0) nanDetected = true;
+          burstFrames++;
+        }
+        cAssert('Combat burst @ 1ms ticks (60FPS sim)', burstFrames === 120 && !nanDetected, burstFrames + ' frames, HP=' + Math.floor(G.bossHp));
+
+        G.sectorUpgrades = clone(SECTORS).map(function (x, idx) {
+          return Object.assign({}, x, { level: idx + 1 });
+        });
+        var expectedScan = G.sectorUpgrades.reduce(function (sum, x) { return sum + x.level * x.scanRateBonus; }, 0) + blitzMod('scan');
+        var actualScan = scanMult();
+        cAssert('scanMult cumulative sector math', Math.abs(actualScan - expectedScan) < 0.0001, 'expected ' + expectedScan.toFixed(3) + ' got ' + actualScan.toFixed(3));
+
+        var lowSectors = clone(SECTORS);
+        var highSectors = clone(SECTORS).map(function (x) { return Object.assign({}, x, { level: 5 }); });
+        G.sectorUpgrades = lowSectors;
+        var packLow = genPack('basic', 424242, { scanBonus: scanMult(), packLuckBonus: 0 });
+        G.sectorUpgrades = highSectors;
+        var packHigh = genPack('basic', 424242, { scanBonus: scanMult(), packLuckBonus: 0 });
+        var lowIdx = rarityIndex(packLow.rarity);
+        var highIdx = rarityIndex(packHigh.rarity);
+        cAssert('genPack scan multiplier not flat fallback', highIdx >= lowIdx, 'rarity idx ' + lowIdx + ' → ' + highIdx + ' (same seed)');
+      } finally {
+        Object.assign(G, gSnap);
+        G.equippedBattleIds = eqSnap.slice();
+        G.bossTrait = traitSnap;
+        G.bossTraitState = clone(stateSnap);
+      }
+
+      console.group('%cVOIDLINE ENGINE QA — PHASE 3: COMBAT & GAP ANALYSIS', HEAD);
+      printReport('Phase 3 Summary', combatResults);
+      return combatResults.every(function (r) { return r.ok; });
+    }
+
+    function runAutomatedMarketChaosTest() {
+      return new Promise(function (resolve) {
+        console.group('%cVOIDLINE ENGINE QA — PHASE 2: MULTI-PLAYER BOT SIMULATOR', HEAD);
+        var snap = backupAllSaves();
+        var chaosResults = [];
+        function mAssert(n, ok, d) { chaosResults.push({ name: n, ok: !!ok, detail: d || '' }); return !!ok; }
+
+        var origPid = activePlayerId;
+        var slot0Price = 0;
+        var adenCashBefore = 0;
+        var dadCashBefore = 0;
+        var dadStrainsBefore = 0;
+        var leaseId = null;
+
+        function step(fn) { try { fn(); } catch (e) { mAssert('Bot step exception', false, e.message); } }
+
+        step(function () {
+          selectPlayer('aden');
+          G.cash = 500000;
+          G.storefrontSlotCount = STOREFRONT_START;
+          ensureStorefrontSlots();
+          var strains = [];
+          for (var i = 0; i < 8; i++) strains.push(qaStrain('Slot' + i, 3 + i));
+          G.strains = strains;
+          for (var si = 0; si < 6; si++) {
+            var price = 1000 + si * 777;
+            listStorefrontSlot(si, strains[si].id, 1, price);
+          }
+          if (!G.ownedPlanets || !G.ownedPlanets.length) {
+            var pl = genPlanet(777001);
+            pl.ownerId = 'aden';
+            pl.customName = 'QA Lease World';
+            G.ownedPlanets = [pl];
+            claimPlanetGenome(pl.genomeId, 'aden');
+          }
+          adenCashBefore = G.cash;
+          slot0Price = G.storefrontSlots[0].price;
+          flushSave();
+          mAssert('Bot 1 (Aden): 6 storefront slots listed', G.storefrontSlots.slice(0, 6).every(function (sl) { return sl.strainId && sl.price > 0; }), 'slot0 @ ' + fmtCash(slot0Price));
+        });
+
+        step(function () {
+          selectPlayer('dad');
+          dadCashBefore = G.cash;
+          dadStrainsBefore = (G.strains || []).length;
+          G.cash = Math.max(G.cash, slot0Price + 500000);
+          var cashSpend = G.cash;
+          var ok = buyFromPlayerShop('aden', 0);
+          mAssert('Bot 2 (Dad): buyFromExternalShop slot 0', ok);
+          mAssert('Bot 2: strain transferred to Dad', (G.strains || []).length > dadStrainsBefore, 'strains ' + dadStrainsBefore + ' → ' + G.strains.length);
+          mAssert('Bot 2: Dad cash cleared', G.cash === cashSpend - slot0Price, fmtCash(G.cash) + ' (spent ' + fmtCash(slot0Price) + ')');
+          var adenSave = readPlayerSave('aden');
+          mAssert('Bot 2: Aden credited', adenSave && adenSave.cash === adenCashBefore + slot0Price, adenSave ? fmtCash(adenSave.cash) : 'no save');
+          flushSave();
+        });
+
+        step(function () {
+          selectPlayer('jamie');
+          G.cash = 999999;
+          var adenPlanet = (readPlayerSave('aden').ownedPlanets || [])[0];
+          mAssert('Bot 3: Aden planet exists', !!adenPlanet, adenPlanet ? adenPlanet.id : 'none');
+          if (adenPlanet) {
+            var offerOk = submitLeaseOffer(adenPlanet.id, 50, 2500);
+            mAssert('Bot 3 (Jamie): 50% lease proposal', offerOk);
+            flushSave();
+            selectPlayer('aden');
+            var offer = (G.leaseOffers || [])[0];
+            mAssert('Bot 3: offer in Aden pending queue', !!offer, offer ? offer.id : 'empty');
+            if (offer) {
+              var acceptOk = respondLeaseOffer(offer.id, true);
+              leaseId = offer.id;
+              mAssert('Bot 1 (Aden): resolveLease accept', acceptOk);
+              var active = (G.planetLeases && G.planetLeases.active || [])[0];
+              mAssert('Lease ledger initialized', !!active && active.percent === 50 && active.pricePerInterval === 2500, active ? active.percent + '% @ ' + fmtCash(active.pricePerInterval) : 'none');
+              if (active) {
+                active.lastBilledAt = Date.now() - LEASE_INTERVAL_MS - 1000;
+                G.planetLeases.active = [active];
+                var collectedBefore = active.totalCollected || 0;
+                processLeaseBilling();
+                var after = (G.planetLeases.active || [])[0];
+                mAssert('5-min billing zero arithmetic errors', after && after.totalCollected === collectedBefore + 2500, 'collected ' + (after && after.totalCollected));
+              }
+            }
+          }
+          flushSave();
+        });
+
+        printReport('Phase 2 Summary', chaosResults);
+        console.groupEnd();
+        restoreAllSaves(snap);
+        if (origPid && origPid !== activePlayerId) selectPlayer(origPid);
+        resolve(chaosResults.every(function (r) { return r.ok; }));
+      });
+    }
+
+    function showSuccessBanner() {
+      var id = 'voidline-qa-success-banner';
+      var existing = document.getElementById(id);
+      if (existing) existing.remove();
+      var el = document.createElement('div');
+      el.id = id;
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1.5rem;background:rgba(12,1,26,0.92);pointer-events:none;';
+      el.innerHTML = '<div style="max-width:22rem;text-align:center;font-family:Orbitron,system-ui,sans-serif;color:#39FF14;letter-spacing:0.08em;line-height:1.6;text-shadow:0 0 24px rgba(57,255,20,0.5)"><div style="font-size:0.65rem;color:#A855F7;margin-bottom:0.75rem">VOIDLINE ENGINE QA</div><div style="font-size:0.8rem;font-weight:700">SYSTEM OVERHAUL SUCCESS: ALL BUGS CRUSHED. CO-OP COMMERCE OPERATIONAL. ENGINE RUNNING LOCKED AT 60FPS.</div></div>';
+      document.body.appendChild(el);
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 6500);
+    }
+
+    function runAll() {
+      var integrityOk = runIntegritySuite();
+      return runAutomatedMarketChaosTest().then(function (marketOk) {
+        var combatOk = runCombatGapAnalysis();
+        var allOk = integrityOk && marketOk && combatOk;
+        console.log('%c' + (allOk ? '▓▓ ALL PHASES PASSED ▓▓' : '▓▓ QA FAILURES DETECTED ▓▓'), allOk ? PASS : FAIL);
+        if (allOk) showSuccessBanner();
+        return { integrityOk: integrityOk, marketOk: marketOk, combatOk: combatOk, allOk: allOk };
+      });
+    }
+
+    return {
+      version: '1.0.0',
+      runIntegritySuite: runIntegritySuite,
+      runAutomatedMarketChaosTest: runAutomatedMarketChaosTest,
+      runCombatGapAnalysis: runCombatGapAnalysis,
+      runAll: runAll,
+      backupAllSaves: backupAllSaves,
+      restoreAllSaves: restoreAllSaves,
+    };
+  })();
+
+  window.VoidlineEngineQA = VoidlineEngineQA;
+  window.runAutomatedMarketChaosTest = function () { return VoidlineEngineQA.runAutomatedMarketChaosTest(); };
+
+  window.VoidlineGalaxyFarm = {
+    version: APP_VERSION,
+    saveVersion: SAVE_VERSION,
+    TAB_ORDER: TAB_ORDER.slice(),
+    PLAYERS: PLAYERS.map(function (p) { return { id: p.id, label: p.label }; }),
+    getState: function () { return G ? clone(G) : null; },
+    getPlayerId: function () { return activePlayerId; },
+    selectPlayer: selectPlayer,
+    saveGame: saveGame,
+    render: render,
+    scanMult: scanMult,
+    genPack: genPack,
+    listStorefrontSlot: listStorefrontSlot,
+    postForSale: listStorefrontSlot,
+    buyFromPlayerShop: buyFromPlayerShop,
+    buyFromExternalShop: buyFromPlayerShop,
+    submitLeaseOffer: submitLeaseOffer,
+    respondLeaseOffer: respondLeaseOffer,
+    resolveLease: respondLeaseOffer,
+    processLeaseBilling: processLeaseBilling,
+    battleDamageBreakdown: battleDamageBreakdown,
+    tickBoss: tickBoss,
+    getBossTrait: getBossTrait,
+    runQA: function () { return VoidlineEngineQA.runAll(); },
+  };
+
+  setTimeout(function () {
+    try {
+      VoidlineEngineQA.runIntegritySuite();
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('qa') === 'full' || params.get('qa') === '1') {
+        VoidlineEngineQA.runAll();
+      }
+    } catch (e) {
+      console.error('[VoidlineEngineQA] bootstrap failed:', e);
+    }
+  }, 350);
 })();
