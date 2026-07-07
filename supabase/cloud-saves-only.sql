@@ -1,27 +1,6 @@
--- Run once in Supabase: SQL Editor → New query → Run
--- Safe to re-run (idempotent). Enable Email auth in Authentication → Providers before testing signup.
+-- Run this if schema.sql failed partway (game_rooms already exists).
+-- Safe to run multiple times.
 
--- Co-op rooms (service role via api/room only)
-create table if not exists game_rooms (
-  room_id text primary key,
-  state jsonb not null default '{}'::jsonb,
-  version integer not null default 1,
-  updated_at bigint not null default 0,
-  presence jsonb not null default '{}'::jsonb
-);
-
-create index if not exists game_rooms_updated_at_idx on game_rooms (updated_at desc);
-
-alter table game_rooms enable row level security;
-
-drop policy if exists "No public access" on game_rooms;
-create policy "No public access"
-  on game_rooms
-  for all
-  using (false)
-  with check (false);
-
--- Per-user cloud saves (one row per player slot: aden / dad / jamie)
 create table if not exists cloud_saves (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
