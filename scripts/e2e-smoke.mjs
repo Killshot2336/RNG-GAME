@@ -66,12 +66,13 @@ async function main() {
   await click(page, '[data-action="open-merge-lab"]', 'open merge lab');
   await click(page, '#overlay-merge-lab .profile-close[data-action="close-merge-lab"]', 'close merge lab');
 
-  // Profile stats + settings help
+  // Profile modifiers + settings help
   await click(page, '[data-action="open-profile"]', 'profile');
+  const modTab = page.locator('[data-action="profile-tab"][data-id="modifiers"]');
+  if (!(await modTab.count())) errors.push('missing modifiers profile tab');
+  await click(page, '[data-action="profile-tab"][data-id="stats"]', 'profile stats tab');
   const statsGrid = page.locator('.profile-stat-grid');
   if (!(await statsGrid.count())) errors.push('missing profile stats grid');
-  await click(page, '[data-action="profile-tab"][data-id="custom"]', 'profile customize tab');
-  await click(page, '[data-action="profile-tab"][data-id="stats"]', 'profile stats tab');
   await click(page, '[data-action="open-settings"]', 'settings');
   await click(page, '[data-action="toggle-help"]', 'open game encyclopedia');
   await click(page, '[data-action="toggle-help"]', 'close game encyclopedia');

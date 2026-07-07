@@ -1,6 +1,12 @@
 /* Voidline Galaxy Farm — monolith engine v5 */
 (function () {
   'use strict';
+  var CAT = window.VoidlineCatalog || {};
+  var ABILITIES = CAT.abilities || [];
+  var ABILITY_BY_ID = CAT.abilityById || {};
+  var BLITZ_CATALOG = CAT.blitz || [];
+  var BLITZ_BY_ID = CAT.blitzById || {};
+  var BLITZ_SHOP_SIZE = 10;
   var BLITZ_MS = 1800000, CLONE_MS = 60000, XP_LVL = 500;
   var SAVE_PREFIX = 'voidline_galaxy_farm_v2_';
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
@@ -63,20 +69,30 @@
   var BASE_WORDS = ['Dream', 'Kush', 'Haze', 'Skunk', 'Diesel', 'Cookies', 'Punch', 'Widow', 'Cheese', 'Glue', 'Runtz', 'Zkittlez', 'Gelato', 'Mimosa', 'Sherbet', 'Cake', 'OG', 'Breath', 'Berry', 'Lemon', 'Mint', 'Fuel', 'Storm'];
   var SUFFIX_WORDS = ['', ' OG', ' XL', ' #42', ' #69', ' #420', ' Reserve', ' Classic', ' Prime'];
 
-  var ABILITIES = [
-    { id: 'crit_burst', name: 'Crit Burst', desc: '15% chance to deal 3x boss damage' },
-    { id: 'yield_surge', name: 'Yield Surge', desc: '+20% passive yield' },
-    { id: 'thc_overdrive', name: 'THC Overdrive', desc: '+15% battle DPS' },
-    { id: 'shield_sap', name: 'Shield Sap', desc: 'Boss deals less damage over time' },
-    { id: 'poison_cloud', name: 'Poison Cloud', desc: 'DoT on boss each tick' },
-    { id: 'clone_echo', name: 'Clone Echo', desc: '-10% clone duration' },
-    { id: 'cash_magnet', name: 'Cash Magnet', desc: '+8% cash from bosses' },
-    { id: 'portal_sync', name: 'Portal Sync', desc: '+12% portal revenue' },
-    { id: 'blitz_rush', name: 'Blitz Rush', desc: '+10% blitz modifier stacking' },
-    { id: 'rift_luck', name: 'Rift Luck', desc: '+5% pack rarity luck' },
-    { id: 'boss_slayer', name: 'Boss Slayer', desc: '+30% boss DPS' },
-    { id: 'regen_mist', name: 'Regen Mist', desc: 'Slowly heals boss fight momentum' },
-  ];
+  var ABILITY_ICONS_LEGACY = {
+    crit_burst: '💥', yield_surge: '📈', thc_overdrive: '⚡', shield_sap: '🛡',
+    poison_cloud: '☠', clone_echo: '🧬', cash_magnet: '💰', portal_sync: '🌀',
+    blitz_rush: '🔥', rift_luck: '🎲', boss_slayer: '👹', regen_mist: '💨',
+  };
+
+  function abilityDef(aid) {
+    return ABILITY_BY_ID[aid] || { id: aid, name: String(aid), desc: 'Unknown genetic trait.', category: 'misc', mechanic: aid, icon: '✦', minRarity: 0 };
+  }
+
+  function abilityIcon(aid) {
+    var d = abilityDef(aid);
+    return d.icon || ABILITY_ICONS_LEGACY[d.mechanic] || ABILITY_ICONS_LEGACY[aid] || '✦';
+  }
+
+  function abilityUpgradeCost(lvl) {
+    if (CAT.abilityUpgradeCost) return CAT.abilityUpgradeCost(lvl);
+    return 10 + lvl * 12;
+  }
+
+  function abilityBoostMultFromLvl(lvl) {
+    if (CAT.abilityBoostMult) return CAT.abilityBoostMult(lvl);
+    return 1 + lvl * 0.08;
+  }
 
   var PACKS = [
     { type: 'basic', name: 'Basic Void Pack', price: 5000, emoji: '📦', desc: 'Random procedural strain' },
@@ -91,13 +107,6 @@
   ];
   var AVATARS = ['🌌', '🛸', '👾', '🌿', '💫', '🔮', '🪐', '⚡'];
   var BADGES = [{ id: 'harvester', emoji: '🌾', label: 'Harvester' }, { id: 'rift', emoji: '🌀', label: 'Rift Walker' }, { id: 'omega', emoji: '💎', label: 'Omega Tier' }, { id: 'cloner', emoji: '🧬', label: 'Clone Master' }, { id: 'trader', emoji: '🤝', label: 'Void Trader' }, { id: 'blitz', emoji: '⚡', label: 'Blitz King' }];
-  var BLITZ = [
-    { id: 'blitz-1', name: 'Hyperdrive Yield', description: '+15% passive revenue', modifier: 0.15, modifierType: 'revenue', price: 50000, purchased: false },
-    { id: 'blitz-2', name: 'Rift Amplifier', description: '+20% strain yield', modifier: 0.2, modifierType: 'yield', price: 75000, purchased: false },
-    { id: 'blitz-3', name: 'Scan Burst', description: '+25% sector scan rate', modifier: 0.25, modifierType: 'scan', price: 60000, purchased: false },
-    { id: 'blitz-4', name: 'Clone Accelerator', description: '-30% clone time', modifier: 0.3, modifierType: 'clone', price: 90000, purchased: false },
-    { id: 'blitz-5', name: 'Pack Resonance', description: '+10% pack rarity luck', modifier: 0.1, modifierType: 'packLuck', price: 120000, purchased: false },
-  ];
   var SECTORS = [
     { id: 'thrusters', name: 'Frictionless Thrusters', level: 0, maxLevel: 10, baseCost: 15000, scanRateBonus: 0.08 },
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
@@ -110,7 +119,7 @@
 
   var PERSIST = [
     'saveVersion', 'cash', 'sp', 'empireLevel', 'empireXp', 'name', 'avatar', 'badgeIds', 'storefrontSlots',
-    'strains', 'inventory', 'factoryFloors', 'sectorUpgrades', 'blitzUpgrades', 'blitzEndsAt', 'purchasedBlitzIds',
+    'strains', 'inventory', 'factoryFloors', 'sectorUpgrades', 'blitzEndsAt', 'purchasedBlitzIds', 'blitzWindowOffers',
     'counterPrices', 'cloneJob', 'focusedStrainId', 'farmSubTab', 'nextPortalNum', 'lastTickAt',
     'bossRound', 'bossHp', 'bossMaxHp', 'bossName', 'bossSeed', 'bossRarity', 'equippedBattleIds',
     'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
@@ -170,9 +179,10 @@
 
   function assignAbilities(rng, tierIdx) {
     var min = 1 + Math.floor(tierIdx / 6);
-    var max = Math.min(ABILITIES.length, min + 2 + Math.floor(tierIdx / 4));
+    var max = Math.min(5, min + 2 + Math.floor(tierIdx / 4));
     var count = min + Math.floor(rng() * (max - min + 1));
-    var pool = ABILITIES.slice();
+    var pool = ABILITIES.filter(function (a) { return (a.minRarity || 0) <= tierIdx; });
+    if (!pool.length) pool = ABILITIES.slice(0, 12);
     var out = [];
     for (var i = 0; i < count && pool.length; i++) {
       var idx = Math.floor(rng() * pool.length);
@@ -182,10 +192,35 @@
     return out;
   }
 
-  function abilityBoostLvl(s, aid) { return (s.abilityBoosts && s.abilityBoosts[aid]) || 0; }
-  function abilityBoostMult(s, aid) { return 1 + abilityBoostLvl(s, aid) * 0.08; }
+  function strainAbilityId(s, mechOrId) {
+    var aids = (s && s.abilities) || [];
+    for (var i = 0; i < aids.length; i++) {
+      if (aids[i] === mechOrId) return aids[i];
+      var d = abilityDef(aids[i]);
+      if (d.mechanic === mechOrId) return aids[i];
+    }
+    return null;
+  }
 
-  function hasAbility(s, id) { return (s.abilities || []).indexOf(id) >= 0; }
+  function abilityBoostLvl(s, aid) {
+    if (!s || !s.abilityBoosts) return 0;
+    var entry = strainAbilityId(s, aid);
+    if (entry && s.abilityBoosts[entry] != null) return s.abilityBoosts[entry];
+    return s.abilityBoosts[aid] || 0;
+  }
+  function abilityBoostMult(s, aid) { return abilityBoostMultFromLvl(abilityBoostLvl(s, aid)); }
+
+  function abilityPotency(s, mech, baseMult) {
+    if (!hasAbility(s, mech)) return 1;
+    return baseMult * abilityBoostMult(s, mech);
+  }
+
+  function abilityBonus(s, mech, baseAdd) {
+    if (!hasAbility(s, mech)) return 0;
+    return baseAdd * abilityBoostMult(s, mech);
+  }
+
+  function hasAbility(s, mechOrId) { return !!strainAbilityId(s, mechOrId); }
 
   function genStrain(seed, minR, luck) {
     var rng = rngSeed(seed);
@@ -295,7 +330,7 @@
     var base = 3 * rMult(planet.rarity);
     var harv = 1 + planet.harvesterLv * 0.3;
     var conv = 1 + planet.conveyorLv * 0.2;
-    return base * harv * conv * (planet.upgraderMult || 1);
+    return base * harv * conv * (planet.upgraderMult || 1) * (1 + blitzMod('planet'));
   }
 
   function planetById(id) { return (G.ownedPlanets || []).find(function (p) { return p.id === id; }); }
@@ -414,7 +449,7 @@
       var out = planetOutputPerSec(p) * ms;
       var spBonus = 0;
       var strain = strainById(p.exclusiveStrainId);
-      if (strain && hasAbility(strain, 'yield_surge')) spBonus += out * 0.02;
+      if (strain && hasAbility(strain, 'yield_surge')) spBonus += out * 0.02 * abilityBoostMult(strain, 'yield_surge');
       var cashGain = out * 8;
       G.cash += cashGain;
       cashAcc += cashGain;
@@ -520,13 +555,14 @@
 
   function upStrainAbility(sid, aid) {
     var s = strainById(sid);
-    if (!s || (s.abilities || []).indexOf(aid) < 0) return false;
+    var entry = s ? strainAbilityId(s, aid) : null;
+    if (!s || !entry) return false;
     if (!s.abilityBoosts) s.abilityBoosts = {};
-    var lvl = s.abilityBoosts[aid] || 0;
-    var cost = 10 + lvl * 12;
-    if (G.sp < cost || lvl >= 5) return false;
+    var lvl = s.abilityBoosts[entry] || 0;
+    var cost = abilityUpgradeCost(lvl);
+    if (G.sp < cost) return false;
     G.sp -= cost;
-    s.abilityBoosts[aid] = lvl + 1;
+    s.abilityBoosts[entry] = lvl + 1;
     G.strains = G.strains.map(function (x) { return x.id === sid ? s : x; });
     return true;
   }
@@ -561,7 +597,7 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'stats', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _planetSpAcc: 0, _lastPlanetPop: 0 };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0 };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -574,8 +610,8 @@
       playerId: pid, saveVersion: SAVE_VERSION, cash: 250000, sp: 100, empireLevel: 1, empireXp: 0,
       name: p.defaultName, avatar: p.avatar, badgeIds: [null, null, null],
       storefrontSlots: emptySF(), strains: [], inventory: STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); }),
-      factoryFloors: [], sectorUpgrades: clone(SECTORS), blitzUpgrades: clone(BLITZ),
-      blitzEndsAt: Date.now() + BLITZ_MS, purchasedBlitzIds: [], counterPrices: {},
+      factoryFloors: [], sectorUpgrades: clone(SECTORS),
+      blitzEndsAt: Date.now() + BLITZ_MS, purchasedBlitzIds: [], blitzWindowOffers: null, counterPrices: {},
       cloneJob: null, focusedStrainId: null, packReveal: { open: false, packType: null, strain: null, strains: null },
       farmSubTab: 'portal', transactionBeam: null, lastTickAt: Date.now(), nextPortalNum: 1,
       bossRound: 1, bossHp: 0, bossMaxHp: 0, bossName: '', bossSeed: 0, bossRarity: 'dust', equippedBattleIds: [],
@@ -649,6 +685,50 @@
     }
     if (!G.bossMaxHp || G.bossHp <= 0) spawnBoss();
     if (G.packReveal && G.packReveal.strains === undefined) G.packReveal.strains = null;
+    migrateBlitzSave();
+  }
+
+  function migrateBlitzSave() {
+    if (!G.purchasedBlitzIds) G.purchasedBlitzIds = [];
+    if (G.blitzUpgrades) {
+      if (G.blitzUpgrades.length) {
+        G.blitzUpgrades.forEach(function (b) {
+          if (b.purchased && G.purchasedBlitzIds.indexOf(b.id) < 0) G.purchasedBlitzIds.push(b.id);
+        });
+      }
+      delete G.blitzUpgrades;
+    }
+    if (!G.blitzWindowOffers || !G.blitzWindowOffers.length) rollBlitzOffers();
+  }
+
+  function rollBlitzOffers() {
+    var purchased = G.purchasedBlitzIds || [];
+    var pool = BLITZ_CATALOG.filter(function (b) { return purchased.indexOf(b.id) < 0; });
+    var rng = rngSeed(Date.now() + (G.empireLevel || 1) * 997);
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    G.blitzWindowOffers = pool.slice(0, BLITZ_SHOP_SIZE).map(function (b) { return b.id; });
+  }
+
+  function blitzShopRows() {
+    if (!G.blitzWindowOffers || !G.blitzWindowOffers.length) rollBlitzOffers();
+    var purchased = G.purchasedBlitzIds || [];
+    return G.blitzWindowOffers.map(function (id) {
+      var def = BLITZ_BY_ID[id];
+      if (!def) return null;
+      return Object.assign({}, def, { purchased: purchased.indexOf(id) >= 0 });
+    }).filter(Boolean);
+  }
+
+  function blitzRushMult() {
+    var bonus = 0;
+    (G.equippedBattleIds || []).forEach(function (id) {
+      var s = strainById(id);
+      if (s && hasAbility(s, 'blitz_rush')) bonus += 0.1 * abilityBoostMult(s, 'blitz_rush');
+    });
+    return 1 + Math.min(0.5, bonus);
   }
 
   function loadGame(pid) {
@@ -695,7 +775,7 @@
   function xpNeededForLevel(lvl) { return (lvl || 1) * XP_LVL; }
   function packLuckBonus() {
     var luck = blitzMod('packLuck');
-    G.strains.forEach(function (st) { if (hasAbility(st, 'rift_luck')) luck += 0.05; });
+    G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
     return luck;
   }
 
@@ -937,9 +1017,12 @@
     var ids = (G.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
     var dot = 0;
     var hadCrit = false;
+    var wave = battleWaveNum();
+    var regenMult = 1;
     ids.forEach(function (id) {
       var s = strainById(id);
-      if (s && hasAbility(s, 'poison_cloud')) dot += 5 * s.quantity;
+      if (s && hasAbility(s, 'poison_cloud')) dot += 5 * s.quantity * abilityBoostMult(s, 'poison_cloud');
+      if (s && hasAbility(s, 'regen_mist')) regenMult += 0.03 * (wave - 1) * abilityBoostMult(s, 'regen_mist');
     });
     var dps = ids.reduce(function (t, id) {
       var s = strainById(id);
@@ -950,6 +1033,7 @@
       if (hasAbility(s, 'crit_burst') && rng() < 0.15) { base *= 3 * abilityBoostMult(s, 'crit_burst'); hadCrit = true; }
       return t + base;
     }, 0);
+    dps = dps * (1 + blitzMod('battle')) * regenMult;
     if (hadCrit && (!UI._lastCritPop || Date.now() - UI._lastCritPop > 1200)) {
       UI._lastCritPop = Date.now();
       flashBossHit(true);
@@ -965,7 +1049,7 @@
     var mult = 1;
     (G.equippedBattleIds || []).forEach(function (id) {
       var s = strainById(id);
-      if (s && hasAbility(s, 'cash_magnet')) mult += 0.08;
+      mult += abilityBonus(s, 'cash_magnet', 0.08);
     });
     var cashGain = Math.floor((mega ? 5000 : 750) * round * rMult(G.bossRarity) * mult * (mega ? 1 : 0.35 + wave * 0.1));
     G.cash += cashGain;
@@ -981,13 +1065,19 @@
     if (mega) {
       popArcade('label', 0, { label: 'BOSS JACKPOT!', jackpot: true, delay: 280 });
       popArcade('label', 0, { label: 'RIFT TWIN PACK!', mega: true, delay: 380 });
+      UI.battleWaveFlash = 'boss-kill-celebrate';
     } else if (wave === 4) {
       popArcade('label', 0, { label: 'MEGA BOSS NEXT!', mega: true, delay: 200 });
+      UI.battleWaveFlash = 'boss-wave-advance';
+    } else {
+      UI.battleWaveFlash = 'boss-wave-clear';
     }
     if (mega) queueReward('dual', 'boss');
     G.bossRound = round + 1;
     spawnBoss();
     shakeScreen();
+    flashBossHit(mega);
+    setTimeout(function () { UI.battleWaveFlash = null; render(); }, mega ? 900 : 550);
     if (mega) {
       showBattleToast('BOSS DOWN! +' + spGain + ' SP · RIFT TWIN PACK!', true);
       plantSay('boss_kill', true);
@@ -1001,8 +1091,21 @@
   function tickBoss(dt) {
     if (!G.bossMaxHp || G.bossHp <= 0) return;
     var dps = totalBattleDps();
+    var sapReduce = 0;
+    (G.equippedBattleIds || []).forEach(function (id) {
+      var s = strainById(id);
+      sapReduce += abilityBonus(s, 'shield_sap', 0.08);
+    });
+    var regen = G.bossMaxHp * 0.0015 * Math.max(0, 1 - sapReduce);
+    if (regen > 0) G.bossHp = Math.min(G.bossMaxHp, G.bossHp + regen * (dt / 1000));
     if (dps <= 0) return;
-    G.bossHp = Math.max(0, G.bossHp - dps * (dt / 1000));
+    var dmg = dps * (dt / 1000);
+    G.bossHp = Math.max(0, G.bossHp - dmg);
+    UI._bossHitAcc = (UI._bossHitAcc || 0) + dmg;
+    if (UI._bossHitAcc >= G.bossMaxHp * 0.015) {
+      UI._bossHitAcc = 0;
+      flashBossHit(false);
+    }
     if (G.bossHp <= 0) killBoss();
   }
 
@@ -1102,7 +1205,13 @@
   }
 
   function switchPlayerPrompt() { saveGame(); UI.playerSelectOpen = true; UI.profileOpen = false; UI.settingsOpen = false; render(); }
-  function blitzMod(t) { return G.blitzUpgrades.filter(function (b) { return b.purchased && b.modifierType === t; }).reduce(function (s, b) { return s + b.modifier; }, 0); }
+  function blitzMod(t) {
+    var base = (G.purchasedBlitzIds || []).reduce(function (s, id) {
+      var b = BLITZ_BY_ID[id];
+      return b && b.modifierType === t ? s + b.modifier : s;
+    }, 0);
+    return base * blitzRushMult();
+  }
   function scanMult() { return G.sectorUpgrades.reduce(function (s, x) { return s + x.level * x.scanRateBonus; }, 0) + blitzMod('scan'); }
   function revMs() {
     var rm = 1 + blitzMod('revenue'), ym = 1 + blitzMod('yield'), t = 0;
@@ -1111,8 +1220,8 @@
       var s = strainById(f.equippedStrainId);
       if (!s) return;
       var fm = 1;
-      if (hasAbility(s, 'yield_surge')) fm *= 1.2;
-      if (hasAbility(s, 'portal_sync')) fm *= 1.12;
+      if (hasAbility(s, 'yield_surge')) fm *= abilityPotency(s, 'yield_surge', 1.2);
+      if (hasAbility(s, 'portal_sync')) fm *= abilityPotency(s, 'portal_sync', 1.12);
       t += revSec(s) * f.level * rm * ym * fm;
     });
     G.inventory.forEach(function (i) {
@@ -1152,6 +1261,10 @@
   function tick(now) {
     var d = now - G.lastTickAt;
     if (d <= 0) return;
+    if (G.blitzEndsAt && Date.now() >= G.blitzEndsAt) {
+      G.blitzEndsAt = Date.now() + BLITZ_MS;
+      rollBlitzOffers();
+    }
     var cashGain = revMs() * d;
     G.cash += cashGain;
     UI._passiveCashAcc = (UI._passiveCashAcc || 0) + cashGain;
@@ -1194,7 +1307,7 @@
     else if (G.cash < p.price) return false;
     else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
     var luck = blitzMod('packLuck');
-    G.strains.forEach(function (st) { if (hasAbility(st, 'rift_luck')) luck += 0.05; });
+    G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
     var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: luck });
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain };
@@ -1230,13 +1343,13 @@
     drainRewardQueue();
   }
   function buyBlitz(id) {
-    var u = G.blitzUpgrades.find(function (b) { return b.id === id; });
+    var u = blitzShopRows().find(function (b) { return b.id === id; });
     if (!u || u.purchased || G.cash < u.price) return false;
     var first = !G.purchasedBlitzIds.length;
     G.cash -= u.price;
-    G.blitzUpgrades = G.blitzUpgrades.map(function (b) { return b.id === id ? Object.assign({}, b, { purchased: true }) : b; });
-    G.purchasedBlitzIds = G.purchasedBlitzIds.concat([id]);
+    if (G.purchasedBlitzIds.indexOf(id) < 0) G.purchasedBlitzIds.push(id);
     if (first) G.blitzEndsAt = Date.now() + BLITZ_MS;
+    scheduleSave();
     return true;
   }
   function buyItem(id) {
@@ -1303,7 +1416,9 @@
     if (G.cloneJob) return false;
     if (!strainById(sid)) return false;
     var cd = CLONE_MS * (1 - blitzMod('clone'));
-    G.strains.forEach(function (st) { if (hasAbility(st, 'clone_echo')) cd *= 0.9; });
+    G.strains.forEach(function (st) {
+      if (hasAbility(st, 'clone_echo')) cd *= Math.pow(0.9, abilityBoostMult(st, 'clone_echo'));
+    });
     G.cloneJob = { strainId: sid, startedAt: Date.now(), durationMs: cd };
     return true;
   }
@@ -1384,25 +1499,25 @@
     if (opts.lift) {
       if (!ids.length) return '<div class="text-muted text-xs text-center">No abilities on this strain.</div>';
       return ids.map(function (aid) {
-        var a = ABILITIES.find(function (x) { return x.id === aid; });
-        if (!a) return '';
-        var lvl = strain ? abilityBoostLvl(strain, aid) : 0;
+        var a = abilityDef(aid);
+        var entry = strain ? strainAbilityId(strain, aid) : aid;
+        var lvl = strain && entry ? abilityBoostLvl(strain, entry) : 0;
         var upBtn = '';
-        if (opts.upgradeable && strain) {
-          var cost = 10 + lvl * 12;
-          upBtn = '<button type="button" class="game-btn game-btn-sm game-btn-green" style="flex-shrink:0;padding:4px 8px;font-size:0.48rem" data-action="up-ability" data-id="' + esc(strain.id) + ':' + aid + '"' + (G.sp < cost || lvl >= 5 ? ' disabled' : '') + '>+' + cost + ' SP</button>';
+        if (opts.upgradeable && strain && entry) {
+          var cost = abilityUpgradeCost(lvl);
+          upBtn = '<button type="button" class="game-btn game-btn-sm game-btn-green" style="flex-shrink:0;padding:4px 8px;font-size:0.48rem" data-action="up-ability" data-id="' + esc(strain.id) + ':' + entry + '"' + (G.sp < cost ? ' disabled' : '') + '>+' + cost + ' SP</button>';
         }
         return '<div class="lift-ability-row"><div style="flex:1;min-width:0"><div class="text-green" style="font-weight:700;font-size:0.65rem">' + esc(a.name) + (lvl ? ' <span class="text-muted">Lv.' + lvl + '</span>' : '') + '</div><div class="text-muted" style="font-size:0.55rem;line-height:1.35;margin-top:0.15rem">' + esc(a.desc) + '</div></div>' + upBtn + '</div>';
       }).join('');
     }
     return (ids || []).map(function (aid) {
-      var a = ABILITIES.find(function (x) { return x.id === aid; });
-      if (!a) return '';
-      var lvl = strain ? abilityBoostLvl(strain, aid) : 0;
+      var a = abilityDef(aid);
+      var entry = strain ? strainAbilityId(strain, aid) : aid;
+      var lvl = strain && entry ? abilityBoostLvl(strain, entry) : 0;
       var upBtn = '';
-      if (opts.upgradeable && strain) {
-        var cost = 10 + lvl * 12;
-        upBtn = ' <button type="button" class="game-btn game-btn-sm" style="padding:2px 6px;font-size:0.45rem;margin-left:0.25rem" data-action="up-ability" data-id="' + esc(strain.id) + ':' + aid + '"' + (G.sp < cost || lvl >= 5 ? ' disabled' : '') + '>+' + cost + ' SP</button>';
+      if (opts.upgradeable && strain && entry) {
+        var cost = abilityUpgradeCost(lvl);
+        upBtn = ' <button type="button" class="game-btn game-btn-sm" style="padding:2px 6px;font-size:0.45rem;margin-left:0.25rem" data-action="up-ability" data-id="' + esc(strain.id) + ':' + entry + '"' + (G.sp < cost ? ' disabled' : '') + '>+' + cost + ' SP</button>';
       }
       return '<div class="text-xs mb-1 flex-between" style="gap:0.25rem;align-items:flex-start"><span><span class="text-green">' + esc(a.name) + (lvl ? ' Lv.' + lvl : '') + '</span> — ' + esc(a.desc) + '</span>' + upBtn + '</div>';
     }).join('');
@@ -1438,21 +1553,17 @@
       artSkew: ((roll(5) - 0.5) * 6).toFixed(1),
       arenaIdx: Math.floor(roll(6) * 12),
       particlePhase: (roll(7) * 2.5).toFixed(1),
+      frameAccent: Math.floor(roll(8) * 6),
+      sparkle: roll(9) > 0.55,
     };
   }
-
-  var ABILITY_ICONS = {
-    crit_burst: '💥', yield_surge: '📈', thc_overdrive: '⚡', shield_sap: '🛡',
-    poison_cloud: '☠', clone_echo: '🧬', cash_magnet: '💰', portal_sync: '🌀',
-    blitz_rush: '🔥', rift_luck: '🎲', boss_slayer: '👹', regen_mist: '💨',
-  };
 
   function abilityPipsHtml(s) {
     var ab = (s.abilities || []).slice(0, 4);
     if (!ab.length) return '';
     return '<div class="cr-ability-pips">' + ab.map(function (aid) {
-      var a = ABILITIES.find(function (x) { return x.id === aid; });
-      return '<span class="cr-ability-pip" title="' + esc(a ? a.name : aid) + '">' + (ABILITY_ICONS[aid] || '✦') + '</span>';
+      var a = abilityDef(aid);
+      return '<span class="cr-ability-pip" title="' + esc(a.name) + '">' + abilityIcon(aid) + '</span>';
     }).join('') + '</div>';
   }
 
@@ -1566,8 +1677,9 @@
       qty: s.quantity, tag: tag,
       arenaIdx: vis.arenaIdx,
       abilityPips: abilityPipsHtml(s),
-      cardFx: cardFxHtml(tierIdx, vis, rc),
+      cardFx: cardFxHtml(tierIdx, vis, rc) + (vis.sparkle && tierIdx >= 4 ? '<div class="cr-card-sparkle"></div>' : ''),
       bannerColor: rc,
+      frameExtra: vis.frameAccent ? ' cr-frame-accent-' + vis.frameAccent : '',
       frameStyle: tierIdx >= 4 ? ' style="--cr-border:' + rc + '"' : '',
     });
     if (opts.noFocus) return '<div class="' + cls + '">' + inner + '</div>';
@@ -1862,7 +1974,7 @@
       h += liftWrap('pack-' + p.type, '<div class="flex-row"><div style="font-size:1.875rem">' + p.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(p.name) + '</div><div class="text-muted text-xs">' + esc(p.desc) + '</div><div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>OPEN</button></div>', 'buy-pack:' + p.type);
     });
     h += '<div class="neon-card neon-card-green neon-card-pulse p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
-    G.blitzUpgrades.forEach(function (u) {
+    blitzShopRows().forEach(function (u) {
       h += '<div class="flex-between p-3 mb-2" style="background:rgba(0,0,0,0.35);border-radius:0.75rem;border:1px solid ' + (u.purchased ? 'rgba(100,100,100,0.3)' : 'rgba(57,255,20,0.25)') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
     h += '</div><div class="section-label mb-2">GENERAL STORE</div>';
@@ -2060,6 +2172,75 @@
     el.innerHTML = h;
   }
 
+  function modPct(v) { return (v * 100).toFixed(1) + '%'; }
+
+  function modSectionCard(title, value, sources) {
+    var src = (sources || []).map(function (s) {
+      return '<div class="text-xs text-muted" style="padding:0.15rem 0 0 0.5rem">· ' + s + '</div>';
+    }).join('');
+    return '<div class="neon-card p-3 mb-2"><div class="flex-between"><span class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.1em">' + esc(title) + '</span><span class="font-mono text-xs" style="font-weight:700;color:var(--green)">' + esc(value) + '</span></div>' + src + '</div>';
+  }
+
+  function profileModifiersHtml() {
+    var ids = (G.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
+    var wave = battleWaveNum();
+    var h = '<div class="profile-stats-scroll">';
+    var dpsSources = [];
+    ids.forEach(function (id) {
+      var s = strainById(id);
+      if (!s) return;
+      dpsSources.push(esc(s.name) + ': ' + strainBattleDpsBase(s).toFixed(1) + '/s base');
+      if (hasAbility(s, 'poison_cloud')) dpsSources.push('Poison Cloud (' + esc(s.name) + '): +' + (5 * s.quantity).toFixed(1) + ' DoT');
+      if (hasAbility(s, 'regen_mist') && wave > 1) dpsSources.push('Regen Mist (' + esc(s.name) + '): +' + modPct(0.03 * (wave - 1) * abilityBoostMult(s, 'regen_mist')));
+    });
+    if (blitzMod('battle') > 0) dpsSources.push('Blitz Battle: +' + modPct(blitzMod('battle')));
+    if (blitzRushMult() > 1) dpsSources.push('Blitz Rush: ×' + blitzRushMult().toFixed(2) + ' on all blitz mods');
+    h += '<div class="section-label section-label-green mb-2">BATTLE DPS</div>';
+    h += modSectionCard('Total DPS', totalBattleDps().toFixed(1) + '/s', dpsSources.length ? dpsSources : ['Equip strains on the Fight tab']);
+
+    var revSources = [];
+    var invRev = inventoryRevPerSec();
+    if (invRev > 0) revSources.push('General store: +' + invRev.toFixed(2) + '/sec');
+    G.factoryFloors.forEach(function (f) {
+      if (!f.equippedStrainId) return;
+      var s = strainById(f.equippedStrainId);
+      if (!s) return;
+      var line = esc(f.name) + ' · ' + esc(s.name) + ': ' + (revSec(s) * f.level).toFixed(2) + '/sec base';
+      if (hasAbility(s, 'yield_surge')) line += ' (+Yield Surge)';
+      if (hasAbility(s, 'portal_sync')) line += ' (+Portal Sync)';
+      revSources.push(line);
+    });
+    if (blitzMod('revenue') > 0) revSources.push('Blitz Revenue: +' + modPct(blitzMod('revenue')));
+    if (blitzMod('yield') > 0) revSources.push('Blitz Yield: +' + modPct(blitzMod('yield')));
+    h += '<div class="section-label mb-2 mt-2">PASSIVE REVENUE</div>';
+    h += modSectionCard('Total Passive', fmtRev(revSecTotal()), revSources.length ? revSources : ['Equip strains on portal floors']);
+
+    var scanSources = [];
+    G.sectorUpgrades.forEach(function (x) {
+      if (x.level > 0) scanSources.push(esc(x.name) + ' Lv.' + x.level + ': +' + modPct(x.level * x.scanRateBonus));
+    });
+    (G.purchasedBlitzIds || []).forEach(function (bid) {
+      var b = BLITZ_BY_ID[bid];
+      if (b && b.modifierType === 'scan') scanSources.push(esc(b.name) + ': +' + modPct(b.modifier));
+    });
+    if (blitzRushMult() > 1 && scanMult() > 0) scanSources.push('Blitz Rush multiplier applied to scan total');
+    h += '<div class="section-label mb-2 mt-2">SCAN RATE</div>';
+    h += modSectionCard('Scan Bonus', modPct(scanMult()), scanSources.length ? scanSources : ['Upgrade sectors on the Map tab']);
+
+    var blitzSources = [];
+    (G.purchasedBlitzIds || []).forEach(function (bid) {
+      var b = BLITZ_BY_ID[bid];
+      if (b) blitzSources.push(esc(b.name) + ' — ' + esc(b.description));
+    });
+    if (!blitzSources.length) blitzSources.push('No permanent blitz purchased yet — visit Shop');
+    else if (blitzRushMult() > 1) blitzSources.push('Blitz Rush strains: ×' + blitzRushMult().toFixed(2) + ' on all blitz effects');
+    h += '<div class="section-label mb-2 mt-2">BLITZ MODIFIERS</div>';
+    h += modSectionCard('Owned', String((G.purchasedBlitzIds || []).length) + ' / ' + BLITZ_CATALOG.length, blitzSources);
+
+    h += '</div>';
+    return h;
+  }
+
   function profileStatsHtml() {
     var dps = totalBattleDps();
     var blitzCount = G.purchasedBlitzIds ? G.purchasedBlitzIds.length : 0;
@@ -2069,7 +2250,7 @@
       ['Level', 'LV.' + G.empireLevel], ['Boss Round', 'R' + (G.bossRound || 1)], ['Battle DPS', dps.toFixed(1) + '/sec'],
       ['Passive Rev', fmtRev(revSecTotal())], ['Inventory Rev', '+' + invRev.toFixed(1) + '/sec'],
       ['Planets', String((G.ownedPlanets || []).length)], ['Strains', String(G.strains.length)],
-      ['Portal Floors', String(G.factoryFloors.length)], ['Blitz Mods', String(blitzCount) + ' / ' + BLITZ.length],
+      ['Portal Floors', String(G.factoryFloors.length)], ['Blitz Mods', String(blitzCount) + ' / ' + BLITZ_CATALOG.length],
       ['Scan Bonus', ((scanMult() * 100).toFixed(0)) + '%'], ['Equipped', String((G.equippedBattleIds || []).length) + ' / ' + BATTLE_EQUIP_MAX],
     ];
     var h = '<div class="profile-stats-scroll"><div class="stat-grid profile-stat-grid">';
@@ -2082,17 +2263,20 @@
 
   function helpEncyclopediaHtml() {
     return '<div class="help-scroll text-xs" style="line-height:1.55;color:var(--muted)">' +
-      '<p><span class="text-green">SP</span> — Strain Points from boss waves. Spend on merges, ability upgrades, and planet multipliers.</p>' +
-      '<p><span class="text-green">XP</span> — Empire XP from packs, clones, harvests. Level up for milestone packs.</p>' +
-      '<p><span class="text-green">Planets</span> — Scan the map, claim worlds, upgrade harvesters/conveyors, harvest exclusive strains.</p>' +
-      '<p><span class="text-green">Boss</span> — 5 waves per cycle; wave 5 is mega boss with twin pack reward. Equip strains for DPS.</p>' +
-      '<p><span class="text-green">Strains</span> — CR cards with THC, yield, abilities. Equip for battle or portal floors.</p>' +
-      '<p><span class="text-green">Merge</span> — Fuse two parents in the Merge Lab for 15 SP → new F1 hybrid.</p>' +
-      '<p><span class="text-green">Shop</span> — Packs, blitz upgrades, nutrients (+0.5/sec), pipes (+1.2–2.5/sec).</p>' +
-      '<p><span class="text-green">Packs</span> — Basic, guaranteed, and omega rift packs add genetics to your Index.</p>' +
-      '<p><span class="text-green">Conveyors</span> — Planet conveyors speed stored yield; harvest when ready.</p>' +
-      '<p><span class="text-green">Floors</span> — Portal farm floors mine passive cash when strains are equipped.</p>' +
-      '<p><span class="text-green">Stats</span> — Profile Stats tab tracks empire progress at a glance.</p></div>';
+      '<p><span class="text-green">SP</span> — Strain Points from boss waves. Spend on merges (15 SP), infinite ability upgrades, and planet multipliers.</p>' +
+      '<p><span class="text-green">XP</span> — Empire XP from packs, clones, harvests, and boss kills. Level up for milestone reward packs.</p>' +
+      '<p><span class="text-green">Boss</span> — 5 waves per cycle; wave 5 is a mega boss with twin-pack reward. Bosses regen 0.15% max HP/s; Shield Sap slows regen 8% per equipped copy.</p>' +
+      '<p><span class="text-green">Battle DPS</span> — Equip up to 8 strains. THC × yield × rarity drives damage. Crit Burst, Boss Slayer, THC Overdrive, Poison Cloud, and Regen Mist (+3% DPS per wave cleared) stack.</p>' +
+      '<p><span class="text-green">Strains</span> — CR-style cards with THC, yield, potency, and 1–5 abilities from a 500-trait catalog. Abilities share 12 core mechanics with infinite SP upgrade levels.</p>' +
+      '<p><span class="text-green">Abilities</span> — Crit Burst, Yield Surge, THC Overdrive, Shield Sap, Poison Cloud, Clone Echo, Cash Magnet, Portal Sync, Blitz Rush (+10% blitz per copy), Rift Luck, Boss Slayer, Regen Mist.</p>' +
+      '<p><span class="text-green">Merge Lab</span> — Fuse two parents in the Index for 15 SP → new F1 hybrid inheriting parent traits plus a chance at a new catalog ability.</p>' +
+      '<p><span class="text-green">Shop</span> — Mystery packs, rotating blitz window (10 offers from 500 permanent upgrades), nutrients (+0.5/sec), and pipes (+1.2–2.5/sec).</p>' +
+      '<p><span class="text-green">Blitz</span> — Cash-purchased permanent modifiers for revenue, yield, scan, clone speed, pack luck, battle DPS, and planet output. First purchase starts a 30-min blitz timer; Blitz Rush strains amplify all owned blitz effects.</p>' +
+      '<p><span class="text-green">Planets</span> — Scan the Map, claim worlds, upgrade harvesters/conveyors, spend SP on output multipliers, harvest exclusive strains.</p>' +
+      '<p><span class="text-green">Portal Floors</span> — Rocket hub → equip strains to mine passive cash. Yield Surge and Portal Sync boost floor revenue.</p>' +
+      '<p><span class="text-green">Modifiers Tab</span> — Profile → Modifiers shows live DPS, revenue, scan, and blitz breakdowns with per-source detail.</p>' +
+      '<p><span class="text-green">Co-op</span> — Family board shows each player\'s progress; Share Board listings let you buy strains from other saves.</p>' +
+      '<p><span class="text-green">Casino</span> — Blackjack, slots, and poker rooms for bonus cash (bet responsibly in-game!).</p></div>';
   }
 
   function renderMergeLab() {
@@ -2136,10 +2320,12 @@
 
   function renderProfile() {
     var pl = playerDef(activePlayerId);
-    var tab = UI.profileTab || 'stats';
+    var tab = UI.profileTab || 'modifiers';
     var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">✕</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;font-size:1.5rem;border-width:3px">' + G.avatar + '</div></div></div><div class="profile-body">';
-    h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'stats' ? ' active' : '') + '" data-action="profile-tab" data-id="stats">STATS</button><button type="button" class="farm-tab' + (tab === 'custom' ? ' active' : '') + '" data-action="profile-tab" data-id="custom">CUSTOMIZE</button></div>';
-    if (tab === 'stats') {
+    h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'modifiers' ? ' active' : '') + '" data-action="profile-tab" data-id="modifiers">MODIFIERS</button><button type="button" class="farm-tab' + (tab === 'stats' ? ' active' : '') + '" data-action="profile-tab" data-id="stats">STATS</button><button type="button" class="farm-tab' + (tab === 'custom' ? ' active' : '') + '" data-action="profile-tab" data-id="custom">CUSTOMIZE</button></div>';
+    if (tab === 'modifiers') {
+      h += profileModifiersHtml();
+    } else if (tab === 'stats') {
       h += profileStatsHtml();
     } else {
       h += '<div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24">';
