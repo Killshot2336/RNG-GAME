@@ -106,6 +106,11 @@
     { type: 'guaranteed', name: 'Guaranteed Rift Pack', price: 25000, emoji: '🎁', desc: 'Pulse+ guaranteed' },
     { type: 'omega', name: 'Omega Rift Pack', price: 100000, spCost: 50, emoji: '🌌', desc: 'Bloom+ cosmic anomaly (cash or SP)' },
   ];
+  var CHEST_TIERS = [
+    { packType: 'basic', name: 'Wooden Crates', emoji: '🪵', tagline: 'Street-tier loot burst', accent: '#A16207' },
+    { packType: 'guaranteed', name: 'Neon Chests', emoji: '💠', tagline: 'Pulse+ guaranteed neon drop', accent: '#38BDF8' },
+    { packType: 'omega', name: 'Void Overlord Vaults', emoji: '👑', tagline: 'Bloom+ mythic siege vault', accent: '#F472B6' },
+  ];
   var STORE = [
     { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 1200, emoji: '🧪', desc: 'Boosts passive revenue +0.5/sec each.', revPerSec: 0.5 },
     { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 3500, emoji: '💧', desc: 'Premium nutrients — +0.5/sec passive each.', revPerSec: 0.5 },
@@ -132,6 +137,7 @@
     'voidEssence', 'prestigeVault', 'totalCashEarned',
     'storefrontSlotCount', 'planetLeases', 'leaseOffers',
     'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
+    'mutationEssence', 'mutationItems', 'dailyShowcaseDay',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -657,7 +663,7 @@
     return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -754,6 +760,7 @@
       voidEssence: 0, prestigeVault: [], totalCashEarned: 0,
       indexSearch: '', indexSort: 'recent',
       ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
+      mutationEssence: 0, mutationItems: [], dailyShowcaseDay: 0,
     };
   }
 
@@ -1041,6 +1048,8 @@
     healArr('ownedPlanets', []);
     healArr('equippedBattleIds', []);
     healArr('pendingRewards', []);
+    healArr('mutationItems', []);
+    if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
     if (!G.planetLeases || typeof G.planetLeases !== 'object') {
       G.planetLeases = { active: [], archive: [], pending: [] };
       fixes++;
@@ -1067,6 +1076,8 @@
     if (G.name === 'VoidPilot_Aden' || G.name === 'VoidPilot') G.name = p.defaultName;
     if (G.sp == null || isNaN(G.sp)) G.sp = 100;
     if (!G.pendingRewards) G.pendingRewards = [];
+    if (!G.mutationItems) G.mutationItems = [];
+    if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
     if (!G.ownedPlanets) G.ownedPlanets = [];
     if (G.scanPending === undefined) G.scanPending = null;
     G.strains = (G.strains || []).map(migrateStrain);
@@ -1243,13 +1254,7 @@
     var q = G.pendingRewards;
     if (!q || !q.length) return;
     var r = q.shift();
-    if (r.kind === 'dual') {
-      var pair = genUniqueStrainPair(r.packType === 'boss' ? 'bloom' : 'pulse', r.packType);
-      G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null };
-    } else if (r.kind === 'single') {
-      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
-      G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s };
-    }
+    processPendingReward(r);
     scheduleSave();
     render();
   }
@@ -1811,7 +1816,7 @@
     else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
     var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
     G.cash = nc; G.sp = ns;
-    G.packReveal = { open: true, packType: type, strain: strain };
+    G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true };
     if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
     popArcade('label', 0, { label: 'PACK OPEN!', mega: true });
     return true;
@@ -1840,7 +1845,7 @@
       popStrain(pr.strain, { mega: pr.packType === 'breed' || isBoss, jackpot: isBoss, delay: 120 });
       plantSay('pack', true);
     }
-    G.packReveal = { open: false, packType: null, strain: null, strains: null };
+    G.packReveal = { open: false, packType: null, strain: null, strains: null, wheelSpin: false };
     drainRewardQueue();
   }
   function buyBlitz(id) {
@@ -2352,32 +2357,110 @@
     el.innerHTML = h;
   }
 
-  function fightTopBarHtml(farmMode) {
-    var h = '<div class="fight-top-bar mb-2"><button type="button" id="hub-rocket-btn" class="hub-rocket-btn' + (farmMode ? ' active' : '') + '" data-action="toggle-farm" title="' + (farmMode ? 'Back to Battle' : 'Portal Farm') + '"><img src="/public/art/rocket.svg" alt="" style="width:1.35rem;height:1.35rem"></button>';
-    if (farmMode) {
-      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div></div>';
-    } else {
-      var wave = battleWaveNum();
-      var mega = isBossWave();
-      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div></div>';
+  function processPendingReward(r) {
+    if (!r) return;
+    if (r.kind === 'dual') {
+      var pair = genUniqueStrainPair(r.packType === 'boss' ? 'bloom' : 'pulse', r.packType);
+      G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null, wheelSpin: true };
+    } else if (r.kind === 'single') {
+      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
+      G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s, wheelSpin: true };
     }
-    return h;
   }
 
-  function renderBattle() {
+  function openChestSlot(idx) {
+    if (G.packReveal && G.packReveal.open) {
+      showBattleToast('Close the open pack reveal first', false);
+      return false;
+    }
+    var q = G.pendingRewards || [];
+    var i = parseInt(idx, 10);
+    if (i < 0 || i >= q.length) return false;
+    var r = q.splice(i, 1)[0];
+    G.pendingRewards = q;
+    processPendingReward(r);
+    scheduleSave();
+    return true;
+  }
+
+  function destroyStrain(id) {
+    var s = strainById(id);
+    if (!s) return false;
+    if (s.planetExclusive && (s.quantity || 1) <= 1) {
+      showBattleToast('Cannot burn last planet-exclusive copy', false);
+      return false;
+    }
+    var si = G.strains.findIndex(function (x) { return x.id === id; });
+    if (si < 0) return false;
+    if ((s.quantity || 1) > 1) {
+      G.strains = G.strains.slice();
+      G.strains[si] = Object.assign({}, s, { quantity: s.quantity - 1 });
+    } else {
+      G.strains = G.strains.filter(function (x) { return x.id !== id; });
+      G.equippedBattleIds = (G.equippedBattleIds || []).filter(function (x) { return x !== id; });
+      if (G.breedSlotA === id) G.breedSlotA = null;
+      if (G.breedSlotB === id) G.breedSlotB = null;
+    }
+    var power = 1 + rarityIndex(s.rarity);
+    G.mutationEssence = (G.mutationEssence || 0) + power;
+    G.mutationItems = (G.mutationItems || []).concat([{
+      id: 'mut_' + Date.now() + '_' + Math.floor(Math.random() * 9999),
+      name: s.name.split(' ')[0] + ' Shard',
+      tier: s.rarity,
+      power: power,
+      burnedAt: Date.now(),
+    }]);
+    popArcade('label', 0, { label: '+' + power + ' MUTATION', mega: true });
+    showBattleToast('Burned ' + s.name + ' → +' + power + ' mutation', true);
+    scheduleSave();
+    return true;
+  }
+
+  function dailyShowcaseSeed() { return Math.floor(Date.now() / 86400000); }
+
+  function dailyShowcaseItems() {
+    var day = dailyShowcaseSeed();
+    if (G.dailyShowcaseDay !== day) G.dailyShowcaseDay = day;
+    var pid = (activePlayerId || 'aden').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    var rng = rngSeed(day * 7919 + pid);
+    var items = [];
+    for (var i = 0; i < 3; i++) {
+      var rar = pickRarity(rng, i === 2 ? 'bloom' : (i === 1 ? 'pulse' : 'spark'), 0.12 + i * 0.04);
+      var strain = genStrain(Math.floor(rng() * 0xffffffff), rar, 0.08);
+      var price = Math.floor(12000 + rarityIndex(rar) * 6500 + rng() * 18000);
+      items.push({ slot: i, strain: strain, price: price, label: i === 2 ? 'MYTHIC' : (i === 1 ? 'LEGENDARY' : 'EPIC') });
+    }
+    return items;
+  }
+
+  function buyDailyShowcase(slot) {
+    var items = dailyShowcaseItems();
+    var item = items[slot];
+    if (!item || G.cash < item.price) return false;
+    G.cash -= item.price;
+    G.strains = mergeStrains(G.strains, item.strain);
+    if (!G.focusedStrainId) G.focusedStrainId = item.strain.id;
+    addXp(20);
+    popStrain(item.strain, { mega: true, jackpot: slot === 2 });
+    plantSay('pack', true);
+    scheduleSave();
+    return true;
+  }
+
+  function chestLabel(r) {
+    if (!r) return '';
+    var pt = (r.packType || r.kind || 'reward').toUpperCase().replace(/-/g, ' ');
+    return pt;
+  }
+
+  function bossArenaStageHtml() {
     var hpPct = G.bossMaxHp ? Math.max(0, G.bossHp / G.bossMaxHp * 100) : 0;
     var bc = rarityColor(G.bossRarity);
     var dps = totalBattleDps();
     var mega = isBossWave();
-    var equipped = G.equippedBattleIds || [];
     var wave = battleWaveNum();
     var bossHue = G.bossSeed % 360;
-    var h = '<div class="screen-section battle-screen boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
-    h += fightTopBarHtml(false);
-    h += '<div class="battle-layout"><div class="battle-main">';
-    h += '<div class="boss-stage' + (mega ? ' boss-stage-mega' : '') + '">';
+    var h = '<div class="boss-stage glass-inset' + (mega ? ' boss-stage-mega' : '') + '">';
     h += '<div class="boss-stage-sky"></div>';
     h += '<div class="boss-stage-nebula" style="filter:hue-rotate(' + bossHue + 'deg)"></div>';
     h += '<div class="boss-stage-floor"></div>';
@@ -2402,30 +2485,58 @@
     h += '<div class="boss-hp-text"><span class="text-green">' + Math.ceil(G.bossHp).toLocaleString() + ' HP</span><span class="text-muted">' + G.bossMaxHp.toLocaleString() + '</span></div>';
     h += '<div class="boss-trait-badge"><span class="boss-trait-name">' + esc(bossTraitLabel(getBossTrait())) + '</span><span class="boss-trait-state">' + esc(bossTraitStatusText()) + '</span></div>';
     h += '<div class="boss-stage-dps">⚔ ' + dps.toFixed(1) + ' DPS</div>';
-    h += '</div></div></div>';
-    h += '<div class="battle-side"><div class="flex-between mb-2"><div class="section-label section-label-green" style="margin:0;text-align:left">BATTLE LOADOUT</div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="equip-best">EQUIP BEST</button></div>';
-    h += '<div class="battle-loadout-grid mb-3">';
-    for (var slot = 0; slot < BATTLE_EQUIP_MAX; slot++) {
-      var eid = equipped[slot];
-      var es = eid ? strainById(eid) : null;
-      if (es) h += '<div class="battle-slot liftable-wrap" data-lift="battle-slot-' + esc(es.id) + '">' + crCardHtml(es, { noFocus: true, showDps: true }) + '</div>';
-      else h += '<div class="battle-slot battle-slot-empty"><span class="text-muted text-xs">Empty</span></div>';
-    }
-    h += '</div><div class="section-label mb-2" style="text-align:left">EQUIP FROM INDEX</div>';
-    h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="battle-equip-search" value="' + esc(UI.battleEquipSearch || '') + '">';
-    h += sortChipsHtml('battle-equip-sort', UI.battleEquipSort || 'dps', BATTLE_SORT_CHIPS);
-    if (!G.strains.length) h += '<div class="neon-card p-4 text-center text-muted text-sm">No strains — open a pack in Shop.</div>';
-    else {
-      var pool = filteredBattleEquipStrains();
-      if (!pool.length) h += '<div class="neon-card p-3 text-center text-muted text-xs">All strains equipped or none match search.</div>';
-      else {
-        h += '<div class="binder-grid battle-equip-grid">';
-        pool.forEach(function (s) {
-          h += '<div class="battle-equip-card liftable-wrap" data-lift="battle-pool-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, showDps: true }) + '</div>';
-        });
-        h += '</div>';
+    h += '</div></div>';
+    return h;
+  }
+
+  function homeChestSlotsHtml() {
+    var q = G.pendingRewards || [];
+    var h = '<div class="home-chest-grid">';
+    for (var i = 0; i < 4; i++) {
+      var r = q[i];
+      if (r) {
+        h += '<button type="button" class="home-chest-slot home-chest-ready halftone-panel" data-action="open-chest" data-id="' + i + '">';
+        h += '<div class="home-chest-icon">📦</div><div class="home-chest-label">' + esc(chestLabel(r)) + '</div>';
+        h += '<div class="home-chest-open">OPEN</div></button>';
+      } else {
+        h += '<div class="home-chest-slot home-chest-empty halftone-panel"><div class="home-chest-icon opacity-60">▫</div><div class="home-chest-label text-muted">EMPTY</div></div>';
       }
     }
+    h += '</div>';
+    return h;
+  }
+
+  function hubOrbBtn(label, actionName, emoji) {
+    var actAttr = 'data-action';
+    return '<button type="button" class="hub-orb-btn halftone-panel" ' + actAttr + '="' + esc(actionName) + '" title="' + esc(label) + '"><span class="hub-orb-glow"></span><span class="hub-orb-emoji">' + emoji + '</span><span class="hub-orb-label">' + esc(label) + '</span></button>';
+  }
+
+  function fightTopBarHtml(farmMode) {
+    var h = '<div class="fight-top-bar mb-2"><button type="button" id="hub-rocket-btn" class="hub-rocket-btn' + (farmMode ? ' active' : '') + '" data-action="toggle-farm" title="' + (farmMode ? 'Back to Battle' : 'Portal Farm') + '"><img src="/public/art/rocket.svg" alt="" style="width:1.35rem;height:1.35rem"></button>';
+    if (farmMode) {
+      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div></div>';
+    } else {
+      var wave = battleWaveNum();
+      var mega = isBossWave();
+      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div></div>';
+    }
+    return h;
+  }
+
+  function renderBattle() {
+    var mega = isBossWave();
+    var h = '<div class="screen-section home-command halftone-panel boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
+    h += fightTopBarHtml(false);
+    h += '<div class="home-command-body">';
+    h += '<div class="home-arena-frame glass-panel halftone-panel">';
+    h += bossArenaStageHtml();
+    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', '🗼') + hubOrbBtn('RAID', 'hub-raid', '⚔') + hubOrbBtn('MUTATION LAB', 'open-merge-lab', '🧬') + '</div>';
+    h += '</div>';
+    h += '<div class="home-chest-rail glass-panel halftone-panel">';
+    h += '<div class="section-label section-label-green" style="margin:0 0 0.5rem;text-align:left">PENDING CHESTS · INSTANT OPEN</div>';
+    h += homeChestSlotsHtml();
     h += '</div></div></div>';
     return h;
   }
@@ -2494,39 +2605,171 @@
   }
 
   function renderShop() {
-    var h = '<div class="screen-section"><div class="text-center mb-2"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">NEBULA MARKET</h2><p class="font-mono text-muted" style="font-size:0.65rem;margin-top:0.25rem">Balance: ' + fmtCash(G.cash) + '</p></div><div class="section-label section-label-green mb-2">MYSTERY PACKS</div>';
-    PACKS.forEach(function (p) {
+    var h = '<div class="screen-section shop-screen">';
+    h += '<div class="shop-hero glass-panel halftone-panel text-center mb-2">';
+    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">NEBULA REVENUE GRID</h2>';
+    h += '<p class="font-mono text-muted" style="font-size:0.6rem;margin:0.35rem 0 0">Balance ' + fmtCash(G.cash) + ' · ' + fmtSp(G.sp || 0) + '</p></div>';
+    h += '<div class="section-label section-label-green mb-2" style="text-align:left">PREMIUM CHEST TIERS</div>';
+    h += '<div class="shop-chest-stack mb-3">';
+    CHEST_TIERS.forEach(function (tier) {
+      var p = PACKS.find(function (x) { return x.type === tier.packType; });
+      if (!p) return;
       var dis = G.cash < p.price && !(p.type === 'omega' && p.spCost && G.sp >= p.spCost);
-      h += liftWrap('pack-' + p.type, '<div class="flex-row"><div style="font-size:1.875rem">' + p.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(p.name) + '</div><div class="text-muted text-xs">' + esc(p.desc) + '</div><div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>OPEN</button></div>', 'buy-pack:' + p.type);
+      h += '<div class="shop-chest-tier glass-panel halftone-panel" style="--chest-accent:' + tier.accent + '">';
+      h += '<div class="shop-chest-tier-art"><span class="shop-chest-emoji">' + tier.emoji + '</span></div>';
+      h += '<div class="shop-chest-tier-body"><div class="shop-chest-tier-name font-display">' + esc(tier.name) + '</div>';
+      h += '<div class="text-muted text-xs">' + esc(tier.tagline) + '</div>';
+      h += '<div class="text-green font-mono text-xs" style="font-weight:700;margin-top:0.25rem">' + fmtCash(p.price) + (p.spCost ? ' or ' + p.spCost + ' SP' : '') + '</div></div>';
+      h += '<button type="button" class="game-btn game-btn-green game-btn-sm shop-chest-open-btn" data-action="buy-pack" data-pack="' + p.type + '"' + (dis ? ' disabled' : '') + '>SIEGE OPEN</button></div>';
     });
-    h += '<div class="neon-card neon-card-green neon-card-pulse p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
+    h += '</div>';
+    h += '<div class="section-label mb-2" style="text-align:left">DAILY LUXURY SHOWCASE</div>';
+    h += '<div class="shop-daily-grid mb-3">';
+    dailyShowcaseItems().forEach(function (item) {
+      var s = item.strain;
+      var rc = rarityColor(s.rarity);
+      var dis = G.cash < item.price;
+      h += '<div class="shop-daily-slot glass-panel halftone-panel" style="--daily-accent:' + rc + '">';
+      h += '<div class="shop-daily-tag">' + esc(item.label) + '</div>';
+      h += '<div class="shop-daily-card">' + crCardHtml(s, { noFocus: true }) + '</div>';
+      h += '<div class="shop-daily-price font-mono text-green">' + fmtCash(item.price) + '</div>';
+      h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="buy-showcase" data-id="' + item.slot + '"' + (dis ? ' disabled' : '') + '>ACQUIRE</button></div>';
+    });
+    h += '</div>';
+    h += '<div class="neon-card neon-card-green neon-card-pulse glass-panel halftone-panel p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
     blitzShopRows().forEach(function (u) {
-      h += '<div class="flex-between p-3 mb-2" style="background:rgba(0,0,0,0.35);border-radius:0.75rem;border:1px solid ' + (u.purchased ? 'rgba(100,100,100,0.3)' : 'rgba(57,255,20,0.25)') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
+      h += '<div class="flex-between p-3 mb-2 shop-blitz-row" style="background:rgba(0,0,0,0.35);border-radius:0.75rem;border:1px solid ' + (u.purchased ? 'rgba(100,100,100,0.3)' : 'rgba(57,255,20,0.25)') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
-    h += '</div><div class="section-label mb-2">GENERAL STORE</div>';
+    h += '</div><div class="section-label mb-2" style="text-align:left">GENERAL STORE</div>';
     G.inventory.forEach(function (it) {
       var def = STORE.find(function (x) { return x.id === it.id; }) || it;
       var revBonus = def.revPerSec || (it.type === 'nutrient' ? 0.5 : it.type === 'pipe' ? 1.2 : 0);
-      h += '<div class="neon-card p-3 mb-2"><div class="flex-row"><div style="font-size:1.5rem">' + it.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + '</div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
+      h += '<div class="neon-card glass-panel halftone-panel p-3 mb-2"><div class="flex-row"><div style="font-size:1.5rem">' + it.emoji + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + '</div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
     });
     h += '</div>';
     return h;
   }
 
-  function renderIndex() {
-    var list = filteredStrains();
-    var h = '<div class="screen-section"><div class="neon-card neon-card-green neon-card-pulse p-4 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.3em">STRAIN INDEX</div><div class="font-display chromatic-text" style="font-size:1.875rem;font-weight:700">' + G.strains.length + ' <span class="text-muted" style="font-size:1rem">/ ∞</span></div><div class="text-muted text-xs">All strains in your collection</div></div>';
-    h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="index-search" value="' + esc(G.indexSearch || '') + '">';
-    h += '<div class="flex-row gap-2 mb-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="open-merge-lab">🧬 MERGE STRAINS</button></div>';
-    h += sortChipsHtml('index-sort', G.indexSort || 'recent', STRAIN_SORT_CHIPS);
-    if (!list.length) {
-      h += '<div class="neon-card p-5 text-center">' + budImg({ hue: 120 }, '2rem') + '<div class="text-muted text-sm mt-2">No strains yet.</div></div>';
-    } else {
-      h += '<div class="binder-grid mb-3">';
-      list.forEach(function (s) {
-        h += '<div class="liftable-wrap holo-wrap" data-lift="index-' + esc(s.id) + '" data-lift-up="up-strain:' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
+  function renderIndexDecksPane() {
+    var equipped = G.equippedBattleIds || [];
+    var h = '<div class="decks-pane">';
+    h += '<div class="deck-section glass-panel halftone-panel p-3 mb-3"><div class="flex-between mb-2"><div class="section-label section-label-green" style="margin:0;text-align:left">CAMPAIGN SQUAD</div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="equip-best">EQUIP BEST</button></div>';
+    h += '<div class="battle-loadout-grid mb-2">';
+    for (var slot = 0; slot < BATTLE_EQUIP_MAX; slot++) {
+      var eid = equipped[slot];
+      var es = eid ? strainById(eid) : null;
+      if (es) h += '<div class="battle-slot liftable-wrap" data-lift="battle-slot-' + esc(es.id) + '">' + crCardHtml(es, { noFocus: true, showDps: true }) + '</div>';
+      else h += '<div class="battle-slot battle-slot-empty"><span class="text-muted text-xs">Empty</span></div>';
+    }
+    h += '</div><input type="search" class="input-field mb-2" placeholder="Search strains to equip..." data-action="battle-equip-search" value="' + esc(UI.battleEquipSearch || '') + '">';
+    h += sortChipsHtml('battle-equip-sort', UI.battleEquipSort || 'dps', BATTLE_SORT_CHIPS);
+    var pool = filteredBattleEquipStrains();
+    if (!pool.length) h += '<div class="text-muted text-xs text-center p-2">No unequipped strains match.</div>';
+    else {
+      h += '<div class="binder-grid battle-equip-grid">';
+      pool.forEach(function (s) {
+        h += '<div class="battle-equip-card liftable-wrap" data-lift="battle-pool-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, showDps: true }) + '</div>';
       });
       h += '</div>';
+    }
+    h += '</div>';
+    h += '<div class="deck-section glass-panel halftone-panel p-3 mb-3"><div class="section-label section-label-green mb-2" style="text-align:left">TOWER FLOORS</div>';
+    if (!G.factoryFloors.length) h += '<div class="text-muted text-xs text-center">No portal floors — open Tower from Home.</div>';
+    G.factoryFloors.forEach(function (f, fi) {
+      var eq = f.equippedStrainId ? strainById(f.equippedStrainId) : null;
+      h += '<div class="deck-floor-row flex-between mb-2"><div class="font-mono text-xs text-muted">F' + (fi + 1) + ' Lv.' + f.level + '</div>';
+      h += '<div style="flex:1;margin:0 0.5rem">' + (eq ? crCardHtml(eq, { noFocus: true }) : '<div class="battle-slot-empty" style="min-height:3rem"><span class="text-muted text-xs">Empty</span></div>') + '</div>';
+      h += '<button type="button" class="game-btn game-btn-sm" data-action="open-strain-picker" data-id="' + esc(f.id) + '">SET</button></div>';
+    });
+    h += '</div>';
+    h += '<div class="deck-section glass-panel halftone-panel p-3"><div class="section-label mb-2" style="text-align:left">RAID LOADOUT</div>';
+    h += '<div class="text-muted text-xs mb-2">Mirrors Campaign squad for boss raids · ' + totalBattleDps().toFixed(1) + ' DPS</div>';
+    h += '<div class="battle-loadout-grid">';
+    for (var rs = 0; rs < Math.min(4, BATTLE_EQUIP_MAX); rs++) {
+      var rid = equipped[rs];
+      var rsStrain = rid ? strainById(rid) : null;
+      if (rsStrain) h += '<div class="battle-slot">' + crCardHtml(rsStrain, { noFocus: true, showDps: true }) + '</div>';
+      else h += '<div class="battle-slot battle-slot-empty"><span class="text-muted text-xs">—</span></div>';
+    }
+    h += '</div></div></div>';
+    return h;
+  }
+
+  function renderIndexMutationsPane() {
+    var mode = UI.mutationMode || 'create';
+    var h = '<div class="mutation-board glass-panel halftone-panel p-3">';
+    h += '<div class="mutation-mode-tabs mb-3">';
+    h += '<button type="button" class="mutation-mode-tab' + (mode === 'destroy' ? ' active' : '') + '" data-action="mutation-mode" data-id="destroy">DESTROY</button>';
+    h += '<button type="button" class="mutation-mode-tab' + (mode === 'create' ? ' active' : '') + '" data-action="mutation-mode" data-id="create">CREATE</button></div>';
+    h += '<div class="font-mono text-xs text-green mb-2">Mutation Essence: ' + (G.mutationEssence || 0) + ' · Items: ' + ((G.mutationItems || []).length) + '</div>';
+    if (mode === 'destroy') {
+      h += '<p class="text-muted text-xs mb-2">Burn strains into permanent mutation shards. Higher rarity = more essence.</p>';
+      h += '<div class="binder-grid mutation-burn-grid mb-2" style="max-height:42vh;overflow-y:auto">';
+      G.strains.filter(function (s) { return !s.planetExclusive || (s.quantity || 1) > 1; }).forEach(function (s) {
+        var gain = 1 + rarityIndex(s.rarity);
+        h += '<button type="button" class="mutation-burn-card" data-action="destroy-strain" data-id="' + esc(s.id) + '">';
+        h += crCardHtml(s, { noFocus: true }) + '<div class="mutation-burn-tag">+' + gain + ' ESS</div></button>';
+      });
+      h += '</div>';
+      if (!(G.mutationItems || []).length) h += '<div class="text-muted text-xs text-center">No mutation items yet — destroy cards to forge shards.</div>';
+      else {
+        h += '<div class="mutation-item-list">';
+        (G.mutationItems || []).slice(-6).reverse().forEach(function (m) {
+          h += '<div class="mutation-item-chip" style="--chip-color:' + rarityColor(m.tier) + '"><span class="font-mono text-xs">' + esc(m.name) + '</span><span class="text-muted text-xs">+' + m.power + '</span></div>';
+        });
+        h += '</div>';
+      }
+    } else {
+      var err = mergeLabError();
+      h += '<p class="text-muted text-xs mb-2">Fortnite-style splice — fuse two parents with a glowing core.</p>';
+      h += '<div class="mutation-fuse-rail flex-row mb-3" style="justify-content:center;align-items:center;gap:0.5rem">';
+      [G.breedSlotA, G.breedSlotB].forEach(function (sid, si) {
+        var bs = sid ? strainById(sid) : null;
+        h += '<div class="mutation-fuse-slot">' + (bs ? crCardHtml(bs, { noFocus: true }) : '<div class="merge-slot-empty mutation-slot-empty">SLOT ' + (si + 1) + '</div>') + '</div>';
+        if (si === 0) h += '<div class="mutation-fuse-plus">+</div>';
+      });
+      h += '</div>';
+      h += '<div class="binder-grid mutation-pick-grid mb-2" style="max-height:32vh;overflow-y:auto">';
+      G.strains.filter(function (s) { return !s.planetExclusive || s.quantity > 1; }).forEach(function (s) {
+        var onA = G.breedSlotA === s.id, onB = G.breedSlotB === s.id;
+        h += '<button type="button" class="merge-pick-card' + (onA || onB ? ' selected' : '') + '" data-action="merge-pick" data-id="' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, selected: onA || onB }) + '</button>';
+      });
+      h += '</div>';
+      if (err) h += '<div class="text-xs mb-2" style="color:#F87171;text-align:center">' + esc(err) + '</div>';
+      h += '<div class="flex-row gap-2"><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="open-merge-lab">FULL LAB</button>';
+      h += '<button type="button" class="game-btn game-btn-green" style="flex:2" data-action="breed-run"' + (err ? ' disabled' : '') + '>FUSE · ' + MERGE_SP_COST + ' SP</button></div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function renderIndex() {
+    var pane = UI.indexPane || 'strains';
+    var list = filteredStrains();
+    var h = '<div class="screen-section index-screen">';
+    h += '<div class="index-nav-grid mb-3">';
+    [['mutations', 'MUTATIONS', '🧬'], ['strains', 'STRAINS', '📇'], ['decks', 'DECKS', '⚔']].forEach(function (nav) {
+      h += '<button type="button" class="index-nav-card glass-panel halftone-panel' + (pane === nav[0] ? ' index-nav-active' : '') + '" data-action="index-pane" data-id="' + nav[0] + '">';
+      h += '<span class="index-nav-emoji">' + nav[2] + '</span><span class="index-nav-label font-display">' + nav[1] + '</span></button>';
+    });
+    h += '</div>';
+    if (pane === 'mutations') {
+      h += renderIndexMutationsPane();
+    } else if (pane === 'decks') {
+      h += renderIndexDecksPane();
+    } else {
+      h += '<div class="neon-card neon-card-green neon-card-pulse glass-panel halftone-panel p-4 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.3em">STRAIN INDEX</div><div class="font-display chromatic-text" style="font-size:1.875rem;font-weight:700">' + G.strains.length + ' <span class="text-muted" style="font-size:1rem">/ ∞</span></div><div class="text-muted text-xs">All strains in your collection</div></div>';
+      h += '<input type="search" class="input-field mb-2" placeholder="Search strains..." data-action="index-search" value="' + esc(G.indexSearch || '') + '">';
+      h += sortChipsHtml('index-sort', G.indexSort || 'recent', STRAIN_SORT_CHIPS);
+      if (!list.length) {
+        h += '<div class="neon-card glass-panel halftone-panel p-5 text-center">' + budImg({ hue: 120 }, '2rem') + '<div class="text-muted text-sm mt-2">No strains yet.</div></div>';
+      } else {
+        h += '<div class="binder-grid mb-3 index-strain-grid">';
+        list.forEach(function (s) {
+          h += '<div class="liftable-wrap holo-wrap" data-lift="index-' + esc(s.id) + '" data-lift-up="up-strain:' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
+        });
+        h += '</div>';
+      }
     }
     h += '</div>';
     return h;
@@ -2984,7 +3227,12 @@
     var hasSingle = !!pr.strain;
     if (!pr.open || (!hasSingle && !hasDual)) { document.getElementById('overlay-pack-reveal').classList.remove('open'); return; }
     var title = (pr.packType || 'reward').toUpperCase().replace(/-/g, ' ');
-    var inner = '<div class="font-mono text-muted mb-2" style="font-size:0.6rem;letter-spacing:0.4em">' + esc(title) + '</div>';
+    var wheelHtml = '';
+    if (pr.wheelSpin) {
+      var pct = 35 + Math.floor(Math.random() * 45);
+      wheelHtml = '<div class="pack-reveal-wheel-stage mb-3"><div class="pack-reveal-wheel"><div class="pack-reveal-wheel-ring"></div><div class="pack-reveal-wheel-pointer"></div><div class="pack-reveal-wheel-center font-display">' + pct + '%</div></div><div class="font-mono text-xs text-cyan mt-2" style="letter-spacing:0.2em">SIEGE ROLL · DICE LOCK</div></div>';
+    }
+    var inner = wheelHtml + '<div class="font-mono text-muted mb-2" style="font-size:0.6rem;letter-spacing:0.4em">' + esc(title) + '</div>';
     if (hasDual) {
       inner += '<div class="dual-pack-grid mb-3">';
       pr.strains.forEach(function (s) {
@@ -2997,7 +3245,7 @@
       inner += abilityListHtml(s) + '<div class="grid-3 mb-4 mt-3"><div class="neon-card stat-box"><div class="stat-label">THC</div><div class="stat-value">' + s.thcPercent + '%</div></div><div class="neon-card stat-box"><div class="stat-label">YIELD</div><div class="stat-value">' + s.yield + '</div></div><div class="neon-card stat-box"><div class="stat-label">POTENCY</div><div class="stat-value">' + s.potency + '</div></div></div>';
     }
     var borderC = hasDual ? '#39FF14' : rarityColor(pr.strain.rarity);
-    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:2px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
+    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card pack-reveal-aaa halftone-panel" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:3px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66, inset 0 1px 0 rgba(255,255,255,0.08)"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
     document.getElementById('overlay-pack-reveal').classList.add('open');
   }
 
@@ -3408,6 +3656,12 @@
     else if (act==='lease-accept') respondLeaseOffer(val, true);
     else if (act==='lease-decline') respondLeaseOffer(val, false);
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
+    else if (act==='open-chest') { openChestSlot(val); return; }
+    else if (act==='hub-raid') { UI.activeTab = 'index'; UI.indexPane = 'decks'; UI.farmOpen = false; }
+    else if (act==='index-pane') UI.indexPane = val;
+    else if (act==='mutation-mode') UI.mutationMode = val;
+    else if (act==='destroy-strain') destroyStrain(val);
+    else if (act==='buy-showcase') buyDailyShowcase(parseInt(val, 10));
     else if (act==='breed-pick') {
       var bp = val.split(':');
       if (bp[0] === 'a') G.breedSlotA = bp[1] || null;
