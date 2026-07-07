@@ -1013,6 +1013,7 @@
       filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.45));
     }
     .battle-hub-start-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       position: relative; width: min(100%, 16rem); padding: 0.95rem 1.25rem;
       border: 3px solid #1a1209; border-radius: 1rem; cursor: pointer;
       font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; letter-spacing: 0.14em;
@@ -1062,12 +1063,28 @@
       color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
     }
     .battle-hub-trail-toggle:hover { color: var(--green); }
+    .battle-hub-equip-link {
+      background: none; border: none; color: var(--cyan); font-family: var(--font-mono);
+      font-size: 0.48rem; letter-spacing: 0.12em; cursor: pointer; padding: 0.2rem;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .battle-hub-start-icon .farm-icon { font-size: 1.1rem; }
     .battle-hub .campaign-trail-wrap { margin-top: -0.25rem; }
+    .battle-hub-campaign-wrap {
+      border-radius: 0.85rem; overflow: hidden; max-height: 42vh;
+      border: 2px solid rgba(74, 222, 128, 0.2);
+      animation: battle-hub-trail-in 0.35s ease;
+    }
+    @keyframes battle-hub-trail-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
     .battle-hub-section-title {
       font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.18em;
       color: var(--gold); font-weight: 700; margin-bottom: 0.55rem;
     }
     .battle-hub-section-title-cyan { color: var(--cyan); }
+    .battle-hub-section-head {
+      display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.55rem;
+    }
+    .battle-hub-section-icon .farm-icon { font-size: 0.85rem; }
     .battle-hub-quests {
       padding: 0.65rem 0.75rem; border-radius: 1rem;
       background: linear-gradient(165deg, rgba(26, 16, 48, 0.92), rgba(12, 6, 24, 0.95));
@@ -1784,3 +1801,251 @@
       0%, 100% { transform: scale(1); filter: brightness(1); }
       50% { transform: scale(1.02); filter: brightness(1.15); }
     }
+
+    /* ── Battle Hub (HOME tab — Clash Royale style) ── */
+    .battle-hub-screen {
+      display: flex; flex-direction: column; gap: 0.65rem;
+      min-height: 100%; padding-bottom: 0.5rem;
+      background: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(88, 28, 135, 0.35) 0%, transparent 55%),
+        radial-gradient(ellipse 80% 50% at 100% 100%, rgba(6, 182, 212, 0.12) 0%, transparent 45%),
+        linear-gradient(180deg, #0a0612 0%, #12081c 40%, #0c0805 100%);
+    }
+    .battle-hub-hero {
+      position: relative; border-radius: 1rem; overflow: hidden;
+      border: 3px solid #0c0805;
+      box-shadow: 0 8px 0 #0c0805, 0 0 40px rgba(168, 85, 247, 0.2);
+      min-height: 17.5rem;
+    }
+    .battle-hub-hero-mega {
+      box-shadow: 0 8px 0 #0c0805, 0 0 50px rgba(250, 204, 21, 0.35), 0 0 80px rgba(236, 72, 153, 0.25);
+    }
+    .battle-hub-boss-bg {
+      position: absolute; inset: 0; overflow: hidden;
+      background: linear-gradient(180deg, #1a0a2e 0%, #0d0618 100%);
+    }
+    .battle-hub-boss-img {
+      position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      width: 11rem; height: 11rem; object-fit: contain;
+      filter: drop-shadow(0 0 24px rgba(168, 85, 247, 0.5));
+      z-index: 1;
+    }
+    .battle-hub-hero-mega .battle-hub-boss-img { width: 12.5rem; height: 12.5rem; }
+    .battle-hub-boss-dim {
+      position: absolute; inset: 0; z-index: 2;
+      background: linear-gradient(180deg, rgba(10, 6, 18, 0.25) 0%, rgba(10, 6, 18, 0.72) 55%, rgba(8, 5, 12, 0.92) 100%);
+    }
+    .battle-hub-boss-aura {
+      position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      width: 10rem; height: 10rem; border-radius: 50%; z-index: 0;
+      border: 2px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 0 60px rgba(168, 85, 247, 0.35);
+      animation: battle-hub-aura 3s ease-in-out infinite alternate;
+    }
+    @keyframes battle-hub-aura {
+      0% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.5; }
+      100% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.85; }
+    }
+    .battle-hub-hero-content {
+      position: relative; z-index: 3; display: flex; flex-direction: column;
+      align-items: center; padding: 0.65rem 0.75rem 0.85rem; text-align: center;
+    }
+    .battle-hub-node-tag {
+      font-family: var(--font-mono); font-size: 0.5rem; letter-spacing: 0.2em;
+      color: rgba(56, 189, 248, 0.9); margin-bottom: 0.2rem;
+    }
+    .battle-hub-boss-name {
+      font-family: 'Audiowide', var(--font-display); font-size: 0.85rem;
+      letter-spacing: 0.12em; text-shadow: 0 2px 0 #0c0805, 0 0 12px rgba(250, 204, 21, 0.35);
+      margin-bottom: 0.1rem;
+    }
+    .battle-hub-boss-tier {
+      font-family: var(--font-mono); font-size: 0.48rem; color: var(--muted); margin-bottom: 0.35rem;
+    }
+    .battle-hub-hp-track {
+      width: 88%; max-width: 16rem; height: 0.45rem; border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(74, 222, 128, 0.25);
+      overflow: hidden; margin-bottom: 0.2rem;
+    }
+    .battle-hub-hp-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #22c55e, #4ade80, #a3e635);
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+      transition: width 0.2s ease;
+    }
+    .battle-hub-hp-text { font-family: var(--font-mono); font-size: 0.48rem; margin-bottom: 0.45rem; }
+    .battle-hub-gate-warn { margin-bottom: 0.35rem; }
+    .battle-hub-gate-line {
+      font-size: 0.48rem; color: #f87171; background: rgba(248, 113, 113, 0.12);
+      padding: 0.2rem 0.5rem; border-radius: 0.35rem;
+    }
+    .battle-hub-start-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      width: min(100%, 16rem); padding: 0.85rem 1.25rem; margin: 0.15rem 0 0.5rem;
+      border: 3px solid #0c0805; border-radius: 1rem;
+      background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+      color: #1a0a00; font-family: 'Audiowide', var(--font-display);
+      font-size: 1rem; font-weight: 700; letter-spacing: 0.18em;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #92400e, 0 0 28px rgba(250, 204, 21, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.35);
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    .battle-hub-start-btn:hover {
+      box-shadow: 0 6px 0 #92400e, 0 0 40px rgba(250, 204, 21, 0.75), inset 0 2px 0 rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
+    }
+    .battle-hub-start-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #92400e, 0 0 20px rgba(250, 204, 21, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+    }
+    .battle-hub-start-icon .farm-icon { font-size: 1.1rem; }
+    .battle-hub-power {
+      font-family: 'Audiowide', var(--font-display); font-size: 1.35rem; font-weight: 700;
+      letter-spacing: 0.06em; line-height: 1.1; margin-bottom: 0.45rem;
+      color: #fff;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.9), 0 0 40px rgba(168, 85, 247, 0.5), 0 2px 0 #0c0805;
+      animation: battle-hub-power-pulse 2.5s ease-in-out infinite alternate;
+    }
+    @keyframes battle-hub-power-pulse {
+      0% { text-shadow: 0 0 16px rgba(56, 189, 248, 0.7), 0 0 32px rgba(168, 85, 247, 0.35), 0 2px 0 #0c0805; }
+      100% { text-shadow: 0 0 28px rgba(56, 189, 248, 1), 0 0 56px rgba(250, 204, 21, 0.45), 0 2px 0 #0c0805; }
+    }
+    .battle-hub-squad {
+      display: flex; gap: 0.28rem; justify-content: center; flex-wrap: nowrap;
+      width: 100%; max-width: 20rem; margin-bottom: 0.35rem;
+    }
+    .battle-hub-squad-slot {
+      flex: 1; max-width: 2.15rem; aspect-ratio: 3/4; border-radius: 0.4rem;
+      border: 2px solid #0c0805; background: rgba(0, 0, 0, 0.45);
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .battle-hub-squad-slot.filled {
+      box-shadow: 0 0 10px color-mix(in srgb, var(--slot-glow, #7ca61e) 45%, transparent);
+      border-color: color-mix(in srgb, var(--slot-glow, #7ca61e) 60%, #0c0805);
+    }
+    .battle-hub-squad-slot.empty { border-style: dashed; opacity: 0.55; }
+    .battle-hub-squad-plus { font-size: 0.75rem; color: var(--muted); font-weight: 700; }
+    .battle-hub-equip-link {
+      background: none; border: none; color: var(--cyan); font-family: var(--font-mono);
+      font-size: 0.48rem; letter-spacing: 0.12em; cursor: pointer; padding: 0.2rem;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .battle-hub-campaign-wrap {
+      border-radius: 0.85rem; overflow: hidden; max-height: 42vh;
+      border: 2px solid rgba(74, 222, 128, 0.2);
+      animation: battle-hub-trail-in 0.35s ease;
+    }
+    @keyframes battle-hub-trail-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .battle-hub-campaign-wrap .campaign-trail-wrap { margin: 0; }
+    .battle-hub-quests, .battle-hub-portal {
+      padding: 0.65rem 0.75rem; border-radius: 0.85rem;
+    }
+    .battle-hub-quests {
+      background: linear-gradient(165deg, rgba(30, 15, 45, 0.85) 0%, rgba(12, 8, 20, 0.95) 100%) !important;
+      border-color: rgba(168, 85, 247, 0.35) !important;
+    }
+    .battle-hub-portal {
+      background: linear-gradient(165deg, rgba(15, 30, 20, 0.85) 0%, rgba(8, 12, 10, 0.95) 100%) !important;
+      border-color: rgba(56, 189, 248, 0.3) !important;
+    }
+    .battle-hub-section-head {
+      display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.55rem;
+    }
+    .battle-hub-section-icon .farm-icon { font-size: 0.7rem; }
+    .battle-hub-section-title {
+      font-family: 'Audiowide', var(--font-display); font-size: 0.58rem;
+      letter-spacing: 0.2em; color: var(--gold);
+    }
+    .battle-hub-event-banner {
+      position: relative; border-radius: 0.75rem; overflow: hidden;
+      margin-bottom: 0.55rem; border: 2px solid rgba(236, 72, 153, 0.45);
+      background: linear-gradient(135deg, #3b0764 0%, #1e1b4b 50%, #0f172a 100%);
+    }
+    .battle-hub-event-glow {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 80% 20%, rgba(250, 204, 21, 0.25) 0%, transparent 55%);
+      animation: battle-hub-event-glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes battle-hub-event-glow {
+      0% { opacity: 0.6; } 100% { opacity: 1; }
+    }
+    .battle-hub-event-body { position: relative; padding: 0.55rem 0.65rem; z-index: 1; }
+    .battle-hub-event-title {
+      font-family: 'Audiowide', var(--font-display); font-size: 0.72rem;
+      letter-spacing: 0.14em; color: #fff;
+      text-shadow: 0 0 12px rgba(236, 72, 153, 0.6);
+    }
+    .battle-hub-event-sub { font-size: 0.48rem; color: rgba(255, 255, 255, 0.65); margin: 0.15rem 0 0.35rem; }
+    .battle-hub-event-timer {
+      display: inline-block; font-family: var(--font-mono); font-size: 0.65rem; font-weight: 700;
+      color: #fbbf24; padding: 0.2rem 0.5rem; border-radius: 0.35rem;
+      background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(250, 204, 21, 0.35);
+      box-shadow: 0 0 12px rgba(250, 204, 21, 0.25);
+    }
+    .battle-hub-quest {
+      display: flex; gap: 0.45rem; align-items: flex-start;
+      padding: 0.4rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .battle-hub-quest:last-of-type { border-bottom: none; }
+    .battle-hub-quest-done .battle-hub-quest-name { color: var(--leaf); }
+    .battle-hub-quest-icon .farm-icon { font-size: 0.85rem; }
+    .battle-hub-quest-body { flex: 1; min-width: 0; }
+    .battle-hub-quest-name { font-size: 0.58rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .battle-hub-quest-bar {
+      height: 0.35rem; border-radius: 999px; background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; margin-bottom: 0.15rem;
+    }
+    .battle-hub-quest-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8, #a855f7);
+      transition: width 0.3s ease;
+    }
+    .battle-hub-quest-prog { font-family: var(--font-mono); font-size: 0.45rem; color: var(--muted); }
+    .battle-hub-chest-alert {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+      margin-top: 0.45rem; padding: 0.4rem 0.5rem; border-radius: 0.5rem;
+      background: rgba(250, 204, 21, 0.1); border: 1px solid rgba(250, 204, 21, 0.25);
+      font-size: 0.52rem;
+    }
+    .battle-hub-quest-links {
+      display: flex; gap: 0.35rem; margin-top: 0.5rem; flex-wrap: wrap;
+    }
+    .battle-hub-mini-btn {
+      flex: 1; min-width: 4.5rem; padding: 0.35rem 0.4rem; border-radius: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.35);
+      font-size: 0.48rem; cursor: pointer; color: var(--text);
+      display: flex; align-items: center; justify-content: center; gap: 0.25rem;
+    }
+    .battle-hub-mini-btn:hover { border-color: rgba(56, 189, 248, 0.4); }
+    .battle-hub-portal-stats {
+      display: grid; grid-template-columns: 1.4fr 0.8fr 1fr; gap: 0.45rem; margin-bottom: 0.55rem;
+    }
+    .battle-hub-portal-stat {
+      padding: 0.45rem 0.4rem; border-radius: 0.55rem;
+      background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(56, 189, 248, 0.15);
+      text-align: center;
+    }
+    .battle-hub-stat-label {
+      font-family: var(--font-mono); font-size: 0.42rem; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 0.15rem;
+    }
+    .battle-hub-stat-value {
+      font-family: 'Audiowide', var(--font-display); font-size: 0.72rem;
+      color: var(--leaf); line-height: 1.2;
+    }
+    .battle-hub-portal-rev .battle-hub-stat-value { font-size: 0.82rem; color: #4ade80; }
+    .battle-hub-upgrade-btn {
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+      width: 100%; padding: 0.65rem; border: 3px solid #0c0805; border-radius: 0.75rem;
+      background: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
+      color: #042f2e; font-family: 'Audiowide', var(--font-display);
+      font-size: 0.65rem; letter-spacing: 0.15em; font-weight: 700; cursor: pointer;
+      box-shadow: 0 4px 0 #0e7490, 0 0 16px rgba(34, 211, 238, 0.35);
+      transition: transform 0.08s ease;
+    }
+    .battle-hub-upgrade-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #0e7490; }
+    .battle-hub-hero.boss-kill-celebrate { animation: boss-kill-celebrate 0.9s ease; }
+    .battle-hub-hero.boss-wave-clear { animation: boss-wave-clear 0.55s ease; }
+    .battle-hub-hero.boss-wave-advance { animation: boss-wave-advance 0.65s ease; }

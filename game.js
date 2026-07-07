@@ -3028,12 +3028,18 @@
   function syncBossBattleDom() {
     if (UI.activeTab !== 'battle' || UI.farmOpen) return;
     if (isBossHpDirty()) {
-      var hp = document.querySelector('.boss-hp-fill');
-      if (hp && G.bossMaxHp) {
-        var hpPct = Math.max(0, G.bossHp / G.bossMaxHp * 100);
-        if (UI_LAST.bossHpPct !== hpPct) {
-          hp.style.width = hpPct + '%';
-          UI_LAST.bossHpPct = hpPct;
+      var hpPct = G.bossMaxHp ? Math.max(0, G.bossHp / G.bossMaxHp * 100) : 0;
+      var hp = document.querySelector('.boss-hp-fill') || document.querySelector('.battle-hub-hp-fill');
+      if (hp && G.bossMaxHp && UI_LAST.bossHpPct !== hpPct) {
+        hp.style.width = hpPct + '%';
+        UI_LAST.bossHpPct = hpPct;
+      }
+      var hpCur = document.querySelector('.battle-hub-hp-current');
+      if (hpCur && G.bossMaxHp) {
+        var hpTxt = Math.ceil(G.bossHp).toLocaleString();
+        if (UI_LAST.bossHpCur !== hpTxt) {
+          hpCur.textContent = hpTxt;
+          UI_LAST.bossHpCur = hpTxt;
         }
       }
       UI.dirty.bossHp = false;
@@ -3061,10 +3067,12 @@
       UI.dirty.bossTrait = false;
     }
     if (isBossDpsDirty()) {
-      var dpsEl = document.querySelector('.battle-hub-dps-value') || document.querySelector('.boss-stage-dps');
+      var dpsVal = totalBattleDps();
+      var dpsEl = document.querySelector('.battle-hub-dps-value') || document.getElementById('home-dps-display') || document.querySelector('.boss-stage-dps');
       if (dpsEl) {
-        var dpsVal = totalBattleDps();
-        var dpsStr = dpsEl.classList.contains('battle-hub-dps-value') ? dpsVal.toFixed(1) : 'DPS ' + dpsVal.toFixed(1);
+        var dpsStr = (dpsEl.classList.contains('battle-hub-dps-value') || dpsEl.id === 'home-dps-display')
+          ? 'DPS: ' + dpsVal.toFixed(1)
+          : 'DPS ' + dpsVal.toFixed(1);
         if (UI_LAST.dps !== dpsStr) {
           dpsEl.textContent = dpsStr;
           UI_LAST.dps = dpsStr;
@@ -3153,8 +3161,8 @@
     syncXpDom(false);
     syncHudShell(false);
     syncBossBattleDom();
-    syncTabTimers();
     syncBattleHubTimers();
+    syncTabTimers();
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
   }
 
@@ -3431,11 +3439,14 @@
     h += '</div><div class="battle-hub-hero-dim"></div></div>';
     h += '<div class="battle-hub-hero-content">';
     h += '<div class="battle-hub-node-tag">NODE ' + node + '/' + CAMPAIGN_NODE_COUNT + (mega ? ' · MEGA' : '') + '</div>';
-    h += '<div class="battle-hub-dps"><span class="battle-hub-dps-label">DPS</span><span class="battle-hub-dps-value boss-stage-dps">' + dps.toFixed(1) + '</span></div>';
-    h += '<button type="button" class="battle-hub-start-btn" data-action="start-run">START RUN</button>';
+    h += '<button type="button" class="battle-hub-start-btn" data-action="start-run">';
+    h += '<span class="battle-hub-start-icon">' + farmIcon('mega', { lg: true }) + '</span>';
+    h += '<span class="battle-hub-start-label">START RUN</span></button>';
+    h += '<div class="battle-hub-dps battle-hub-power" id="home-dps-display">';
+    h += '<span class="battle-hub-dps-label">POWER</span>';
+    h += '<span class="battle-hub-dps-value boss-stage-dps">DPS: ' + dps.toFixed(1) + '</span></div>';
     h += battleHubSquadHtml();
-    h += '<button type="button" class="battle-hub-trail-toggle" data-action="toggle-campaign-trail">';
-    h += (UI.campaignTrailOpen ? 'Hide Trail' : 'Campaign Trail') + ' · ' + esc(G.bossName) + '</button>';
+    h += '<button type="button" class="battle-hub-equip-link" data-action="hub-raid">' + farmIcon('equip') + ' EDIT SQUAD</button>';
     h += '</div></section>';
     return h;
   }
@@ -3443,7 +3454,9 @@
   function battleHubQuestsHtml() {
     ensureQuestState();
     var h = '<section class="battle-hub-quests ' + SKIN_PANEL + '">';
-    h += '<div class="battle-hub-section-title">QUESTS</div>';
+    h += '<div class="battle-hub-section-head"><span class="battle-hub-section-icon">' + farmIcon('help') + '</span>';
+    h += '<span class="battle-hub-section-title">QUESTS & EVENTS</span></div>';
+    h += battleHubEventBannerHtml();
     DAILY_QUEST_DEFS.forEach(function (q) { h += questRowHtml(q, 'daily'); });
     WEEKLY_QUEST_DEFS.forEach(function (q) { h += questRowHtml(q, 'weekly'); });
     h += battleHubPendingChestsHtml();
@@ -3456,7 +3469,8 @@
     var cr = cloneRem();
     var cloneActive = !!G.cloneJob;
     var h = '<section class="battle-hub-portal ' + SKIN_PANEL + '">';
-    h += '<div class="battle-hub-section-title battle-hub-section-title-cyan">PORTAL FARM</div>';
+    h += '<div class="battle-hub-section-head"><span class="battle-hub-section-icon">' + farmIcon('portal') + '</span>';
+    h += '<span class="battle-hub-section-title battle-hub-section-title-cyan">PORTAL FARM</span></div>';
     h += '<div class="battle-hub-portal-grid">';
     h += '<div class="battle-hub-portal-stat"><div class="battle-hub-portal-stat-label">$/SEC</div>';
     h += '<div class="battle-hub-portal-stat-value" id="battle-hub-rev">' + fmtRev(revSecTotal()) + '</div></div>';
@@ -3466,7 +3480,7 @@
     h += '<div class="battle-hub-cloner-row">' + farmIcon('clone', { lg: true });
     h += '<span class="battle-hub-cloner-timer" id="battle-hub-clone-timer">' + (cloneActive ? fmtCd(cr) : 'READY') + '</span></div></div>';
     h += '</div>';
-    h += '<button type="button" class="battle-hub-upgrade-btn" data-action="openPortalFarm">UPGRADE</button>';
+    h += '<button type="button" class="battle-hub-upgrade-btn" data-action="open-portal-farm">' + farmIcon('tower') + ' UPGRADE</button>';
     h += '</section>';
     return h;
   }
@@ -3589,37 +3603,6 @@
     scheduleSave();
     checkAchievements();
     return true;
-  }
-
-  function engagementStripHtml() {
-    ensureEngagementState();
-    var canClaim = canClaimDailyLogin();
-    var h = '<div class="engagement-strip">';
-    h += '<button type="button" class="engagement-pill" data-action="open-daily-login">';
-    h += '<div class="engagement-pill-title">' + (canClaim ? 'DAILY REWARD' : 'LOGIN STREAK') + '</div>';
-    h += '<div class="engagement-pill-sub">' + (canClaim ? 'Tap to claim!' : 'Day ' + (G.dailyLoginStreak || 0) + ' · claimed') + '</div></button>';
-    h += '<button type="button" class="engagement-pill" data-action="open-trophy-road">';
-    h += '<div class="engagement-pill-title">TROPHY ROAD</div>';
-    h += '<div class="engagement-pill-sub">' + (G.trophyPoints || 0) + ' pts</div></button>';
-    h += '<button type="button" class="engagement-pill" data-action="open-achievements">';
-    h += '<div class="engagement-pill-title">ACHIEVEMENTS</div>';
-    h += '<div class="engagement-pill-sub">' + (G.achievementsUnlocked || []).length + '/' + ACHIEVEMENTS.length + '</div></button>';
-    h += '</div>';
-    return h;
-  }
-
-  function cardOfDaySpotlightHtml() {
-    var cod = cardOfDayStrain();
-    var s = cod.strain;
-    var sold = G.cardOfDayPurchased;
-    var h = '<div class="card-of-day-spotlight ' + SKIN_PANEL + '">';
-    h += '<div class="card-of-day-info"><div class="font-mono text-green text-xs" style="letter-spacing:0.15em">CARD OF THE DAY</div>';
-    h += '<div style="font-weight:700;font-size:0.8rem">' + esc(s.name) + '</div>';
-    h += '<div class="text-muted text-xs">' + esc(rarityName(s.rarity)) + ' · ' + fmtCash(cod.price) + '</div>';
-    if (sold) h += '<div class="text-muted text-xs mt-1">Acquired today</div>';
-    else h += '<button type="button" class="game-btn game-btn-green game-btn-sm mt-2" data-action="buy-card-of-day"' + (G.cash < cod.price ? ' disabled' : '') + '>ACQUIRE</button>';
-    h += '</div><div>' + crCardHtml(s, { noFocus: true }) + '</div></div>';
-    return h;
   }
 
   function chestLabel(r) {
@@ -3760,13 +3743,15 @@
   }
 
   function renderBattle() {
-    // RAID + MUTATION LAB: reach via Index nav (decks / mutations panes) — hub orbs removed from HOME.
     var mega = isBossWave();
     var h = '<div class="screen-section battle-hub' + (mega ? ' battle-hub-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += battleHubHeroHtml();
-    if (UI.campaignTrailOpen) h += renderCampaignTrail();
+    if (UI.campaignTrailOpen) {
+      h += '<div id="home-campaign-trail" class="battle-hub-campaign-wrap">';
+      h += renderCampaignTrail();
+      h += '</div>';
+    }
     h += battleHubQuestsHtml();
-    h += battleHubEventBannerHtml();
     h += battleHubPortalPanelHtml();
     h += '</div>';
     return h;
@@ -4934,6 +4919,31 @@
       if (UI.farmOpen) plantSay('tab_farm', true);
       scheduleSave(); render(); return;
     }
+    if (act==='open-portal-farm' || act==='openPortalFarm') {
+      UI.activeTab = 'battle';
+      UI.farmOpen = true;
+      UI.campaignTrailOpen = false;
+      G.farmSubTab = 'portal';
+      plantSay('tab_farm', true);
+      scheduleSave(); render(); return;
+    }
+    if (act==='start-run') {
+      UI.campaignTrailOpen = true;
+      UI.farmOpen = false;
+      UI.battleWaveFlash = 'battle-hub-run-flash';
+      render();
+      setTimeout(function () {
+        var trail = document.getElementById('home-campaign-trail');
+        if (trail) trail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var el = document.getElementById('campaign-node-' + currentCampaignNode());
+        if (el) {
+          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { el.scrollIntoView(true); }
+        }
+        UI.battleWaveFlash = null;
+        render();
+      }, 120);
+      return;
+    }
     if (act==='buy-pack') buyPack(val);
     else if (act==='buy-blitz') buyBlitz(val);
     else if (act==='buy-item') buyItem(val);
@@ -5051,28 +5061,6 @@
     else if (act==='lease-decline') respondLeaseOffer(val, false);
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
     else if (act==='open-chest') { openChestSlot(val); return; }
-    else if (act==='openPortalFarm') {
-      UI.activeTab = 'battle';
-      UI.farmOpen = true;
-      G.farmSubTab = 'portal';
-      plantSay('tab_farm', true);
-      scheduleSave(); render(); return;
-    }
-    else if (act==='start-run') {
-      UI.campaignTrailOpen = true;
-      UI.battleWaveFlash = 'battle-hub-run-flash';
-      render();
-      setTimeout(function () {
-        var node = currentCampaignNode();
-        var el = document.getElementById('campaign-node-' + node);
-        if (el) {
-          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { el.scrollIntoView(true); }
-        }
-        UI.battleWaveFlash = null;
-        render();
-      }, 120);
-      return;
-    }
     else if (act==='toggle-campaign-trail') {
       UI.campaignTrailOpen = !UI.campaignTrailOpen;
       render(); return;
