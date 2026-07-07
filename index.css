@@ -283,7 +283,8 @@
     .profile-body { padding: 2.5rem 1.25rem 1.25rem; }
     .flipper { display: flex; align-items: center; justify-content: center; gap: 0.25rem; flex-wrap: wrap; margin-bottom: 1rem; }
     .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
-    .stat-box { text-align: center; padding: 0.5rem 0.25rem; }
+    .stat-box { text-align: center; padding: 0.5rem 0.25rem; border-radius: 0.75rem; }
+    .stat-box.halftone-panel { padding: 0.65rem 0.45rem; }
     .stat-label { font-family: var(--font-mono); font-size: 0.45rem; color: var(--muted); }
     .stat-value { font-size: 0.6rem; font-weight: 700; color: #39FF14; overflow: hidden; text-overflow: ellipsis; }
     .avatar-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 1rem; }
@@ -435,6 +436,9 @@
       position: relative; z-index: 1; width: 5rem; height: 5rem; object-fit: contain;
       filter: drop-shadow(0 8px 16px rgba(0,0,0,0.6));
       animation: boss-idle 4s ease-in-out infinite;
+    }
+    .boss-svg-fallback.boss-sprite {
+      display: block; margin: 0 auto;
     }
     .boss-stage-mega .boss-sprite { width: 7rem; height: 7rem; }
     @keyframes boss-idle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
@@ -873,23 +877,24 @@
       transform: translate3d(0, 0, 0);
     }
     .home-arena-frame {
-      position: relative; flex: 1 1 50%; min-height: 14rem;
+      position: relative; flex: 1 1 56%; min-height: 13.5rem;
       border-radius: 1.1rem; padding: 0.5rem;
       background: linear-gradient(145deg, rgba(10, 15, 30, 0.82), rgba(3, 7, 18, 0.92));
     }
     .home-arena-frame .boss-stage {
-      margin: 0; min-height: 12rem; border: none; box-shadow: none; background: transparent;
-      padding: 0.75rem 0.5rem 0.65rem;
+      margin: 0; min-height: 11.5rem; border: none; box-shadow: none; background: transparent;
+      padding: 0.65rem 0.5rem 0.5rem;
     }
+    .home-arena-frame .boss-stage-hud { padding-bottom: 0.1rem; }
     .home-hub-dock {
       position: relative; left: auto; top: auto; transform: translate3d(0, 0, 0);
-      display: flex; align-items: center; justify-content: center; gap: 0.85rem;
-      z-index: 4; pointer-events: auto;
-      margin-top: 0.55rem; padding: 0.35rem 0 0.15rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.65rem;
+      z-index: 4; pointer-events: auto; flex-shrink: 0;
+      margin-top: 0.25rem; padding: 0.15rem 0 0.1rem;
     }
     .hub-orb-btn {
       pointer-events: auto; position: relative;
-      width: 4.25rem; height: 4.25rem; border-radius: 50%;
+      width: 3.85rem; height: 3.85rem; border-radius: 50%;
       border: 3px solid rgba(0, 0, 0, 0.9) !important;
       background: radial-gradient(circle at 35% 28%, rgba(74, 222, 128, 0.35), rgba(10, 15, 30, 0.95) 58%, rgba(3, 7, 18, 1));
       box-shadow:
@@ -907,9 +912,9 @@
       border: 2px solid rgba(74, 222, 128, 0.25); animation: hub-orb-pulse 2.8s ease-in-out infinite;
     }
     @keyframes hub-orb-pulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:0.85;transform:scale(1.06)} }
-    .hub-orb-emoji { font-size: 1.35rem; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6)); }
+    .hub-orb-emoji { font-size: 1.2rem; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6)); }
     .hub-orb-label {
-      font-family: var(--font-display); font-size: 0.38rem; font-weight: 700;
+      font-family: var(--font-display); font-size: 0.36rem; font-weight: 700;
       letter-spacing: 0.08em; color: var(--green); margin-top: 0.15rem;
       text-shadow: 0 1px 0 #000;
     }
@@ -938,6 +943,7 @@
     /* SHOP — Clash Royale revenue grid */
     .shop-screen { gap: 0.75rem; padding-bottom: 1.5rem; }
     .shop-hero { border-radius: 1rem; padding: 0.85rem 1rem; }
+    .shop-hero.halftone-panel { background: linear-gradient(160deg, rgba(10, 15, 30, 0.92), rgba(3, 7, 18, 0.98)); }
     .shop-chest-stack { display: flex; flex-direction: column; gap: 0.65rem; }
     .shop-chest-tier {
       display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center;
@@ -992,6 +998,9 @@
       transition: transform 0.18s var(--ease-os), box-shadow 0.2s;
       transform: translate3d(0, 0, 0);
     }
+    .index-nav-card.ink-border { border-radius: 0.9rem; }
+    .deck-section.halftone-panel { border-radius: 1rem; }
+    .mutation-board.halftone-panel { border-radius: 1rem; }
     .index-nav-card:hover { transform: translate3d(0, -3px, 0); }
     .index-nav-active {
       border-color: rgba(74, 222, 128, 0.55) !important;
