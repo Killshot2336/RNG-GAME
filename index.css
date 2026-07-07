@@ -1318,3 +1318,83 @@
       .nav-btn:hover { color: var(--text); }
       .strain-card:hover { transform: scale(1.02); }
     }
+
+    /* Art pipeline — farm-icon labels + layered card composites */
+    .farm-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono, monospace); font-size: 0.55rem; font-weight: 700;
+      letter-spacing: 0.08em; line-height: 1; vertical-align: middle; color: var(--green);
+    }
+    .farm-icon-lg { font-size: 0.72rem; }
+    .farm-icon-xl { font-size: 0.95rem; }
+    .farm-icon-img {
+      display: inline-block; background: center/contain no-repeat; vertical-align: middle;
+    }
+    .farm-icon-bud.farm-icon-img { width: 1.35em; height: 1.35em; background-image: url('/public/art/strains/leaf-bud.svg'); }
+    .farm-icon-boss.farm-icon-img { width: 1.35em; height: 1.35em; background-image: url('/public/art/characters/boss-avatar.svg'); }
+    .farm-icon-cash::before { content: 'CASH'; color: #4ADE80; }
+    .farm-icon-pack::before { content: 'PACK'; }
+    .farm-icon-gift::before { content: 'GIFT'; color: #38BDF8; }
+    .farm-icon-crate::before { content: 'CRATE'; color: #A16207; }
+    .farm-icon-neon::before { content: 'NEON'; color: #38BDF8; }
+    .farm-icon-vault::before { content: 'VAULT'; color: #F472B6; }
+    .farm-icon-tower::before { content: 'TWR'; color: #FACC15; }
+    .farm-icon-raid::before { content: 'RAID'; color: #F87171; }
+    .farm-icon-mutation::before { content: 'MUT'; color: #A855F7; }
+    .farm-icon-dps::before { content: 'DPS'; color: #4ADE80; }
+    .farm-icon-equip::before { content: 'EQ'; color: #4ADE80; }
+    .farm-icon-planet::before { content: 'PLNT'; color: #22D3EE; }
+    .farm-icon-hybrid::before { content: 'HYB'; color: #A855F7; }
+    .farm-icon-mega::before { content: 'MEGA'; color: #FACC15; }
+    .farm-icon-lock::before { content: 'LOCK'; color: #9CA3AF; font-size: 0.48rem; }
+    .farm-icon-close::before { content: 'X'; color: #9CA3AF; }
+    .farm-icon-check::before { content: 'OK'; color: #4ADE80; }
+    .farm-icon-shop::before { content: 'SHOP'; }
+    .farm-icon-settings::before { content: 'CFG'; }
+    .farm-icon-help::before { content: 'HELP'; }
+    .farm-icon-bill::before { content: 'BILL'; }
+    .farm-icon-upgrade::before { content: 'UP'; color: #FACC15; }
+    .farm-icon-portal::before { content: 'VOID'; color: #22D3EE; }
+    .farm-icon-nutrient::before { content: 'NUT'; color: #A855F7; }
+    .farm-icon-pipe::before { content: 'PIPE'; color: #38BDF8; }
+    .farm-icon-strains::before { content: 'IDX'; }
+    .farm-icon-decks::before { content: 'DECK'; }
+    .farm-icon-ability::before { content: 'AB'; color: #C084FC; font-size: 0.48rem; }
+    .farm-icon-crit::before { content: 'CRT'; }
+    .farm-icon-yield::before { content: 'YLD'; }
+    .farm-icon-thc::before { content: 'THC'; }
+    .farm-icon-shield::before { content: 'SHD'; }
+    .farm-icon-poison::before { content: 'PSN'; }
+    .farm-icon-clone::before { content: 'CLN'; }
+    .farm-icon-magnet::before { content: 'MAG'; }
+    .farm-icon-sync::before { content: 'SYNC'; }
+    .farm-icon-blitz::before { content: 'BLZ'; }
+    .farm-icon-luck::before { content: 'LCK'; }
+    .farm-icon-slayer::before { content: 'SLY'; }
+    .farm-icon-mist::before { content: 'MST'; }
+    .farm-icon-harvest::before { content: 'HRV'; }
+    .farm-icon-rift::before { content: 'RFT'; }
+    .farm-icon-omega::before { content: 'OMG'; }
+    .farm-icon-trader::before { content: 'TRD'; }
+    .farm-icon-swap::before { content: 'SWAP'; }
+    .farm-icon-empty::before { content: '---'; color: #6B7280; }
+    .bud-art-composite, .planet-card-art, .cr-art-layered {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      width: 100%; height: 100%; overflow: hidden;
+    }
+    .bud-art-terrain, .cr-planet-terrain, .cr-art-terrain {
+      position: absolute; inset: 0; border-radius: inherit; opacity: 0.85;
+      background: var(--cr-arena, radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #0F172A 100%));
+    }
+    .bud-art-composite .strain-bud-art, .planet-card-art .cr-planet-orb {
+      position: relative; z-index: 1; width: 72%; height: auto; max-height: 88%;
+      object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+    }
+    .planet-card-art .cr-planet-orb {
+      width: 68%; aspect-ratio: 1; border-radius: 50%;
+    }
+    .cr-art-layered .cr-art-terrain { z-index: 0; }
+    .cr-art-layered .cr-art-wrap { position: relative; z-index: 1; }
+    .avatar-portrait { display: block; object-fit: cover; border-radius: 50%; }
+    .hub-orb-icon .farm-icon, .shop-chest-icon .farm-icon, .index-nav-icon .farm-icon { font-size: 0.62rem; }
+    .home-chest-icon .farm-icon { font-size: 0.7rem; }
