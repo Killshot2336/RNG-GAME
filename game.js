@@ -30,6 +30,12 @@
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
   var BATTLE_EQUIP_MAX = 8;
   var MERGE_SP_COST = 15;
+  var STOREFRONT_START = 6;
+  var STOREFRONT_MAX = 20;
+  var STOREFRONT_SLOT_COST = 25000;
+  var LEASE_INTERVAL_MS = 300000;
+  var LEASE_MAX_PERCENT = 50;
+  var TAB_ORDER = ['shop', 'index', 'battle', 'coop', 'map'];
 
   var PLAYERS = [
     { id: 'aden', label: 'Aden', avatar: '🌌', portrait: '/public/art/strain-bud.svg', defaultName: 'Aden' },
@@ -127,6 +133,7 @@
     'bossRound', 'bossHp', 'bossMaxHp', 'bossName', 'bossSeed', 'bossRarity', 'equippedBattleIds',
     'bossTrait', 'bossShieldHp', 'bossShieldMax', 'bossWaveStartedAt', 'bossTraitState',
     'voidEssence', 'prestigeVault', 'totalCashEarned',
+    'storefrontSlotCount', 'planetLeases', 'leaseOffers',
     'indexSearch', 'indexSort', 'casinoBets', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
   ];
 
@@ -255,8 +262,8 @@
   function genPack(type, seed, opts) {
     opts = opts || {};
     var s = seed != null ? seed : Math.floor(Math.random() * 0xffffffff);
-    var luck = (opts.packLuckBonus || 0) + (opts.scanBonus || 0) * 0.1;
-    if (hasAbility({ abilities: [] }, 'rift_luck')) luck += 0;
+    var scanBoost = (opts.scanBonus != null ? opts.scanBonus : scanMult());
+    var luck = (opts.packLuckBonus || 0) + scanBoost * 0.28;
     if (type === 'guaranteed') return genStrain(s, 'pulse', luck);
     if (type === 'omega') return genStrain(s, 'bloom', luck);
     return genStrain(s, undefined, luck);
@@ -367,6 +374,7 @@
     p.exclusiveStrainId = strain.id;
     p.harvesterLv = 1;
     p.conveyorLv = 1;
+    p.ownerId = activePlayerId;
     G.ownedPlanets = (G.ownedPlanets || []).concat([p]);
     G.scanPending = null;
     addXp(30, true);
@@ -394,6 +402,7 @@
     p.exclusiveStrainId = strain.id;
     p.harvesterLv = 1;
     p.conveyorLv = 1;
+    p.ownerId = activePlayerId;
     G.ownedPlanets = (G.ownedPlanets || []).concat([p]);
     addXp(30, true);
     return true;
@@ -604,7 +613,7 @@
     var rev = Math.max(1, Math.floor(planetOutputPerSec(p) * 8));
     var lvl = Math.max(1, (p.harvesterLv || 0) + (p.conveyorLv || 0) + 1);
     var orb = '<div class="cr-planet-orb" style="background:radial-gradient(circle at 32% 28%,' + c + 'dd,' + c + '55 42%,#1A1209 78%);filter:hue-rotate(' + (p.hue || 0) + 'deg)"></div>';
-    return '<button type="button" class="cr-card planet-card' + (opts.selected ? ' selected' : '') + '"' + focusAttr + '>' +
+    return '<button type="button" class="cr-card planet-card planet-glow' + (opts.glow ? ' planet-glow-active' : '') + (opts.selected ? ' selected' : '') + '"' + focusAttr + ' style="--planet-color:' + c + '">' +
       crCardFrameInner({ tier: tier, name: nm, artHtml: orb,
         badgeLeft: '<div class="cr-badge cr-badge-thc cr-badge-sm">' + rev + '</div>',
         badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + lvl + '</div>',
@@ -612,7 +621,18 @@
   }
 
   function revSec(s) { return (s.yield * s.quantity * s.thcPercent) / 100; }
-  function emptySF() { return [{ strainId: null, price: 0 }, { strainId: null, price: 0 }, { strainId: null, price: 0 }]; }
+  function emptySF() {
+    var a = [];
+    for (var i = 0; i < STOREFRONT_START; i++) a.push({ strainId: null, price: 0, quantity: 0 });
+    return a;
+  }
+  function ensureStorefrontSlots() {
+    if (!G.storefrontSlotCount) G.storefrontSlotCount = STOREFRONT_START;
+    if (!G.storefrontSlots) G.storefrontSlots = emptySF();
+    while (G.storefrontSlots.length < G.storefrontSlotCount) {
+      G.storefrontSlots.push({ strainId: null, price: 0, quantity: 0 });
+    }
+  }
   function mergeStrains(arr, incoming) {
     var i = arr.findIndex(function (s) { return s.genomeId === incoming.genomeId; });
     if (i >= 0) {
@@ -625,7 +645,7 @@
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
   function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0 };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, casinoOpen: false, casinoGame: 'menu', casinoToast: '', slotOverlay: false, blackjack: null, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -709,7 +729,9 @@
     return {
       playerId: pid, saveVersion: SAVE_VERSION, cash: 250000, sp: 100, empireLevel: 1, empireXp: 0,
       name: p.defaultName, avatar: p.avatar, badgeIds: [null, null, null],
-      storefrontSlots: emptySF(), strains: [], inventory: STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); }),
+      storefrontSlots: emptySF(), storefrontSlotCount: STOREFRONT_START,
+      planetLeases: { active: [], archive: [], pending: [] }, leaseOffers: [],
+      strains: [], inventory: STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); }),
       factoryFloors: [], sectorUpgrades: clone(SECTORS),
       blitzEndsAt: Date.now() + BLITZ_MS, purchasedBlitzIds: [], blitzWindowOffers: null, counterPrices: {},
       cloneJob: null, focusedStrainId: null, packReveal: { open: false, packType: null, strain: null, strains: null },
@@ -758,6 +780,218 @@
     }
   }
 
+  function writePlayerSave(pid, data) {
+    try {
+      data.saveVersion = SAVE_VERSION;
+      data.lastTickAt = Date.now();
+      var p = { playerId: pid, saveVersion: SAVE_VERSION };
+      PERSIST.forEach(function (k) { if (data[k] !== undefined) p[k] = data[k]; });
+      var key = saveKey(pid);
+      var blob = JSON.stringify(p);
+      localStorage.setItem(key, blob);
+      localStorage.setItem(key + '_backup', blob);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function readPlayerSaveMutable(pid) {
+    var d = readPlayerSave(pid);
+    if (!d) return null;
+    return Object.assign(freshState(pid), d, { playerId: pid });
+  }
+
+  function mutateOtherPlayerSave(pid, fn) {
+    var data = readPlayerSaveMutable(pid);
+    if (!data) return false;
+    fn(data);
+    return writePlayerSave(pid, data);
+  }
+
+  function playerBattleDps(save) {
+    var strains = save.strains || [];
+    var ids = (save.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
+    var t = 0;
+    ids.forEach(function (id) {
+      var s = strains.find(function (x) { return x.id === id; });
+      if (!s) return;
+      t += (s.yield * s.thcPercent / 100) * rMult(s.rarity) * (s.quantity || 1);
+    });
+    return t;
+  }
+
+  function playerRevSec(save) {
+    var t = 0;
+    (save.factoryFloors || []).forEach(function (f) {
+      if (!f.equippedStrainId) return;
+      var s = (save.strains || []).find(function (x) { return x.id === f.equippedStrainId; });
+      if (s) t += (s.yield * (s.quantity || 1) * s.thcPercent) / 100 * f.level;
+    });
+    return t;
+  }
+
+  function buyStorefrontSlot() {
+    ensureStorefrontSlots();
+    if (G.storefrontSlotCount >= STOREFRONT_MAX) return false;
+    var cost = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
+    if (G.cash < cost) return false;
+    G.cash -= cost;
+    G.storefrontSlotCount++;
+    G.storefrontSlots.push({ strainId: null, price: 0, quantity: 0 });
+    scheduleSave();
+    return true;
+  }
+
+  function listStorefrontSlot(slotIdx, strainId, qty, price) {
+    ensureStorefrontSlots();
+    var slot = G.storefrontSlots[slotIdx];
+    if (!slot || slotIdx >= G.storefrontSlotCount) return false;
+    var s = strainById(strainId);
+    if (!s || qty < 1 || price <= 0) return false;
+    if ((s.quantity || 1) < qty) return false;
+    G.storefrontSlots = G.storefrontSlots.slice();
+    G.storefrontSlots[slotIdx] = { strainId: strainId, price: price, quantity: qty };
+    scheduleSave();
+    return true;
+  }
+
+  function clearStorefrontSlot(slotIdx) {
+    ensureStorefrontSlots();
+    var slot = G.storefrontSlots[slotIdx];
+    if (!slot || !slot.strainId) return false;
+    G.storefrontSlots = G.storefrontSlots.slice();
+    G.storefrontSlots[slotIdx] = { strainId: null, price: 0, quantity: 0 };
+    scheduleSave();
+    return true;
+  }
+
+  function buyFromPlayerShop(sellerId, slotIdx) {
+    var buyer = G;
+    var seller = readPlayerSaveMutable(sellerId);
+    if (!seller || sellerId === activePlayerId) return false;
+    ensureStorefrontSlots.call({}); // noop — seller has own slots
+    if (!seller.storefrontSlots || slotIdx >= seller.storefrontSlots.length) return false;
+    var slot = seller.storefrontSlots[slotIdx];
+    if (!slot || !slot.strainId || !slot.price) return false;
+    var strain = (seller.strains || []).find(function (s) { return s.id === slot.strainId; });
+    if (!strain || (strain.quantity || 1) < (slot.quantity || 1)) return false;
+    var total = slot.price;
+    if (buyer.cash < total) return false;
+    buyer.cash -= total;
+    seller.cash = (seller.cash || 0) + total;
+    var soldQty = slot.quantity || 1;
+    var sellerStrains = seller.strains.slice();
+    var si = sellerStrains.findIndex(function (s) { return s.id === strain.id; });
+    if (si < 0) return false;
+    if ((sellerStrains[si].quantity || 1) <= soldQty) {
+      sellerStrains.splice(si, 1);
+    } else {
+      sellerStrains[si] = Object.assign({}, sellerStrains[si], { quantity: sellerStrains[si].quantity - soldQty });
+    }
+    seller.strains = sellerStrains;
+    seller.storefrontSlots = seller.storefrontSlots.slice();
+    seller.storefrontSlots[slotIdx] = { strainId: null, price: 0, quantity: 0 };
+    var copy = clone(strain);
+    copy.quantity = soldQty;
+    copy.id = 'strain_bought_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+    copy.genomeId = strain.genomeId + '_b' + Date.now();
+    G.strains = mergeStrains(G.strains, copy);
+    writePlayerSave(sellerId, seller);
+    popStrain(copy, { qty: soldQty, big: true });
+    scheduleSave();
+    return true;
+  }
+
+  function getPlanetOwner(planet) {
+    if (!planet) return null;
+    if (planet.ownerId) return planet.ownerId;
+    var reg = getPlanetRegistry();
+    return reg[planet.genomeId] || null;
+  }
+
+  function submitLeaseOffer(planetId, percent, price) {
+    var planet = planetById(planetId);
+    if (!planet) return false;
+    var ownerId = getPlanetOwner(planet) || planet.ownerId;
+    if (!ownerId || ownerId === activePlayerId) return false;
+    percent = Math.min(LEASE_MAX_PERCENT, Math.max(1, Math.floor(percent)));
+    if (price <= 0) return false;
+    var offer = {
+      id: 'lo_' + Date.now(),
+      planetId: planetId,
+      planetName: planetDisplayName(planet),
+      ownerId: ownerId,
+      buyerId: activePlayerId,
+      percent: percent,
+      pricePerInterval: price,
+      intervalMs: LEASE_INTERVAL_MS,
+      status: 'pending',
+      createdAt: Date.now(),
+    };
+    mutateOtherPlayerSave(ownerId, function (data) {
+      if (!data.leaseOffers) data.leaseOffers = [];
+      data.leaseOffers.push(offer);
+    });
+    scheduleSave();
+    return true;
+  }
+
+  function respondLeaseOffer(offerId, accept, counterPrice) {
+    var offer = (G.leaseOffers || []).find(function (o) { return o.id === offerId; });
+    if (!offer) return false;
+    G.leaseOffers = G.leaseOffers.filter(function (o) { return o.id !== offerId; });
+    if (!accept) {
+      if (counterPrice && counterPrice > 0) {
+        mutateOtherPlayerSave(offer.buyerId, function (data) {
+          if (!data.leaseOffers) data.leaseOffers = [];
+          data.leaseOffers.push(Object.assign({}, offer, { pricePerInterval: counterPrice, status: 'counter', id: 'lo_' + Date.now() }));
+        });
+      }
+      scheduleSave();
+      return true;
+    }
+    if (!G.planetLeases) G.planetLeases = { active: [], archive: [], pending: [] };
+    var lease = Object.assign({}, offer, {
+      status: 'active',
+      lastBilledAt: Date.now(),
+      totalCollected: 0,
+      id: 'lease_' + Date.now(),
+    });
+    G.planetLeases.active.push(lease);
+    mutateOtherPlayerSave(offer.buyerId, function (data) {
+      if (!data.planetLeases) data.planetLeases = { active: [], archive: [], pending: [] };
+      data.planetLeases.active.push(Object.assign({}, lease));
+    });
+    scheduleSave();
+    return true;
+  }
+
+  function processLeaseBilling() {
+    if (!G || !G.planetLeases) return;
+    var now = Date.now();
+    (G.planetLeases.active || []).slice().forEach(function (lease) {
+      if (lease.status !== 'active' || now - (lease.lastBilledAt || 0) < (lease.intervalMs || LEASE_INTERVAL_MS)) return;
+      var buyer = readPlayerSaveMutable(lease.buyerId);
+      if (!buyer || buyer.cash < lease.pricePerInterval) {
+        lease.status = 'broke';
+        lease.endedAt = now;
+        G.planetLeases.archive = (G.planetLeases.archive || []).concat([lease]);
+        G.planetLeases.active = G.planetLeases.active.filter(function (l) { return l.id !== lease.id; });
+        mutateOtherPlayerSave(lease.buyerId, function (data) {
+          if (!data.planetLeases) data.planetLeases = { active: [], archive: [] };
+          data.planetLeases.active = (data.planetLeases.active || []).filter(function (l) { return l.id !== lease.id; });
+          data.planetLeases.archive = (data.planetLeases.archive || []).concat([Object.assign({}, lease, { status: 'broke', endedAt: now })]);
+        });
+        return;
+      }
+      buyer.cash -= lease.pricePerInterval;
+      writePlayerSave(lease.buyerId, buyer);
+      creditCash(lease.pricePerInterval);
+      lease.lastBilledAt = now;
+      lease.totalCollected = (lease.totalCollected || 0) + lease.pricePerInterval;
+      G.planetLeases.active = G.planetLeases.active.map(function (l) { return l.id === lease.id ? lease : l; });
+    });
+  }
+
   function sanitizeSave(pid) {
     delete G.planetOffers;
     delete G.profileViewIndex;
@@ -785,6 +1019,12 @@
     if (G.voidEssence == null) G.voidEssence = 0;
     if (!G.prestigeVault) G.prestigeVault = [];
     if (G.totalCashEarned == null) G.totalCashEarned = 0;
+    ensureStorefrontSlots();
+    if (!G.planetLeases) G.planetLeases = { active: [], archive: [], pending: [] };
+    if (!G.leaseOffers) G.leaseOffers = [];
+    G.storefrontSlots = G.storefrontSlots.map(function (sl) {
+      return Object.assign({ strainId: null, price: 0, quantity: 0 }, sl);
+    });
     if (!G.saveVersion || G.saveVersion < SAVE_VERSION) {
       var hadLegacyFloors = (G.factoryFloors || []).length >= 3 && !G.nextPortalNum;
       if (!G.saveVersion || hadLegacyFloors || G.saveVersion < 2) {
@@ -1476,6 +1716,7 @@
     if (bossTickAcc >= 100) { tickBoss(bossTickAcc); bossTickAcc = 0; }
     autoScanAcc += d;
     if (autoScanAcc >= AUTO_SCAN_MS) { autoScanAcc = 0; processAutoScan(); }
+    processLeaseBilling();
     G.lastTickAt = now;
   }
 
@@ -1625,14 +1866,44 @@
     G.cloneJob = { strainId: sid, startedAt: Date.now(), durationMs: cd };
     return true;
   }
+  function upgradeStrain(sid) { return upStrain(sid); }
+
+  function giftStrain(sid, toPlayerId) {
+    var s = strainById(sid);
+    if (!s || (s.quantity || 1) < 1) return false;
+    var target = readPlayerSaveMutable(toPlayerId);
+    if (!target || toPlayerId === activePlayerId) return false;
+    var gift = clone(s);
+    gift.quantity = 1;
+    gift.id = 'strain_gift_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+    target.strains = mergeStrains(target.strains || [], gift);
+    if ((s.quantity || 1) <= 1) {
+      G.strains = G.strains.filter(function (x) { return x.id !== sid; });
+    } else {
+      G.strains = G.strains.map(function (x) {
+        return x.id === sid ? Object.assign({}, x, { quantity: x.quantity - 1 }) : x;
+      });
+    }
+    writePlayerSave(toPlayerId, target);
+    popArcade('label', 0, { label: 'GIFTED ' + s.name, mega: true });
+    scheduleSave();
+    return true;
+  }
+
   function upStrain(sid) {
     var i = G.strains.findIndex(function (s) { return s.id === sid; });
     if (i < 0) return false;
     var s = G.strains[i], c = upCost(s);
     if (G.cash < c) return false;
     G.cash -= c;
+    var lvl = (s.strainLevel || strainCardLevel(s)) + 1;
     var u = G.strains.slice();
-    u[i] = Object.assign({}, s, { yield: Math.round(s.yield * 1.12), potency: Math.min(100, s.potency + 5), thcPercent: parseFloat(Math.min(35, s.thcPercent + 0.8).toFixed(1)) });
+    u[i] = Object.assign({}, s, {
+      strainLevel: lvl,
+      yield: Math.round(s.yield * 1.12),
+      potency: Math.min(100, s.potency + 5),
+      thcPercent: parseFloat(Math.min(35, s.thcPercent + 0.8).toFixed(1)),
+    });
     G.strains = u;
     addXp(10);
     plantSay('upgrade');
@@ -1793,6 +2064,7 @@
   }
 
   function strainCardLevel(s) {
+    if (s.strainLevel) return Math.max(1, Math.min(99, s.strainLevel));
     return Math.max(1, Math.min(99, Math.floor((s.potency || 10) / 8) + 1));
   }
 
@@ -1811,7 +2083,7 @@
     var tagBadge = opts.tag ? '<div class="cr-badge cr-badge-tag">' + opts.tag + '</div>' : '';
     var arenaCls = 'cr-card-arena' + (opts.arenaIdx != null ? ' cr-arena-' + opts.arenaIdx : '');
     var bannerStyle = opts.bannerColor ? ' style="border-top-color:' + opts.bannerColor + '88"' : '';
-    return '<div class="cr-card-frame ' + opts.tier + (opts.frameExtra || '') + '"' + (opts.frameStyle || '') + '>' +
+    return '<div class="cr-card-frame holo-card ' + opts.tier + (opts.frameExtra || '') + '"' + (opts.frameStyle || '') + '>' +
       '<div class="cr-card-bevel"></div>' +
       '<div class="' + arenaCls + '"></div>' +
       '<div class="cr-card-art">' + opts.artHtml + '</div>' +
@@ -2206,7 +2478,7 @@
     } else {
       h += '<div class="binder-grid mb-3">';
       list.forEach(function (s) {
-        h += '<div class="liftable-wrap" data-lift="index-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
+        h += '<div class="liftable-wrap holo-wrap" data-lift="index-' + esc(s.id) + '" data-lift-up="up-strain:' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
       });
       h += '</div>';
     }
@@ -2216,7 +2488,8 @@
 
   function renderMap() {
     var owned = G.ownedPlanets || [];
-    var h = '<div class="screen-section map-screen"><div class="text-center mb-2"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">UNIVERSE MAP</h2><p class="font-mono text-muted text-xs">' + owned.length + ' claimed world' + (owned.length === 1 ? '' : 's') + ' · scan the void</p></div>';
+    var h = '<div class="screen-section map-screen"><div class="flex-between mb-2"><div><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">UNIVERSE MAP</h2><p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + owned.length + ' worlds</p></div>';
+    h += '<button type="button" class="game-btn game-btn-sm" data-action="map-billings">📁 BILLINGS</button></div>';
     h += '<div class="map-scan-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line"></div><div class="map-scan-beam"></div>';
     h += '<button type="button" class="map-scan-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">SCAN</span></button></div>';
     if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Scanning hyperspace lanes…</div>';
@@ -2224,7 +2497,7 @@
       var p = G.scanPending;
       var exStrain = genExclusivePlanetStrain(p);
       h += '<div class="section-label section-label-green mb-2">PLANET DETECTED</div>';
-      h += '<div class="liftable-wrap mb-3" data-lift="planet-scan">' + planetCardHtml(p) + '</div>';
+      h += '<div class="liftable-wrap mb-3 holo-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
       h += '<div class="neon-card p-3 mb-3 text-xs text-muted">Exclusive strain: <span class="text-green">' + esc(exStrain.name) + '</span> (' + esc(rarityName(p.rarity)) + ') — harvestable only on this world.</div>';
       h += '<input type="text" class="input-field mb-2" placeholder="Name your planet (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
       h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="planet-keep">KEEP</button><button type="button" class="game-btn" style="flex:1" data-action="planet-discard">DISCARD</button></div>';
@@ -2250,6 +2523,16 @@
         h += '<button type="button" class="game-btn game-btn-sm" data-action="up-planet" data-id="' + esc(fpl.id) + ':upgrader"' + (G.sp < uc || (fpl.upgraderMult || 1) >= 8 ? ' disabled' : '') + '>x' + (fpl.upgraderMult || 1) + ' · ' + uc + ' SP</button></div>';
         h += '<button type="button" class="game-btn game-btn-green w-full game-btn-sm" data-action="harvest-planet" data-id="' + esc(fpl.id) + '"' + ((fpl.storedYield || 0) < 1 ? ' disabled' : '') + '>HARVEST EXCLUSIVE STRAIN</button></div>';
       }
+      h += '<div class="section-label mb-2 mt-2">OTHER CLAIMED WORLDS</div>';
+      PLAYERS.forEach(function (pl) {
+        if (pl.id === activePlayerId) return;
+        var save = readPlayerSave(pl.id);
+        if (!save || !save.ownedPlanets) return;
+        save.ownedPlanets.forEach(function (op) {
+          h += '<div class="neon-card glass-panel p-3 mb-2"><div class="flex-between"><div><div style="font-weight:600;font-size:0.8rem">' + esc(op.customName || op.proceduralName) + '</div><div class="text-xs text-muted">Owner: ' + esc(save.name || pl.label) + ' · ' + esc(rarityName(op.rarity)) + '</div></div>';
+          h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="lease-offer-open" data-id="' + esc(op.id) + ':' + pl.id + '">LEASE</button></div></div>';
+        });
+      });
     } else if (!G.scanPending && !UI.scanAnimating) {
       h += '<div class="neon-card p-4 text-center text-muted text-sm">No worlds claimed. Tap SCAN on the rail to probe the universe.</div>';
     }
@@ -2257,25 +2540,106 @@
     return h;
   }
 
+  function renderStorefrontSlot(slotIdx, isMine) {
+    ensureStorefrontSlots();
+    var slot = G.storefrontSlots[slotIdx];
+    var locked = slotIdx >= G.storefrontSlotCount;
+    if (locked) {
+      return '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">🔒</div><div class="roadside-slot-label">LOCKED</div></div>';
+    }
+    if (!slot || !slot.strainId) {
+      return '<button type="button" class="roadside-slot roadside-slot-empty" data-action="sf-pick-open" data-id="' + slotIdx + '"><span class="roadside-plus">+</span><span class="roadside-slot-label">LIST ITEM</span></button>';
+    }
+    var s = strainById(slot.strainId);
+    if (!s) return '<div class="roadside-slot roadside-slot-empty"></div>';
+  var h = '<div class="roadside-slot roadside-slot-filled">';
+    if (isMine) {
+      h += '<button type="button" class="roadside-slot-x" data-action="sf-remove-ask" data-id="' + slotIdx + '">✕</button>';
+      h += '<button type="button" class="roadside-slot-info" data-action="sf-info" data-id="' + slotIdx + '">i</button>';
+    }
+    h += '<div class="roadside-slot-card">' + crCardHtml(s, { noFocus: true, qty: slot.quantity || 1 }) + '</div>';
+    h += '<div class="roadside-slot-meta"><div class="roadside-qty">×' + (slot.quantity || 1) + '</div><div class="roadside-price">' + fmtCash(slot.price) + '</div></div>';
+    if (!isMine) h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-1" data-action="sf-buy" data-id="' + esc(UI.coopShopPlayer || '') + ':' + slotIdx + '">BUY</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderPlayerShopGrid(sellerId) {
+    var save = readPlayerSaveMutable(sellerId);
+    if (!save) return '<div class="text-muted text-sm">No save found.</div>';
+    var slots = save.storefrontSlots || [];
+    var count = save.storefrontSlotCount || STOREFRONT_START;
+    var h = '<div class="roadside-grid">';
+    for (var i = 0; i < STOREFRONT_MAX; i++) {
+      var slot = slots[i] || { strainId: null, price: 0, quantity: 0 };
+      var prevG = G;
+      G = save;
+      if (i >= count) h += '<div class="roadside-slot roadside-slot-locked"><div class="roadside-slot-glass">🔒</div></div>';
+      else if (!slot.strainId) h += '<div class="roadside-slot roadside-slot-empty"></div>';
+      else {
+        var s = (save.strains || []).find(function (x) { return x.id === slot.strainId; });
+        if (s) {
+          h += '<div class="roadside-slot roadside-slot-filled"><div class="roadside-slot-card">' + crCardHtml(s, { noFocus: true, qty: slot.quantity || 1 }) + '</div>';
+          h += '<div class="roadside-slot-meta"><div class="roadside-qty">×' + (slot.quantity || 1) + '</div><div class="roadside-price">' + fmtCash(slot.price) + '</div></div>';
+          h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="sf-buy" data-id="' + esc(sellerId) + ':' + i + '">BUY</button></div>';
+        }
+      }
+      G = prevG;
+    }
+    h += '</div>';
+    return h;
+  }
+
   function renderCoop() {
-    var h = '<div class="screen-section"><div class="text-center mb-3"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">FAMILY CO-OP</h2><p class="text-muted text-xs">Aden · Dad · Jamie sync board</p></div>';
-    PLAYERS.forEach(function (pl) {
-      var save = readPlayerSave(pl.id) || {};
-      var strains = save.strains || [];
-      var floors = save.factoryFloors || [];
-      var battleNames = (save.equippedBattleIds || []).map(function (id) { var s = strains.find(function (x) { return x.id === id; }); return s ? s.name : null; }).filter(Boolean);
-      var portalNames2 = floors.map(function (f) { if (!f.equippedStrainId) return null; var s = strains.find(function (x) { return x.id === f.equippedStrainId; }); return s ? s.name : null; }).filter(Boolean);
-      h += '<div class="coop-card neon-card p-4 mb-3' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '"><div class="flex-between mb-2"><div style="font-weight:700">' + esc(save.name || pl.label) + '</div><div class="font-mono text-xs text-muted">Boss R' + (save.bossRound || 1) + '</div></div>';
-      h += '<div class="font-mono text-xs text-muted mb-1">Floors: ' + floors.length + ' · Strains: ' + strains.length + '</div>';
-      h += '<div class="text-xs mb-1"><span class="text-green">Battle:</span> ' + (battleNames.length ? esc(battleNames.join(', ')) : '—') + '</div>';
-      h += '<div class="text-xs"><span class="text-cyan">Portal:</span> ' + (portalNames2.length ? esc(portalNames2.join(', ')) : '—') + '</div></div>';
-    });
-    var offers = getSharedOffers();
-    h += '<div class="section-label mb-2 mt-3">SHARE BOARD LISTINGS</div>';
-    if (!offers.length) h += '<div class="neon-card p-4 text-center text-muted text-sm">No listings yet.</div>';
-    offers.forEach(function (o) {
-      h += '<div class="neon-card p-3 mb-2"><div class="font-mono text-xs text-muted">' + esc(o.sellerName) + '</div><div style="font-weight:600;font-size:0.875rem">' + esc(o.strainName) + '</div><div class="text-green text-xs">' + fmtCash(o.offerPrice) + '</div></div>';
-    });
+    ensureStorefrontSlots();
+    var view = UI.coopView || 'hub';
+    var h = '<div class="screen-section coop-screen"><div class="text-center mb-2"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">ROADSIDE GROUP</h2><p class="text-muted text-xs">Hay Day-style local family marketplace</p></div>';
+    if (view === 'myshop') {
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
+      h += '<div class="section-label section-label-green mb-2">MY ROADSIDE SHOP · ' + G.storefrontSlotCount + '/' + STOREFRONT_MAX + ' SLOTS</div>';
+      h += '<div class="roadside-grid mb-3">';
+      for (var si = 0; si < STOREFRONT_MAX; si++) h += renderStorefrontSlot(si, true);
+      h += '</div>';
+      if (G.storefrontSlotCount < STOREFRONT_MAX) {
+        var sc = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
+        h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="sf-buy-slot"' + (G.cash < sc ? ' disabled' : '') + '>UNLOCK SLOT · ' + fmtCash(sc) + '</button>';
+      }
+    } else if (view.indexOf('shop:') === 0) {
+      var pid = view.slice(5);
+      var pl = playerDef(pid);
+      var save = readPlayerSave(pid) || {};
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
+      h += '<div class="neon-card glass-panel p-3 mb-3 text-center"><div style="font-size:1.5rem">' + (save.avatar || pl.avatar) + '</div><div style="font-weight:700">' + esc(save.name || pl.label) + '</div></div>';
+      h += renderPlayerShopGrid(pid);
+    } else {
+      h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">🏪 MY ROADSIDE SHOP</button>';
+      h += '<div class="section-label mb-2">FAMILY MEMBERS</div>';
+      PLAYERS.forEach(function (pl) {
+        var save = readPlayerSave(pl.id) || {};
+        var badges = (save.badgeIds || []).filter(Boolean).map(function (bid) {
+          var b = BADGES.find(function (x) { return x.id === bid; });
+          return b ? b.emoji : '';
+        }).join(' ');
+        var dps = playerBattleDps(save).toFixed(1);
+        var rev = fmtRev(playerRevSec(save));
+        h += '<div class="coop-player-card glass-panel neon-card p-4 mb-3' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
+        h += '<div class="flex-row gap-3 mb-2"><div class="coop-player-av">' + (save.avatar || pl.avatar) + '</div><div style="flex:1;min-width:0">';
+        h += '<div style="font-weight:700;font-size:0.9rem">' + esc(save.name || pl.label) + '</div>';
+        h += '<div class="font-mono text-xs text-green">⚔ ' + dps + ' DPS · ' + rev + '</div>';
+        h += '<div class="text-xs text-muted">' + badges + '</div></div></div>';
+        if (pl.id !== activePlayerId) h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
+        h += '</div>';
+      });
+    }
+    if ((G.leaseOffers || []).length) {
+      h += '<div class="section-label mb-2 mt-3">LEASE OFFERS</div>';
+      G.leaseOffers.forEach(function (o) {
+        h += '<div class="neon-card glass-panel p-3 mb-2"><div class="text-xs text-muted">' + esc(o.buyerId) + ' wants ' + o.percent + '% of ' + esc(o.planetName) + '</div>';
+        h += '<div class="text-green font-mono text-sm mb-2">' + fmtCash(o.pricePerInterval) + ' / 5min</div>';
+        h += '<div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="lease-accept" data-id="' + esc(o.id) + '">ACCEPT</button>';
+        h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="lease-decline" data-id="' + esc(o.id) + '">DECLINE</button></div></div>';
+      });
+    }
     h += '</div>';
     return h;
   }
@@ -2628,6 +2992,7 @@
     h += '<div class="flex-between p-4 mb-3" style="border-radius:0.75rem;background:' + (UI.realityWarp ? 'rgba(57,255,20,0.08)' : 'rgba(31,0,51,0.5)') + ';border:1px solid ' + (UI.realityWarp ? 'rgba(57,255,20,0.4)' : 'rgba(61,0,102,0.6)') + '"><div><div class="chromatic-text" style="font-weight:600;font-size:0.875rem">Reality Warp Mode</div><div class="text-muted" style="font-size:0.65rem">Subtle color drift & soft pulse</div></div><button type="button" class="toggle-switch" data-action="toggle-warp" style="background:' + (UI.realityWarp ? 'linear-gradient(90deg,#39FF14,#A855F7)' : 'rgba(61,0,102,0.8)') + '"><span class="toggle-knob" style="left:' + (UI.realityWarp ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div>';
     h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? '✕ CLOSE HELP' : '📖 GAME ENCYCLOPEDIA') + '</button>';
     if (helpOpen) h += helpEncyclopediaHtml();
+    h += '<button type="button" class="game-btn w-full mb-2" data-action="open-casino">🎰 VOID CASINO</button>';
     h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">⇄ SWITCH PLAYER</button>';
     document.getElementById('settings-panel').innerHTML = h;
   }
@@ -2685,7 +3050,7 @@
       var eq = on
         ? '<button type="button" class="game-btn" data-action="equip-battle" data-id="' + esc(sid3) + '">UNEQUIP</button>'
         : '<button type="button" class="game-btn game-btn-green" data-action="equip-battle" data-id="' + esc(sid3) + '">⚔ EQUIP</button>';
-      return eq + '<button type="button" class="game-btn game-btn-green" data-action="up-strain" data-id="' + esc(sid3) + '">UP · ' + fmtCash(upCost(s)) + '</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+      return eq + '<button type="button" class="game-btn game-btn-green" data-action="up-strain" data-id="' + esc(sid3) + '">UP · ' + fmtCash(upCost(s)) + '</button><button type="button" class="game-btn" data-action="gift-strain" data-id="' + esc(sid3) + '">GIFT</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
     }
     return '<button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
   }
@@ -2742,10 +3107,65 @@
     else b.classList.remove('active');
   }
 
-  function activeScreen() {
-    if (UI.farmOpen && UI.activeTab === 'battle') return renderFarm;
-    var screens = { battle: renderBattle, shop: renderShop, index: renderIndex, map: renderMap, coop: renderCoop, casino: renderCasino };
-    return screens[UI.activeTab] || renderBattle;
+  function renderAuxOverlays() {
+    var el = document.getElementById('overlay-aux');
+    if (!el) return;
+    var h = '';
+    if (UI.confirmDialog) {
+      var cd = UI.confirmDialog;
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="confirm-no"></button><div class="overlay-panel glass-panel p-4 text-center" style="max-width:18rem;margin:auto"><p class="text-sm mb-3">' + esc(cd.message) + '</p><div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="confirm-yes">YES</button><button type="button" class="game-btn" style="flex:1" data-action="confirm-no">NO</button></div></div></div>';
+    }
+    if (UI.storefrontPickSlot != null) {
+      var slotIdx = UI.storefrontPickSlot;
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="sf-pick-close"></button><div class="overlay-panel glass-panel p-4"><h3 class="font-display text-sm mb-2">LIST ON SLOT ' + (slotIdx + 1) + '</h3>';
+      h += '<select class="input-field mb-2" id="sf-pick-strain"><option value="">— Strain —</option>';
+      G.strains.forEach(function (s) { h += '<option value="' + esc(s.id) + '">' + esc(s.name) + ' x' + (s.quantity || 1) + '</option>'; });
+      h += '</select><input type="number" class="input-field mb-2" id="sf-pick-qty" placeholder="Quantity" value="1" min="1"><input type="number" class="input-field mb-3" id="sf-pick-price" placeholder="Price ($)">';
+      h += '<button type="button" class="game-btn game-btn-green w-full" data-action="sf-pick-confirm" data-id="' + slotIdx + '">LIST ITEM</button></div></div>';
+    }
+    if (UI.giftStrainId) {
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="gift-cancel"></button><div class="overlay-panel glass-panel p-4"><h3 class="font-display text-sm mb-2">GIFT STRAIN</h3>';
+      PLAYERS.forEach(function (pl) {
+        if (pl.id === activePlayerId) return;
+        h += '<button type="button" class="game-btn w-full mb-2" data-action="gift-confirm" data-id="' + UI.giftStrainId + ':' + pl.id + '">→ ' + esc(pl.label) + '</button>';
+      });
+      h += '</div></div>';
+    }
+    if (UI.mapBillingsOpen) {
+      var tab = UI.mapBillingsTab || 'active';
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="map-billings-close"></button><div class="overlay-panel glass-panel p-4" style="max-height:70vh;overflow-y:auto"><h3 class="font-display text-sm mb-2">PLANET BILLINGS</h3>';
+      h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'active' ? ' active' : '') + '" data-action="billings-tab" data-id="active">ACTIVE</button><button type="button" class="farm-tab' + (tab === 'loss' ? ' active' : '') + '" data-action="billings-tab" data-id="loss">LOSS</button></div>';
+      var list = tab === 'loss' ? ((G.planetLeases || {}).archive || []) : ((G.planetLeases || {}).active || []);
+      if (!list.length) h += '<div class="text-muted text-xs">No ' + tab + ' leases.</div>';
+      list.forEach(function (l) {
+        h += '<div class="neon-card p-3 mb-2 text-xs"><div style="font-weight:600">' + esc(l.planetName || l.planetId) + '</div>';
+        h += '<div class="text-muted">Buyer: ' + esc(l.buyerId) + ' · ' + l.percent + '% · ' + fmtCash(l.pricePerInterval) + '/5m</div>';
+        h += '<div class="text-green">Collected: ' + fmtCash(l.totalCollected || 0) + '</div></div>';
+      });
+      h += '</div></div>';
+    }
+    if (UI.leaseDraft) {
+      var ld = UI.leaseDraft;
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="lease-cancel"></button><div class="overlay-panel glass-panel p-4"><h3 class="font-display text-sm mb-2">BUY PORTION / LEASE</h3>';
+      h += '<input type="range" class="input-field mb-2" id="lease-percent" min="1" max="' + LEASE_MAX_PERCENT + '" value="25"><div class="text-xs text-muted mb-2">Allocation: <span id="lease-pct-label">25</span>% (max ' + LEASE_MAX_PERCENT + '%)</div>';
+      h += '<input type="number" class="input-field mb-3" id="lease-price" placeholder="Cash per 5 min">';
+      h += '<button type="button" class="game-btn game-btn-green w-full" data-action="lease-submit" data-id="' + esc(ld.planetId) + ':' + esc(ld.ownerId) + '">SUBMIT OFFER</button></div></div>';
+    }
+    el.innerHTML = h;
+    el.classList.toggle('open', !!h);
+  }
+
+  function screenRenderer(tab) {
+    if (tab === 'battle') return UI.farmOpen ? renderFarm : renderBattle;
+    var map = { shop: renderShop, index: renderIndex, coop: renderCoop, map: renderMap };
+    return map[tab] || renderBattle;
+  }
+
+  function tabCarouselIndex() {
+    var tab = UI.activeTab;
+    if (tab === 'casino') tab = 'battle';
+    var idx = TAB_ORDER.indexOf(tab);
+    return idx < 0 ? 2 : idx;
   }
 
   function render() {
@@ -2755,8 +3175,13 @@
     renderHUD();
     renderPlayerSelect();
     if (!UI.playerSelectOpen && root) {
-      root.innerHTML = activeScreen()();
+      var idx = tabCarouselIndex();
+      var panels = TAB_ORDER.map(function (tab) {
+        return '<div class="cr-screen-panel tab-bg-' + tab + '"><div class="cr-screen-inner">' + screenRenderer(tab)() + '</div></div>';
+      }).join('');
+      root.innerHTML = '<div class="cr-screen-carousel" style="transform:translate3d(-' + (idx * 100) + '%,0,0)">' + panels + '</div>';
       root.scrollTop = scrollTop;
+      bindCardParallax();
     }
     document.getElementById('overlay-profile').classList.toggle('open', UI.profileOpen);
     document.getElementById('overlay-settings').classList.toggle('open', UI.settingsOpen);
@@ -2768,6 +3193,17 @@
     renderSlotOverlay();
     renderStrainPicker();
     renderMergeLab();
+    renderAuxOverlays();
+    renderCasinoOverlay();
+  }
+
+  function renderCasinoOverlay() {
+    var el = document.getElementById('overlay-casino');
+    var panel = document.getElementById('casino-panel');
+    if (!el || !panel) return;
+    if (!UI.casinoOpen) { el.classList.remove('open'); panel.innerHTML = ''; return; }
+    el.classList.add('open');
+    panel.innerHTML = renderCasino();
   }
 
   var saveTimer = null;
@@ -2780,6 +3216,39 @@
     var ok = saveGame();
     if (ok) lastSaveAt = Date.now();
   }
+  function bindCardParallax() {
+    var root = document.getElementById('screen-root');
+    if (!root || root._holoBound) return;
+    root._holoBound = true;
+    function onMove(e) {
+      var card = e.target.closest('.holo-card');
+      if (!card) return;
+      var rect = card.getBoundingClientRect();
+      var px = e.clientX != null ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : rect.left + rect.width / 2);
+      var py = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : rect.top + rect.height / 2);
+      var cx = px - rect.left - rect.width / 2;
+      var cy = py - rect.top - rect.height / 2;
+      var rx = Math.max(-14, Math.min(14, -cy / rect.height * 28));
+      var ry = Math.max(-14, Math.min(14, cx / rect.width * 28));
+      card.style.transform = 'perspective(1000px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) scale(1.02)';
+      var shine = card.querySelector('.cr-card-shine');
+      if (shine) {
+        shine.style.backgroundPosition = (50 + cx / rect.width * 40) + '% ' + (50 + cy / rect.height * 40) + '%';
+        shine.style.opacity = '0.85';
+      }
+    }
+    function onLeave(e) {
+      var card = e.target.closest('.holo-card');
+      if (!card) return;
+      card.style.transform = '';
+      var shine = card.querySelector('.cr-card-shine');
+      if (shine) shine.style.opacity = '';
+    }
+    root.addEventListener('mousemove', onMove);
+    root.addEventListener('touchmove', onMove, { passive: true });
+    root.addEventListener('mouseleave', onLeave, true);
+  }
+
   function resolveStartupPlayer() {
     try {
       var pid = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LAST_PLAYER_KEY);
@@ -2873,6 +3342,64 @@
     else if (act==='harvest-planet') { harvestPlanet(val); }
     else if (act==='breed-run') { startMergeFuse(); return; }
     else if (act==='void-prestige') { if (confirm('Void Prestige resets cash, SP, and strains (keeps top 3 + all blitz). Continue?')) triggerVoidPrestige(); }
+    else if (act==='coop-myshop') { UI.coopView = 'myshop'; }
+    else if (act==='coop-back') { UI.coopView = 'hub'; UI.coopShopPlayer = null; }
+    else if (act==='coop-visit-shop') { UI.coopView = 'shop:' + val; UI.coopShopPlayer = val; }
+    else if (act==='sf-buy-slot') buyStorefrontSlot();
+    else if (act==='sf-pick-open') { UI.storefrontPickSlot = parseInt(val, 10); }
+    else if (act==='sf-pick-close') { UI.storefrontPickSlot = null; }
+    else if (act==='sf-pick-confirm') {
+      var strainEl = document.getElementById('sf-pick-strain');
+      var qtyEl = document.getElementById('sf-pick-qty');
+      var priceEl = document.getElementById('sf-pick-price');
+      if (strainEl && qtyEl && priceEl) listStorefrontSlot(parseInt(val, 10), strainEl.value, parseInt(qtyEl.value, 10) || 1, parseFloat(priceEl.value) || 0);
+      UI.storefrontPickSlot = null;
+    }
+    else if (act==='sf-remove-ask') {
+      UI.confirmDialog = { message: 'Remove listing and return strain to inventory?', yes: 'sf-remove:' + val };
+    }
+    else if (act==='sf-remove') clearStorefrontSlot(parseInt(val, 10));
+    else if (act==='sf-info') {
+      var sl = G.storefrontSlots[parseInt(val, 10)];
+      if (sl && sl.strainId) { UI.liftedCardId = 'index-' + sl.strainId; }
+    }
+    else if (act==='sf-buy') {
+      var bp = val.split(':');
+      buyFromPlayerShop(bp[0], parseInt(bp[1], 10));
+    }
+    else if (act==='confirm-yes' && UI.confirmDialog) {
+      var ya = UI.confirmDialog.yes.split(':');
+      runAction(ya[0], ya.slice(1).join(':'));
+      UI.confirmDialog = null;
+    }
+    else if (act==='confirm-no') UI.confirmDialog = null;
+    else if (act==='gift-strain') { UI.giftStrainId = val; }
+    else if (act==='gift-cancel') { UI.giftStrainId = null; }
+    else if (act==='gift-confirm') {
+      var gp = val.split(':');
+      giftStrain(gp[0], gp[1]);
+      UI.giftStrainId = null;
+      UI.liftedCardId = null;
+    }
+    else if (act==='map-billings') { UI.mapBillingsOpen = true; }
+    else if (act==='map-billings-close') { UI.mapBillingsOpen = false; }
+    else if (act==='billings-tab') { UI.mapBillingsTab = val; }
+    else if (act==='lease-offer-open') {
+      var lp = val.split(':');
+      UI.leaseDraft = { planetId: lp[0], ownerId: lp[1] };
+    }
+    else if (act==='lease-cancel') { UI.leaseDraft = null; }
+    else if (act==='lease-submit') {
+      var ls = val.split(':');
+      var pctEl = document.getElementById('lease-percent');
+      var prEl = document.getElementById('lease-price');
+      if (pctEl && prEl) submitLeaseOffer(ls[0], parseInt(pctEl.value, 10), parseFloat(prEl.value) || 0);
+      UI.leaseDraft = null;
+    }
+    else if (act==='lease-accept') respondLeaseOffer(val, true);
+    else if (act==='lease-decline') respondLeaseOffer(val, false);
+    else if (act==='open-casino') { UI.casinoOpen = true; UI.settingsOpen = false; }
+    else if (act==='casino-close') { UI.casinoOpen = false; UI.casinoGame = 'menu'; }
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
     else if (act==='breed-pick') {
       var bp = val.split(':');
@@ -2895,6 +3422,7 @@
       if (tab !== UI.activeTab) clearArcadePops();
       UI.activeTab = tab;
       if (tab === 'map' && !UI.focusedPlanetId && G.ownedPlanets && G.ownedPlanets.length) UI.focusedPlanetId = G.ownedPlanets[0].id;
+      if (tab === 'coop') UI.coopView = UI.coopView || 'hub';
       render();
       return;
     }

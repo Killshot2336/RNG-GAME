@@ -28,7 +28,7 @@ async function main() {
   await click(page, '[data-action="pick-player"][data-pid="aden"]', 'pick Aden');
 
   // Nav tabs
-  for (const tab of ['battle', 'shop', 'index', 'map', 'coop', 'casino']) {
+  for (const tab of ['shop', 'index', 'battle', 'coop', 'map']) {
     await click(page, '[data-tab="' + tab + '"]', 'tab ' + tab);
   }
 
@@ -81,13 +81,18 @@ async function main() {
   await click(page, '[data-action="toggle-help"]', 'close game encyclopedia');
   await click(page, '#settings-panel button[data-close="settings"]', 'close settings');
 
-  // Casino
-  await click(page, '[data-tab="casino"]', 'casino');
+  await click(page, '[data-action="open-settings"]', 'settings for casino');
+  await click(page, '[data-action="open-casino"]', 'open casino overlay');
   await click(page, '[data-action="casino-select"][data-id="blackjack"]', 'blackjack');
   await click(page, '[data-action="blackjack-deal"]', 'blackjack deal');
   await click(page, '[data-action="casino-select"][data-id="menu"]', 'casino menu');
   await click(page, '[data-action="casino-select"][data-id="poker"]', 'poker room');
   await click(page, '[data-action="poker-ready"]', 'poker ready');
+  await click(page, '[data-action="casino-close"]', 'close casino');
+
+  await click(page, '[data-tab="coop"]', 'group');
+  await click(page, '[data-action="coop-myshop"]', 'my roadside shop');
+  await click(page, '[data-action="coop-back"]', 'coop hub');
 
   await browser.close();
 
