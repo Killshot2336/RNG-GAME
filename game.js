@@ -187,6 +187,14 @@
     { id: 'tr_100', pts: 100, reward: { cash: 50000, sp: 50 } },
     { id: 'tr_150', pts: 150, reward: { cash: 100000 } },
   ];
+  var DAILY_QUEST_DEFS = [
+    { id: 'open_packs', name: 'Open 5 Packs', icon: 'pack', target: 5 },
+    { id: 'clear_nodes', name: 'Clear 3 Nodes', icon: 'mega', target: 3 },
+    { id: 'claim_login', name: 'Claim Daily Reward', icon: 'gift', target: 1, action: 'open-daily-login' },
+  ];
+  var WEEKLY_QUEST_DEFS = [
+    { id: 'earn_cash', name: 'Earn $500K', icon: 'bill', target: 500000 },
+  ];
   var SECTORS = [
     { id: 'thrusters', name: 'Frictionless Thrusters', level: 0, maxLevel: 10, baseCost: 15000, scanRateBonus: 0.08 },
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
@@ -211,6 +219,7 @@
     'dailyLoginStreak', 'dailyLoginLastDay', 'dailyLoginClaimedDay',
     'achievementsUnlocked', 'achievementStats', 'trophyPoints', 'trophyRoadClaimed',
     'cardOfDaySeed', 'cardOfDayPurchased',
+    'dailyQuestDay', 'dailyQuestProgress', 'weeklyQuestWeek', 'weeklyQuestProgress',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -750,7 +759,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -764,7 +773,7 @@
   var ARCADE_POOL_SIZE = 15;
   var arcadePool = [];
   var poolLayerCached = null;
-  var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null };
+  var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null, eventCd: null, hubRev: null };
 
   function isWalletDirty() { return !!UI.dirty.wallet; }
   function isHudDirty() { return !!UI.dirty.hud; }
@@ -813,7 +822,10 @@
     if (!amt) return;
     if (window.__SWARM_CASH_MULT__ > 1) amt = Math.floor(amt * window.__SWARM_CASH_MULT__);
     G.cash += amt;
-    if (amt > 0) G.totalCashEarned = (G.totalCashEarned || 0) + amt;
+    if (amt > 0) {
+      G.totalCashEarned = (G.totalCashEarned || 0) + amt;
+      bumpQuestProgress('earn_cash', amt, 'weekly');
+    }
     markWalletDirty();
   }
 
@@ -910,6 +922,7 @@
       dailyLoginStreak: 0, dailyLoginLastDay: 0, dailyLoginClaimedDay: 0,
       achievementsUnlocked: [], achievementStats: {}, trophyPoints: 0, trophyRoadClaimed: [],
       cardOfDaySeed: 0, cardOfDayPurchased: false,
+      dailyQuestDay: 0, dailyQuestProgress: {}, weeklyQuestWeek: 0, weeklyQuestProgress: {},
     };
   }
 
@@ -1234,6 +1247,10 @@
     if (G.dailyLoginClaimedDay == null || isNaN(G.dailyLoginClaimedDay)) { G.dailyLoginClaimedDay = 0; fixes++; }
     if (G.cardOfDaySeed == null || isNaN(G.cardOfDaySeed)) { G.cardOfDaySeed = 0; fixes++; }
     if (G.cardOfDayPurchased == null) { G.cardOfDayPurchased = false; fixes++; }
+    if (G.dailyQuestDay == null || isNaN(G.dailyQuestDay)) { G.dailyQuestDay = 0; fixes++; }
+    if (!G.dailyQuestProgress || typeof G.dailyQuestProgress !== 'object') { G.dailyQuestProgress = {}; fixes++; }
+    if (G.weeklyQuestWeek == null || isNaN(G.weeklyQuestWeek)) { G.weeklyQuestWeek = 0; fixes++; }
+    if (!G.weeklyQuestProgress || typeof G.weeklyQuestProgress !== 'object') { G.weeklyQuestProgress = {}; fixes++; }
     return fixes;
   }
 
@@ -2060,6 +2077,7 @@
     if (!isCampaignNodeCleared(node)) {
       if (!Array.isArray(G.campaignNodeClears)) G.campaignNodeClears = [];
       G.campaignNodeClears.push(node);
+      bumpQuestProgress('clear_nodes', 1);
     }
     if (node < CAMPAIGN_NODE_COUNT) {
       G.campaignNode = node + 1;
@@ -2432,6 +2450,7 @@
       popStrain(pr.strain, { mega: pr.packType === 'breed' || isBoss, jackpot: isBoss, delay: 120 });
       plantSay('pack', true);
     }
+    bumpQuestProgress('open_packs', 1);
     G.packReveal = { open: false, packType: null, strain: null, strains: null, wheelSpin: false };
     scheduleSave();
     render();
@@ -3042,16 +3061,44 @@
       UI.dirty.bossTrait = false;
     }
     if (isBossDpsDirty()) {
-      var dpsEl = document.querySelector('.boss-stage-dps');
+      var dpsEl = document.querySelector('.battle-hub-dps-value') || document.querySelector('.boss-stage-dps');
       if (dpsEl) {
         var dpsVal = totalBattleDps();
-        var dpsStr = 'DPS ' + dpsVal.toFixed(1);
+        var dpsStr = dpsEl.classList.contains('battle-hub-dps-value') ? dpsVal.toFixed(1) : 'DPS ' + dpsVal.toFixed(1);
         if (UI_LAST.dps !== dpsStr) {
           dpsEl.textContent = dpsStr;
           UI_LAST.dps = dpsStr;
         }
       }
       UI.dirty.bossDps = false;
+    }
+  }
+
+  function syncBattleHubTimers() {
+    if (UI.activeTab !== 'battle' || UI.farmOpen) return;
+    var eventEl = document.getElementById('battle-hub-event-timer');
+    if (eventEl) {
+      var evStr = fmtLongCd(voidRiftRem());
+      if (UI_LAST.eventCd !== evStr) {
+        eventEl.textContent = evStr;
+        UI_LAST.eventCd = evStr;
+      }
+    }
+    var cloneEl = document.getElementById('battle-hub-clone-timer');
+    if (cloneEl) {
+      var cloneStr = G.cloneJob ? fmtCd(cloneRem()) : 'READY';
+      if (UI_LAST.cloneCd !== cloneStr) {
+        cloneEl.textContent = cloneStr;
+        UI_LAST.cloneCd = cloneStr;
+      }
+    }
+    var revEl = document.getElementById('battle-hub-rev');
+    if (revEl) {
+      var revStr = fmtRev(revSecTotal());
+      if (UI_LAST.hubRev !== revStr) {
+        revEl.textContent = revStr;
+        UI_LAST.hubRev = revStr;
+      }
     }
   }
 
@@ -3107,6 +3154,7 @@
     syncHudShell(false);
     syncBossBattleDom();
     syncTabTimers();
+    syncBattleHubTimers();
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
   }
 
@@ -3255,6 +3303,174 @@
 
   function engagementDaySeed() { return Math.floor(Date.now() / 86400000); }
 
+  function engagementWeekSeed() { return Math.floor(engagementDaySeed() / 7); }
+
+  function voidRiftEndsAt() {
+    var now = new Date();
+    var dow = now.getDay();
+    var daysLeft = dow === 0 ? 0 : 7 - dow;
+    var end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysLeft, 23, 59, 59, 999);
+    return end.getTime();
+  }
+
+  function voidRiftRem() { return Math.max(0, voidRiftEndsAt() - Date.now()); }
+
+  function fmtLongCd(ms) {
+    var t = Math.max(0, Math.floor(ms / 1000));
+    var d = Math.floor(t / 86400);
+    var h = Math.floor((t % 86400) / 3600);
+    var m = Math.floor((t % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm ' + (t % 60) + 's';
+  }
+
+  function ensureQuestState() {
+    var day = engagementDaySeed();
+    var week = engagementWeekSeed();
+    if (!G.dailyQuestProgress || typeof G.dailyQuestProgress !== 'object') G.dailyQuestProgress = {};
+    if (!G.weeklyQuestProgress || typeof G.weeklyQuestProgress !== 'object') G.weeklyQuestProgress = {};
+    if (G.dailyQuestDay !== day) {
+      G.dailyQuestDay = day;
+      G.dailyQuestProgress = {};
+    }
+    if (G.weeklyQuestWeek !== week) {
+      G.weeklyQuestWeek = week;
+      G.weeklyQuestProgress = {};
+    }
+  }
+
+  function bumpQuestProgress(id, amt, scope) {
+    if (!amt) return;
+    ensureQuestState();
+    if (scope === 'weekly') {
+      G.weeklyQuestProgress[id] = (G.weeklyQuestProgress[id] || 0) + amt;
+    } else {
+      G.dailyQuestProgress[id] = (G.dailyQuestProgress[id] || 0) + amt;
+    }
+  }
+
+  function questProgressFor(def, scope) {
+    ensureQuestState();
+    var store = scope === 'weekly' ? G.weeklyQuestProgress : G.dailyQuestProgress;
+    return Math.min(def.target, store[def.id] || 0);
+  }
+
+  function questRowHtml(def, scope) {
+    var prog = questProgressFor(def, scope);
+    var pct = Math.min(100, (prog / def.target) * 100);
+    var done = prog >= def.target;
+    var h = '<div class="battle-hub-quest' + (done ? ' battle-hub-quest-done' : '') + '">';
+    if (def.action === 'open-daily-login' && !done) {
+      h += '<button type="button" class="battle-hub-quest-main" data-action="open-daily-login">';
+    } else {
+      h += '<div class="battle-hub-quest-main">';
+    }
+    h += '<div class="battle-hub-quest-icon">' + farmIcon(def.icon || 'pack') + '</div>';
+    h += '<div class="battle-hub-quest-body"><div class="battle-hub-quest-name">' + esc(def.name) + '</div>';
+    h += '<div class="battle-hub-quest-bar"><div class="battle-hub-quest-fill" style="width:' + pct + '%"></div></div>';
+    h += '<div class="battle-hub-quest-prog">' + (def.id === 'earn_cash' ? fmtCash(prog) + ' / ' + fmtCash(def.target) : prog + ' / ' + def.target) + '</div>';
+    h += '</div>';
+    h += def.action === 'open-daily-login' && !done ? '</button>' : '</div>';
+    if (scope === 'weekly') h += '<span class="battle-hub-quest-tag">WEEKLY</span>';
+    h += '</div>';
+    return h;
+  }
+
+  function battleHubEventBannerHtml() {
+    var h = '<div class="battle-hub-event">';
+    h += '<div class="battle-hub-event-glow"></div>';
+    h += '<div class="battle-hub-event-body">';
+    h += '<div class="battle-hub-event-icon">' + farmIcon('portal', { lg: true }) + '</div>';
+    h += '<div class="battle-hub-event-info"><div class="battle-hub-event-title">VOID RIFT INVASION</div>';
+    h += '<div class="battle-hub-event-sub">Bonus node rewards · ends soon</div></div>';
+    h += '<div class="battle-hub-event-timer" id="battle-hub-event-timer">' + fmtLongCd(voidRiftRem()) + '</div>';
+    h += '</div></div>';
+    return h;
+  }
+
+  function battleHubPendingChestsHtml() {
+    var q = G.pendingRewards || [];
+    if (!q.length) return '';
+    var h = '<div class="battle-hub-chests">';
+    q.forEach(function (r, i) {
+      h += '<button type="button" class="battle-hub-chest-btn" data-action="open-chest" data-id="' + i + '">';
+      h += farmIcon('pack') + '<span>' + esc(chestLabel(r)) + '</span><span class="battle-hub-chest-open">OPEN</span></button>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function battleHubSquadHtml() {
+    var ids = (G.equippedBattleIds || []).slice(0, BATTLE_EQUIP_MAX);
+    var h = '<div class="battle-hub-squad"><div class="battle-hub-squad-label">CAMPAIGN SQUAD</div><div class="battle-hub-squad-row">';
+    for (var i = 0; i < BATTLE_EQUIP_MAX; i++) {
+      var s = ids[i] ? strainById(ids[i]) : null;
+      if (s) {
+        h += '<div class="battle-hub-squad-slot battle-hub-squad-filled" title="' + esc(s.name) + '">' + budImg(s, '2rem') + '</div>';
+      } else {
+        h += '<div class="battle-hub-squad-slot battle-hub-squad-empty">' + farmIcon('empty') + '</div>';
+      }
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function battleHubHeroHtml() {
+    var node = currentCampaignNode();
+    var def = campaignNodeDef(node);
+    var mega = isBossWave();
+    var bossHue = def.bossHue;
+    var dps = totalBattleDps();
+    var h = '<section class="battle-hub-hero' + (mega ? ' battle-hub-hero-mega' : '') + '">';
+    h += '<div class="battle-hub-hero-bg campaign-boss-hue-' + (bossHue % 12) + '">';
+    h += '<div class="battle-hub-hero-nebula boss-stage-nebula campaign-boss-hue-' + (bossHue % 12) + '"></div>';
+    h += '<div class="battle-hub-hero-boss">';
+    h += '<div class="boss-aura-ring campaign-boss-accent-' + (bossHue % 8) + '"></div>';
+    h += '<img src="' + BOSS_ART + '" alt="" class="battle-hub-boss-img voidline-art campaign-boss-hue-' + (bossHue % 12) + '" data-art-kind="boss" onerror="this.onerror=null;this.src=\'' + BOSS_ART_FALLBACK + '\'">';
+    h += '</div><div class="battle-hub-hero-dim"></div></div>';
+    h += '<div class="battle-hub-hero-content">';
+    h += '<div class="battle-hub-node-tag">NODE ' + node + '/' + CAMPAIGN_NODE_COUNT + (mega ? ' · MEGA' : '') + '</div>';
+    h += '<div class="battle-hub-dps"><span class="battle-hub-dps-label">DPS</span><span class="battle-hub-dps-value boss-stage-dps">' + dps.toFixed(1) + '</span></div>';
+    h += '<button type="button" class="battle-hub-start-btn" data-action="start-run">START RUN</button>';
+    h += battleHubSquadHtml();
+    h += '<button type="button" class="battle-hub-trail-toggle" data-action="toggle-campaign-trail">';
+    h += (UI.campaignTrailOpen ? 'Hide Trail' : 'Campaign Trail') + ' · ' + esc(G.bossName) + '</button>';
+    h += '</div></section>';
+    return h;
+  }
+
+  function battleHubQuestsHtml() {
+    ensureQuestState();
+    var h = '<section class="battle-hub-quests ' + SKIN_PANEL + '">';
+    h += '<div class="battle-hub-section-title">QUESTS</div>';
+    DAILY_QUEST_DEFS.forEach(function (q) { h += questRowHtml(q, 'daily'); });
+    WEEKLY_QUEST_DEFS.forEach(function (q) { h += questRowHtml(q, 'weekly'); });
+    h += battleHubPendingChestsHtml();
+    h += '</section>';
+    return h;
+  }
+
+  function battleHubPortalPanelHtml() {
+    var floors = G.factoryFloors ? G.factoryFloors.length : 0;
+    var cr = cloneRem();
+    var cloneActive = !!G.cloneJob;
+    var h = '<section class="battle-hub-portal ' + SKIN_PANEL + '">';
+    h += '<div class="battle-hub-section-title battle-hub-section-title-cyan">PORTAL FARM</div>';
+    h += '<div class="battle-hub-portal-grid">';
+    h += '<div class="battle-hub-portal-stat"><div class="battle-hub-portal-stat-label">$/SEC</div>';
+    h += '<div class="battle-hub-portal-stat-value" id="battle-hub-rev">' + fmtRev(revSecTotal()) + '</div></div>';
+    h += '<div class="battle-hub-portal-stat"><div class="battle-hub-portal-stat-label">FLOORS</div>';
+    h += '<div class="battle-hub-portal-stat-value battle-hub-portal-floors">' + floors + '</div></div>';
+    h += '<div class="battle-hub-portal-stat battle-hub-portal-clone"><div class="battle-hub-portal-stat-label">CLONER</div>';
+    h += '<div class="battle-hub-cloner-row">' + farmIcon('clone', { lg: true });
+    h += '<span class="battle-hub-cloner-timer" id="battle-hub-clone-timer">' + (cloneActive ? fmtCd(cr) : 'READY') + '</span></div></div>';
+    h += '</div>';
+    h += '<button type="button" class="battle-hub-upgrade-btn" data-action="openPortalFarm">UPGRADE</button>';
+    h += '</section>';
+    return h;
+  }
+
   function ensureEngagementState() {
     if (!Array.isArray(G.achievementsUnlocked)) G.achievementsUnlocked = [];
     if (!G.achievementStats || typeof G.achievementStats !== 'object') G.achievementStats = {};
@@ -3317,6 +3533,7 @@
     G.dailyLoginLastDay = day;
     G.dailyLoginClaimedDay = day;
     addTrophyPoints(5);
+    bumpQuestProgress('claim_login', 1);
     showBattleToast('Day ' + streak + ' login reward!', true);
     UI.dailyLoginOpen = false;
     scheduleSave();
@@ -3543,21 +3760,15 @@
   }
 
   function renderBattle() {
+    // RAID + MUTATION LAB: reach via Index nav (decks / mutations panes) — hub orbs removed from HOME.
     var mega = isBossWave();
-    var h = '<div class="screen-section home-command halftone-panel boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
-    h += fightTopBarHtml(false);
-    h += '<div class="home-command-body">';
-    h += engagementStripHtml();
-    h += cardOfDaySpotlightHtml();
-    h += '<div class="home-arena-frame ' + SKIN_PANEL + '">';
-    h += bossArenaStageHtml();
+    var h = '<div class="screen-section battle-hub' + (mega ? ' battle-hub-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
+    h += battleHubHeroHtml();
+    if (UI.campaignTrailOpen) h += renderCampaignTrail();
+    h += battleHubQuestsHtml();
+    h += battleHubEventBannerHtml();
+    h += battleHubPortalPanelHtml();
     h += '</div>';
-    h += renderCampaignTrail();
-    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', 'tower') + hubOrbBtn('RAID', 'hub-raid', 'raid') + hubOrbBtn('MUTATION LAB', 'hub-mutation-lab', 'mutation') + '</div>';
-    h += '<div class="home-chest-rail ' + SKIN_PANEL + '">';
-    h += '<div class="section-label section-label-green" style="margin:0 0 0.5rem;text-align:left">PENDING CHESTS · INSTANT OPEN</div>';
-    h += homeChestSlotsHtml();
-    h += '</div></div></div>';
     return h;
   }
 
@@ -4840,6 +5051,33 @@
     else if (act==='lease-decline') respondLeaseOffer(val, false);
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
     else if (act==='open-chest') { openChestSlot(val); return; }
+    else if (act==='openPortalFarm') {
+      UI.activeTab = 'battle';
+      UI.farmOpen = true;
+      G.farmSubTab = 'portal';
+      plantSay('tab_farm', true);
+      scheduleSave(); render(); return;
+    }
+    else if (act==='start-run') {
+      UI.campaignTrailOpen = true;
+      UI.battleWaveFlash = 'battle-hub-run-flash';
+      render();
+      setTimeout(function () {
+        var node = currentCampaignNode();
+        var el = document.getElementById('campaign-node-' + node);
+        if (el) {
+          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { el.scrollIntoView(true); }
+        }
+        UI.battleWaveFlash = null;
+        render();
+      }, 120);
+      return;
+    }
+    else if (act==='toggle-campaign-trail') {
+      UI.campaignTrailOpen = !UI.campaignTrailOpen;
+      render(); return;
+    }
+    // hub-raid / hub-mutation-lab kept for legacy buttons; HOME hub orbs removed — use Index nav.
     else if (act==='hub-raid') { UI.activeTab = 'index'; UI.indexPane = 'decks'; UI.farmOpen = false; }
     else if (act==='hub-mutation-lab') { UI.activeTab = 'index'; UI.indexPane = 'mutations'; UI.farmOpen = false; UI.mergeLab = { open: false, phase: 'idle', child: null, error: '' }; }
     else if (act==='campaign-focus-node') {

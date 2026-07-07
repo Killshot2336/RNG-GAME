@@ -956,7 +956,236 @@
       box-shadow: inset 0 4px 8px rgba(0,0,0,0.35), 0 4px 0 var(--ink);
     }
 
-    /* HOME — Isekai command center */
+    /* ── Battle Hub (Clash Royale-style HOME) ── */
+    .battle-hub {
+      display: flex; flex-direction: column; gap: 0.65rem;
+      min-height: calc(100% - 0.5rem); padding-bottom: 0.35rem;
+    }
+    .battle-hub-hero {
+      position: relative; border-radius: 1.15rem; overflow: hidden;
+      border: 3px solid rgba(0, 0, 0, 0.9);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      min-height: 16.5rem;
+    }
+    .battle-hub-hero-mega {
+      border-color: rgba(236, 72, 153, 0.55);
+      box-shadow: 0 0 36px rgba(236, 72, 153, 0.25), 0 8px 32px rgba(0, 0, 0, 0.55);
+    }
+    .battle-hub-hero-bg {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, #0a0618 0%, #12082a 45%, #1a0a2e 100%);
+    }
+    .battle-hub-hero-nebula { opacity: 0.65; animation: boss-nebula-drift 14s ease-in-out infinite alternate; }
+    .battle-hub-hero-boss {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      pointer-events: none; padding-bottom: 3.5rem;
+    }
+    .battle-hub-boss-img {
+      width: 9rem; height: 9rem; object-fit: contain; opacity: 0.55;
+      filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.75));
+      animation: boss-idle 4.5s ease-in-out infinite;
+    }
+    .battle-hub-hero-mega .battle-hub-boss-img { width: 10.5rem; height: 10.5rem; opacity: 0.62; }
+    .battle-hub-hero-dim {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(8, 4, 18, 0.35) 0%, rgba(8, 4, 18, 0.82) 55%, rgba(4, 2, 12, 0.95) 100%);
+    }
+    .battle-hub-hero-content {
+      position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center;
+      padding: 0.85rem 0.75rem 0.75rem; gap: 0.55rem;
+    }
+    .battle-hub-node-tag {
+      font-family: var(--font-mono); font-size: 0.48rem; letter-spacing: 0.16em;
+      color: var(--gold); font-weight: 700; opacity: 0.9;
+    }
+    .battle-hub-dps {
+      display: flex; flex-direction: column; align-items: center; line-height: 1;
+      text-shadow: 0 0 24px rgba(56, 189, 248, 0.55), 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+    .battle-hub-dps-label {
+      font-family: var(--font-mono); font-size: 0.55rem; letter-spacing: 0.28em;
+      color: var(--cyan); font-weight: 700; margin-bottom: 0.15rem;
+    }
+    .battle-hub-dps-value {
+      font-family: var(--font-display); font-size: 2.35rem; font-weight: 800;
+      background: linear-gradient(180deg, #fff 0%, var(--cyan) 45%, #0284C7 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.45));
+    }
+    .battle-hub-start-btn {
+      position: relative; width: min(100%, 16rem); padding: 0.95rem 1.25rem;
+      border: 3px solid #1a1209; border-radius: 1rem; cursor: pointer;
+      font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; letter-spacing: 0.14em;
+      color: #1a1209;
+      background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 35%, #EA580C 70%, #C2410C 100%);
+      box-shadow:
+        0 0 32px rgba(250, 204, 21, 0.55),
+        0 0 64px rgba(234, 88, 12, 0.25),
+        0 8px 0 #1a1209,
+        inset 0 2px 0 rgba(255, 255, 255, 0.45);
+      transition: transform 0.12s var(--ease-os), box-shadow 0.15s, filter 0.15s;
+      animation: battle-hub-start-glow 2.4s ease-in-out infinite;
+    }
+    @keyframes battle-hub-start-glow {
+      0%, 100% { box-shadow: 0 0 28px rgba(250, 204, 21, 0.45), 0 8px 0 #1a1209, inset 0 2px 0 rgba(255, 255, 255, 0.4); }
+      50% { box-shadow: 0 0 48px rgba(250, 204, 21, 0.75), 0 0 80px rgba(234, 88, 12, 0.35), 0 8px 0 #1a1209, inset 0 2px 0 rgba(255, 255, 255, 0.5); }
+    }
+    .battle-hub-start-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
+    .battle-hub-start-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 0 20px rgba(250, 204, 21, 0.35), 0 2px 0 #1a1209, inset 0 3px 8px rgba(0, 0, 0, 0.25);
+    }
+    .battle-hub-squad { width: 100%; max-width: 20rem; }
+    .battle-hub-squad-label {
+      font-family: var(--font-mono); font-size: 0.42rem; letter-spacing: 0.14em;
+      color: var(--muted); text-align: center; margin-bottom: 0.35rem;
+    }
+    .battle-hub-squad-row {
+      display: flex; justify-content: center; gap: 0.28rem; flex-wrap: nowrap;
+      overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.15rem 0;
+    }
+    .battle-hub-squad-slot {
+      flex: 0 0 2.35rem; width: 2.35rem; height: 2.35rem; border-radius: 0.55rem;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid rgba(0, 0, 0, 0.85);
+      background: rgba(8, 12, 22, 0.75);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+    }
+    .battle-hub-squad-filled {
+      border-color: rgba(74, 222, 128, 0.45);
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .battle-hub-squad-empty { opacity: 0.4; border-style: dashed; }
+    .battle-hub-trail-toggle {
+      background: none; border: none; cursor: pointer; padding: 0.25rem 0.5rem;
+      font-family: var(--font-mono); font-size: 0.45rem; letter-spacing: 0.08em;
+      color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+    }
+    .battle-hub-trail-toggle:hover { color: var(--green); }
+    .battle-hub .campaign-trail-wrap { margin-top: -0.25rem; }
+    .battle-hub-section-title {
+      font-family: var(--font-display); font-size: 0.55rem; letter-spacing: 0.18em;
+      color: var(--gold); font-weight: 700; margin-bottom: 0.55rem;
+    }
+    .battle-hub-section-title-cyan { color: var(--cyan); }
+    .battle-hub-quests {
+      padding: 0.65rem 0.75rem; border-radius: 1rem;
+      background: linear-gradient(165deg, rgba(26, 16, 48, 0.92), rgba(12, 6, 24, 0.95));
+      border-color: rgba(168, 85, 247, 0.35) !important;
+    }
+    .battle-hub-quest {
+      position: relative; margin-bottom: 0.45rem; border-radius: 0.65rem;
+      background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .battle-hub-quest:last-of-type { margin-bottom: 0; }
+    .battle-hub-quest-done { opacity: 0.65; border-color: rgba(74, 222, 128, 0.3); }
+    .battle-hub-quest-main {
+      display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.55rem;
+      width: 100%; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: default;
+    }
+    button.battle-hub-quest-main { cursor: pointer; }
+    button.battle-hub-quest-main:hover { background: rgba(57, 255, 20, 0.06); }
+    .battle-hub-quest-icon { flex-shrink: 0; font-size: 1.1rem; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+    .battle-hub-quest-body { flex: 1; min-width: 0; }
+    .battle-hub-quest-name {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.25rem;
+    }
+    .battle-hub-quest-bar {
+      height: 0.4rem; border-radius: 999px; overflow: hidden; margin-bottom: 0.2rem;
+      background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .battle-hub-quest-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, var(--green), var(--gold));
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.45);
+      transition: width 0.25s ease-out;
+    }
+    .battle-hub-quest-prog { font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); }
+    .battle-hub-quest-tag {
+      position: absolute; top: 0.25rem; right: 0.35rem;
+      font-family: var(--font-mono); font-size: 0.35rem; letter-spacing: 0.1em;
+      color: var(--cyan); opacity: 0.85;
+    }
+    .battle-hub-chests {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; padding-top: 0.45rem;
+      border-top: 1px dashed rgba(250, 204, 21, 0.25);
+    }
+    .battle-hub-chest-btn {
+      display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.5rem;
+      border-radius: 0.55rem; border: 1px solid rgba(250, 204, 21, 0.4);
+      background: rgba(250, 204, 21, 0.08); cursor: pointer; color: inherit; font: inherit;
+      font-family: var(--font-mono); font-size: 0.42rem;
+    }
+    .battle-hub-chest-btn:hover { background: rgba(250, 204, 21, 0.15); transform: translateY(-1px); }
+    .battle-hub-chest-open { color: var(--gold); font-weight: 700; letter-spacing: 0.08em; }
+    .battle-hub-event {
+      position: relative; border-radius: 1rem; overflow: hidden; padding: 0.65rem 0.75rem;
+      border: 2px solid rgba(234, 88, 12, 0.45);
+      background: linear-gradient(135deg, rgba(67, 20, 90, 0.85), rgba(124, 45, 18, 0.55), rgba(12, 6, 24, 0.9));
+      box-shadow: 0 0 24px rgba(234, 88, 12, 0.15);
+    }
+    .battle-hub-event-glow {
+      position: absolute; inset: -40%; pointer-events: none;
+      background: radial-gradient(circle, rgba(250, 204, 21, 0.12) 0%, transparent 55%);
+      animation: battle-hub-event-pulse 3s ease-in-out infinite;
+    }
+    @keyframes battle-hub-event-pulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+    .battle-hub-event-body { position: relative; display: flex; align-items: center; gap: 0.55rem; }
+    .battle-hub-event-icon { flex-shrink: 0; filter: drop-shadow(0 0 12px rgba(234, 88, 12, 0.5)); }
+    .battle-hub-event-info { flex: 1; min-width: 0; }
+    .battle-hub-event-title {
+      font-family: var(--font-display); font-size: 0.78rem; font-weight: 800;
+      letter-spacing: 0.1em; color: #FDE68A;
+      text-shadow: 0 0 16px rgba(250, 204, 21, 0.45);
+    }
+    .battle-hub-event-sub { font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); margin-top: 0.1rem; }
+    .battle-hub-event-timer {
+      flex-shrink: 0; font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+      color: #FB923C; padding: 0.35rem 0.45rem; border-radius: 0.5rem;
+      background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(251, 146, 60, 0.35);
+      box-shadow: 0 0 12px rgba(251, 146, 60, 0.2);
+    }
+    .battle-hub-portal {
+      padding: 0.65rem 0.75rem; border-radius: 1rem;
+      background: linear-gradient(165deg, rgba(15, 30, 20, 0.92), rgba(8, 18, 12, 0.95));
+      border-color: rgba(74, 222, 128, 0.35) !important;
+      box-shadow: inset 0 0 24px rgba(74, 222, 128, 0.04);
+    }
+    .battle-hub-portal-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-bottom: 0.55rem;
+    }
+    .battle-hub-portal-stat {
+      padding: 0.45rem 0.5rem; border-radius: 0.65rem;
+      background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(74, 222, 128, 0.15);
+    }
+    .battle-hub-portal-stat-label {
+      font-family: var(--font-mono); font-size: 0.4rem; letter-spacing: 0.12em; color: var(--muted);
+    }
+    .battle-hub-portal-stat-value {
+      font-family: var(--font-display); font-size: 0.95rem; font-weight: 700;
+      color: var(--green); margin-top: 0.15rem;
+    }
+    .battle-hub-portal-floors { color: var(--cyan); }
+    .battle-hub-portal-clone { grid-column: 1 / -1; }
+    .battle-hub-cloner-row { display: flex; align-items: center; gap: 0.45rem; margin-top: 0.15rem; }
+    .battle-hub-cloner-timer {
+      font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; color: var(--green);
+    }
+    .battle-hub-upgrade-btn {
+      width: 100%; padding: 0.65rem; border-radius: 0.75rem; cursor: pointer;
+      font-family: var(--font-display); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em;
+      border: 2px solid rgba(0, 0, 0, 0.9);
+      color: #0c011a;
+      background: linear-gradient(180deg, var(--green) 0%, #16A34A 55%, #14532D 100%);
+      box-shadow: 0 4px 0 #1a1209, 0 0 16px rgba(74, 222, 128, 0.25);
+      transition: transform 0.12s var(--ease-os);
+    }
+    .battle-hub-upgrade-btn:hover { filter: brightness(1.08); }
+    .battle-hub-upgrade-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #1a1209; }
+    .battle-hub-run-flash .battle-hub-start-btn { animation: battle-hub-run-pulse 0.6s ease-out; }
+    @keyframes battle-hub-run-pulse { 0% { transform: scale(1); } 40% { transform: scale(1.06); filter: brightness(1.15); } 100% { transform: scale(1); } }
+
+    /* HOME — Isekai command center (legacy farm overlay) */
     .home-command { gap: 0.65rem; min-height: calc(100% - 0.5rem); }
     .home-command-body {
       display: flex; flex-direction: column; gap: 0.65rem; flex: 1; min-height: 0;
