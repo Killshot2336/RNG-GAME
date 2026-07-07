@@ -1844,7 +1844,7 @@
     G.sp = (G.sp || 0) + spGain;
     var xpGain = Math.floor((mega ? (40 + node * 10) : (12 + wave * 6 + node * 2)) * (1 + blitzMod('campaignNode')));
     var xpFinal = Math.floor(xpGain * (1 + blitzMod('xp')));
-    addXp(xpGain, true);
+    addXp(xpFinal, true);
     popArcadeBurst([
       { type: 'cash', amount: cashGain, mega: mega, jackpot: mega && cashGain >= 8000 },
       { type: 'sp', amount: spGain, big: true, mega: mega },
