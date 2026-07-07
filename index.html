@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/voidline-icon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#1A2E12" />
+  <meta name="theme-color" content="#030712" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Voidline Galaxy Farm</title>
@@ -13,9 +13,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --void: #1A2E12; --void-deep: #0F1A0A; --panel: rgba(34,60,24,0.72);
-      --neon-purple: #3D5A1E; --neon-glow: #84CC16; --green: #4ADE80;
-      --gold: #FACC15; --pink: #F472B6; --cyan: #38BDF8; --muted: #A3E635; --text: #FEF9C3;
+      --void: #0a0f1e; --void-deep: #030712; --panel: rgba(10, 15, 30, 0.72);
+      --neon-purple: #1e293b; --neon-glow: #84CC16; --green: #4ADE80;
+      --gold: #FACC15; --pink: #F472B6; --cyan: #38BDF8; --muted: #94a3b8; --text: #f1f5f9;
+      --glass-skin: linear-gradient(135deg, rgba(10, 15, 30, 0.7) 0%, rgba(3, 7, 18, 0.85) 100%);
+      --glass-blur: blur(24px) saturate(140%);
+      --glass-border: 1px solid rgba(255, 255, 255, 0.07);
+      --ease-os: cubic-bezier(0.16, 1, 0.3, 1);
       --font-display: "Fredoka", "Audiowide", system-ui, sans-serif;
       --font-body: "Exo 2", system-ui, sans-serif;
       --font-mono: "Share Tech Mono", monospace;
@@ -32,19 +36,22 @@
       display: flex; align-items: stretch; justify-content: center;
       position: relative; overflow: hidden;
     }
-    .backdrop-gradient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, rgba(74,222,128,0.12) 0%, #0F1A0A 70%); }
+    .backdrop-gradient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 30%, rgba(56, 189, 248, 0.1) 0%, transparent 55%), radial-gradient(ellipse at 80% 80%, rgba(168, 85, 247, 0.08) 0%, var(--void-deep) 72%); }
     .phone-inner {
       position: relative; display: flex; flex-direction: column;
       width: 100%; max-width: 28rem; height: 100%; height: 100dvh;
       max-height: 100dvh; min-height: 0; flex: 1 1 auto;
+      contain: layout style paint;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
       background: var(--void);
-      border-left: 1px solid var(--neon-purple);
-      border-right: 1px solid var(--neon-purple);
-      box-shadow: 0 0 50px rgba(61,0,102,0.6);
-      overflow: hidden; transition: filter 0.35s ease;
+      border-left: var(--glass-border);
+      border-right: var(--glass-border);
+      box-shadow: 0 0 60px rgba(3, 7, 18, 0.85), 0 0 120px rgba(56, 189, 248, 0.08);
+      overflow: hidden; transition: filter 0.35s var(--ease-os);
     }
     .phone-inner.dimmed { filter: brightness(0.4); }
-    .void-bg { background-color: var(--void); background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(74,222,128,0.2) 0%, transparent 55%), radial-gradient(ellipse 80% 60% at 100% 100%, rgba(250,204,21,0.1) 0%, transparent 50%); }
+    .void-bg { background-color: var(--void); background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(56, 189, 248, 0.14) 0%, transparent 55%), radial-gradient(ellipse 80% 60% at 100% 100%, rgba(250, 204, 21, 0.08) 0%, transparent 50%); }
     .void-bg::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.7) 0%, transparent 100%), radial-gradient(1px 1px at 72% 42%, rgba(255,255,255,0.6) 0%, transparent 100%), radial-gradient(1.5px 1.5px at 55% 15%, rgba(250,204,21,0.7) 0%, transparent 100%); animation: star-twinkle 4s ease-in-out infinite alternate; }
     .tab-bg-battle { background-image: radial-gradient(ellipse 100% 60% at 50% 0%, rgba(239,68,68,0.12) 0%, transparent 50%), radial-gradient(ellipse 80% 50% at 100% 100%, rgba(74,222,128,0.08) 0%, transparent 45%), radial-gradient(ellipse 120% 80% at 50% -20%, rgba(74,222,128,0.18) 0%, transparent 55%); }
     .tab-bg-shop { background-image: radial-gradient(ellipse 90% 55% at 20% 0%, rgba(250,204,21,0.15) 0%, transparent 50%), radial-gradient(ellipse 70% 45% at 90% 80%, rgba(56,189,248,0.08) 0%, transparent 45%); }
@@ -84,10 +91,13 @@
       touch-action: pan-y;
       padding: 0;
     }
+    .screen-router-wrapper,
     .cr-screen-carousel {
       display: flex; width: 500%; height: 100%;
-      transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
       will-change: transform;
+      transition: transform 0.38s var(--ease-os);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
     }
     .cr-screen-panel {
       flex: 0 0 20%; width: 20%; height: 100%;
@@ -97,18 +107,66 @@
       scroll-padding-bottom: 1rem;
     }
     .cr-screen-inner { min-height: 100%; }
-    .glass-panel {
-      background: rgba(20, 36, 14, 0.55) !important;
-      backdrop-filter: blur(18px) saturate(1.4);
-      border: 1px solid rgba(163, 230, 53, 0.22) !important;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+    .glass-panel,
+    .neon-card,
+    .game-btn,
+    .overlay-panel,
+    .profile-ribbon,
+    .player-pick-card,
+    .farm-tabs,
+    .sort-chip,
+    .lift-abilities,
+    .lift-footer,
+    .input-field,
+    .store-slot,
+    .dual-pack-card,
+    .roadside-slot,
+    .help-scroll,
+    .battle-toast,
+    #bottom-dock,
+    #hud-xp-strip,
+    .hub-rocket-btn {
+      background: var(--glass-skin);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: var(--glass-border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
-    .holo-card { transform-style: preserve-3d; transition: transform 0.12s ease-out; will-change: transform; }
+    .glass-panel { background: var(--glass-skin) !important; border: var(--glass-border) !important; }
+    .neon-card { border-radius: 16px; position: relative; overflow: hidden; }
+    .game-btn { border-radius: 10px; }
+    .game-btn-green { box-shadow: 0 0 18px rgba(57,255,20,0.2), inset 0 1px 0 rgba(255,255,255,0.08); }
+    .overlay-panel { border-radius: 1.5rem; box-shadow: 0 0 60px rgba(3, 7, 18, 0.65); }
+    #bottom-dock { border-top: var(--glass-border); border-radius: 0; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4); }
+    #hud-xp-strip { border-bottom: var(--glass-border); }
+    .holo-card {
+      --x-pct: 0; --y-pct: 0;
+      transform-style: preserve-3d;
+      will-change: transform;
+      transition: transform 0.08s var(--ease-os);
+    }
+    .foil-active .holo-card,
+    .holo-card.foil-active {
+      transform: perspective(900px) rotateX(calc(var(--y-pct) * -18deg)) rotateY(calc(var(--x-pct) * 18deg)) scale3d(1.02, 1.02, 1.02);
+      transition: none;
+    }
+    .cr-card-foil {
+      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
+      pointer-events: none; z-index: 6; opacity: 0;
+      mix-blend-mode: color-dodge;
+      background: linear-gradient(125deg, rgba(255, 0, 128, 0.35) 0%, rgba(0, 240, 255, 0.3) 35%, rgba(255, 215, 0, 0.28) 55%, rgba(168, 85, 247, 0.32) 75%, transparent 90%);
+      background-size: 220% 220%;
+      transition: opacity 0.18s ease;
+    }
+    .foil-active .cr-card-foil,
+    .holo-card.foil-active .cr-card-foil { opacity: 0.92; }
+    .liftable-wrap.foil-active { z-index: 2; }
     .cr-card-shine {
       mix-blend-mode: color-dodge;
       background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.45) 45%, rgba(250,204,21,0.35) 50%, transparent 65%);
       background-size: 200% 200%;
     }
+    .cr-art-fallback { width: 100%; max-height: 100%; display: block; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45)); }
     .roadside-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
     .roadside-slot { position: relative; min-height: 7.5rem; border-radius: 12px; border: 1px dashed rgba(163,230,53,0.35); background: rgba(0,0,0,0.25); }
     .roadside-slot-locked { border-style: solid; border-color: rgba(100,100,100,0.35); }
@@ -131,27 +189,22 @@
       position: relative; z-index: 30; flex-shrink: 0;
       display: flex; justify-content: space-around;
       padding: 0.5rem 0.5rem calc(0.65rem + env(safe-area-inset-bottom, 0));
-      background: rgba(12, 20, 8, 0.92);
-      backdrop-filter: blur(16px);
-      border-top: 1px solid rgba(163, 230, 53, 0.25);
-      box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
     }
-    .nav-btn { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: none; border: none; color: rgba(163,230,53,0.55); cursor: pointer; padding: 0.35rem 0.4rem; font-family: var(--font-display); font-size: 0.48rem; letter-spacing: 0.1em; font-weight: 600; transition: color 0.2s, filter 0.2s, transform 0.2s; }
+    .nav-btn { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: none; border: none; color: rgba(148, 163, 184, 0.65); cursor: pointer; padding: 0.35rem 0.4rem; font-family: var(--font-display); font-size: 0.48rem; letter-spacing: 0.1em; font-weight: 600; transition: color 0.2s, filter 0.2s, transform 0.2s var(--ease-os); }
     .nav-btn.active { color: #FACC15; filter: drop-shadow(0 0 10px rgba(250,204,21,0.65)); transform: translateY(-2px); }
     .nav-btn svg { width: 1.5rem; height: 1.5rem; }
-    .neon-card { background: var(--panel); backdrop-filter: blur(12px); border: 1px solid var(--neon-purple); border-radius: 16px; position: relative; overflow: hidden; }
+    .game-btn { font-family: var(--font-display); font-weight: 600; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 20px; color: var(--text); cursor: pointer; position: relative; overflow: hidden; transition: transform 0.15s var(--ease-os), box-shadow 0.2s; }
     .neon-card-pulse { animation: neon-pulse 2.8s ease-in-out infinite; }
-    .neon-card-green { border-color: rgba(57,255,20,0.55); }
+    .neon-card-green { border-color: rgba(57,255,20,0.35); }
     .neon-card-green.neon-card-pulse { animation: neon-pulse-green 2.8s ease-in-out infinite; }
     .neon-card-static { animation: none; }
-    .game-btn { font-family: var(--font-display); font-weight: 600; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(132,204,22,0.55); background: linear-gradient(180deg, rgba(34,60,24,0.92), rgba(26,46,18,0.96)); color: var(--text); cursor: pointer; position: relative; overflow: hidden; transition: transform 0.15s, box-shadow 0.2s; box-shadow: 0 0 18px rgba(74,222,128,0.25), inset 0 1px 0 rgba(255,255,255,0.12); }
-    .game-btn::after { content: ""; position: absolute; top: 0; left: 0; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer-slide 3s ease-in-out infinite; }
     .game-btn:hover { transform: translateY(-2px); border-color: var(--neon-glow); }
     .game-btn:active { transform: translateY(0) scale(0.97); }
     .game-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-    .game-btn-green { border-color: rgba(57,255,20,0.55); background: linear-gradient(180deg, rgba(20,80,20,0.85), rgba(10,40,10,0.95)); box-shadow: 0 0 18px rgba(57,255,20,0.3); }
+    .game-btn::after { content: ""; position: absolute; top: 0; left: 0; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); animation: shimmer-slide 3s ease-in-out infinite; }
+    .game-btn-green { border-color: rgba(57,255,20,0.35); }
     .game-btn-sm { font-size: 0.55rem; padding: 6px 10px; }
-    .profile-ribbon { position: relative; display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.75rem 0.375rem 0.375rem; border-radius: 9999px; cursor: pointer; background: linear-gradient(135deg, rgba(61,0,102,0.85), rgba(31,0,51,0.75)); border: 1px solid rgba(168,85,247,0.45); box-shadow: 0 0 20px rgba(168,85,247,0.25); transition: transform 0.2s; }
+    .profile-ribbon { position: relative; display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.75rem 0.375rem 0.375rem; border-radius: 9999px; cursor: pointer; transition: transform 0.2s var(--ease-os); }
     .profile-ribbon:hover { transform: scale(1.03); }
     .avatar-wrap { position: relative; width: 2.5rem; height: 2.5rem; flex-shrink: 0; }
     .avatar-ring { position: absolute; inset: -3px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--green); border-right-color: var(--neon-glow); animation: avatar-orbit 8s linear infinite; }
@@ -232,7 +285,7 @@
     .overlay { position: fixed; inset: 0; z-index: 7500; display: none; align-items: center; justify-content: center; padding: 1rem; }
     .overlay.open { display: flex; }
     .overlay-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(12px); border: none; cursor: pointer; }
-    .overlay-panel { position: relative; width: 100%; max-width: 24rem; max-height: 90vh; overflow-y: auto; border-radius: 1.5rem; background: rgba(15,0,28,0.92); border: 1px solid rgba(168,85,247,0.5); box-shadow: 0 0 60px rgba(168,85,247,0.3); }
+    .overlay-panel { position: relative; width: 100%; max-width: 24rem; max-height: 90vh; overflow-y: auto; }
     .overlay-panel::-webkit-scrollbar { width: 4px; }
     #overlay-profile { z-index: 8000; }
     #overlay-settings { z-index: 8500; align-items: flex-end; }
@@ -647,8 +700,6 @@
     @keyframes screen-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
     #hud-xp-strip {
       flex-shrink: 0; z-index: 29; padding: 0 1rem 0.5rem;
-      border-bottom: 1px solid rgba(61,0,102,0.35);
-      background: rgba(12,1,26,0.85);
     }
     .hud-xp-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem; }
   #hud-xp-text { font-family: var(--font-mono); font-size: 0.45rem; color: var(--muted); letter-spacing: 0.08em; }
@@ -877,7 +928,7 @@
     <div id="overlay-merge-lab" class="overlay"></div>
     <div id="overlay-aux"></div>
   </div>
-  <script src="catalog.js?v=27"></script>
-  <script src="game.js?v=27"></script>
+  <script src="catalog.js?v=30"></script>
+  <script src="game.js?v=30"></script>
 </body>
 </html>

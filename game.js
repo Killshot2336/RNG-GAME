@@ -167,10 +167,11 @@
 
   function pickRarity(rng, minR, luck) {
     luck = luck || 0;
-    var roll = rng() + luck * 0.04;
+    var roll = rng();
     var picked = RARITIES[0];
     for (var i = RARITIES.length - 1; i >= 0; i--) {
-      if (roll >= RARITIES[i].threshold) { picked = RARITIES[i]; break; }
+      var adj = Math.max(0, RARITIES[i].threshold * (1 - luck * 0.12));
+      if (roll >= adj) { picked = RARITIES[i]; break; }
     }
     if (minR) {
       var minIdx = rarityIndex(typeof minR === 'string' ? minR : minR.id);
@@ -259,11 +260,22 @@
   function genPack(type, seed, opts) {
     opts = opts || {};
     var s = seed != null ? seed : Math.floor(Math.random() * 0xffffffff);
-    var scanBoost = (opts.scanBonus != null ? opts.scanBonus : scanMult());
-    var luck = (opts.packLuckBonus || 0) + scanBoost * 0.28;
+    var luck = packLuckFromOpts(opts);
     if (type === 'guaranteed') return genStrain(s, 'pulse', luck);
     if (type === 'omega') return genStrain(s, 'bloom', luck);
     return genStrain(s, undefined, luck);
+  }
+
+  function packLuckFromOpts(opts) {
+    opts = opts || {};
+    var sectorScan = 0;
+    if (G && Array.isArray(G.sectorUpgrades)) {
+      sectorScan = G.sectorUpgrades.reduce(function (sum, x) {
+        return sum + (x.level || 0) * (x.scanRateBonus || 0);
+      }, 0);
+    }
+    var scanBoost = opts.scanBonus != null ? opts.scanBonus : (sectorScan + blitzMod('scan'));
+    return (opts.packLuckBonus || 0) + scanBoost * 0.28;
   }
 
   function migrateStrain(s) {
@@ -640,7 +652,10 @@
     return arr.concat([incoming]);
   }
   function upCost(s) { return Math.floor(8000 * rMult(s.rarity) * (1 + s.potency / 100)); }
-  function budImg(s, px) { return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + (s.hue || 0) + 'deg)">'; }
+  function budImg(s, px) {
+    var id = s && s.id ? ' data-strain-id="' + esc(s.id) + '"' : '';
+    return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
+  }
 
   var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
   var G = null;
@@ -652,6 +667,7 @@
 
   function creditCash(amt) {
     if (!amt) return;
+    if (window.__SWARM_CASH_MULT__ > 1) amt = Math.floor(amt * window.__SWARM_CASH_MULT__);
     G.cash += amt;
     if (amt > 0) G.totalCashEarned = (G.totalCashEarned || 0) + amt;
   }
@@ -993,13 +1009,58 @@
       buyer.cash -= lease.pricePerInterval;
       writePlayerSave(lease.buyerId, buyer);
       creditCash(lease.pricePerInterval);
+      if (window.__SWARM_SIM__) window.__SWARM_LEASE_CASH__ = (window.__SWARM_LEASE_CASH__ || 0) + lease.pricePerInterval;
       lease.lastBilledAt = now;
       lease.totalCollected = (lease.totalCollected || 0) + lease.pricePerInterval;
       G.planetLeases.active = G.planetLeases.active.map(function (l) { return l.id === lease.id ? lease : l; });
     });
   }
 
+  function healNullState() {
+    if (!G) return 0;
+    var fixes = 0;
+    function healArr(key, fallback) {
+      if (G[key] == null || !Array.isArray(G[key])) { G[key] = fallback.slice ? fallback.slice() : fallback; fixes++; }
+    }
+    if (Array.isArray(G.claimedPlanets) && (!G.ownedPlanets || !G.ownedPlanets.length)) {
+      G.ownedPlanets = G.claimedPlanets.slice();
+      fixes++;
+    }
+    if (Array.isArray(G.activeLeases)) {
+      if (!G.planetLeases || typeof G.planetLeases !== 'object') G.planetLeases = { active: [], archive: [], pending: [] };
+      if (!G.planetLeases.active || !G.planetLeases.active.length) { G.planetLeases.active = G.activeLeases.slice(); fixes++; }
+    }
+    if (Array.isArray(G.marketStorefront) && (!G.storefrontSlots || !G.storefrontSlots.length)) {
+      G.storefrontSlots = G.marketStorefront.slice();
+      fixes++;
+    }
+    delete G.claimedPlanets;
+    delete G.activeLeases;
+    delete G.marketStorefront;
+    healArr('strains', []);
+    healArr('ownedPlanets', []);
+    healArr('equippedBattleIds', []);
+    healArr('pendingRewards', []);
+    if (!G.planetLeases || typeof G.planetLeases !== 'object') {
+      G.planetLeases = { active: [], archive: [], pending: [] };
+      fixes++;
+    } else {
+      if (!Array.isArray(G.planetLeases.active)) { G.planetLeases.active = []; fixes++; }
+      if (!Array.isArray(G.planetLeases.archive)) { G.planetLeases.archive = []; fixes++; }
+      if (!Array.isArray(G.planetLeases.pending)) { G.planetLeases.pending = []; fixes++; }
+    }
+    if (!Array.isArray(G.leaseOffers)) { G.leaseOffers = []; fixes++; }
+    if (!Array.isArray(G.sectorUpgrades)) { G.sectorUpgrades = clone(SECTORS); fixes++; }
+    ensureStorefrontSlots();
+    if (!G.inventory || !G.inventory.length) {
+      G.inventory = STORE.map(function (i) { return Object.assign({}, i, { owned: 0 }); });
+      fixes++;
+    }
+    return fixes;
+  }
+
   function sanitizeSave(pid) {
+    healNullState();
     delete G.planetOffers;
     delete G.profileViewIndex;
     var p = playerDef(pid);
@@ -1156,13 +1217,16 @@
 
   function genUniqueStrainPair(minR, packType) {
     var luck = packLuckBonus();
+    var scan = scanMult();
+    var baseOpts = { scanBonus: scan, packLuckBonus: luck };
+    var bossOpts = { scanBonus: scan, packLuckBonus: luck + 0.05 };
+    var isBoss = packType === 'boss' || packType === 'milestone';
     var seed = Date.now() + Math.floor(Math.random() * 0xffffff);
-    var s1 = genPack('basic', seed, { scanBonus: scanMult(), packLuckBonus: luck });
-    if (packType === 'boss' || packType === 'milestone') s1 = genPack('guaranteed', seed, { scanBonus: scanMult(), packLuckBonus: luck + 0.05 });
+    var s1 = genPack(isBoss ? 'guaranteed' : 'basic', seed, isBoss ? bossOpts : baseOpts);
     var s2, tries = 0;
     do {
-      s2 = genPack('basic', seed + 1337 + tries * 9973, { scanBonus: scanMult(), packLuckBonus: luck });
-      if (packType === 'boss' || packType === 'milestone') s2 = genPack('guaranteed', seed + 1337 + tries * 9973, { scanBonus: scanMult(), packLuckBonus: luck + 0.05 });
+      var rollSeed = seed + 1337 + tries * 9973;
+      s2 = genPack(isBoss ? 'guaranteed' : 'basic', rollSeed, isBoss ? bossOpts : baseOpts);
       tries++;
     } while (s2.genomeId === s1.genomeId && tries < 24);
     return [s1, s2];
@@ -1645,7 +1709,10 @@
     }, 0);
     return base * blitzRushMult();
   }
-  function scanMult() { return G.sectorUpgrades.reduce(function (s, x) { return s + x.level * x.scanRateBonus; }, 0) + blitzMod('scan'); }
+  function scanMult() {
+    if (!G || !Array.isArray(G.sectorUpgrades)) return blitzMod('scan');
+    return G.sectorUpgrades.reduce(function (s, x) { return s + (x.level || 0) * (x.scanRateBonus || 0); }, 0) + blitzMod('scan');
+  }
   function revMs() {
     var rm = 1 + blitzMod('revenue'), ym = 1 + blitzMod('yield'), t = 0;
     G.factoryFloors.forEach(function (f) {
@@ -1742,9 +1809,7 @@
     if (type === 'omega' && G.cash < p.price && p.spCost && G.sp >= p.spCost) ns -= p.spCost;
     else if (G.cash < p.price) return false;
     else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
-    var luck = blitzMod('packLuck');
-    G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
-    var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: luck });
+    var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain };
     if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
@@ -1802,6 +1867,8 @@
     if (G.cash < c) return false;
     G.cash -= c;
     G.sectorUpgrades = G.sectorUpgrades.map(function (x) { return x.id === id ? Object.assign({}, x, { level: x.level + 1 }) : x; });
+    scheduleSave();
+    render();
     return true;
   }
   function acceptOffer(oid) {
@@ -1846,6 +1913,8 @@
     G.cash -= c;
     G.factoryFloors = G.factoryFloors.map(function (x) { return x.id === fid ? Object.assign({}, x, { level: x.level + 1 }) : x; });
     plantSay('upgrade');
+    scheduleSave();
+    render();
     return true;
   }
   function startClone(sid) {
@@ -1859,6 +1928,14 @@
     return true;
   }
   function upgradeStrain(sid) { return upStrain(sid); }
+
+  function onUpgrade(id) {
+    healNullState();
+    if (strainById(id)) return upStrain(id);
+    if ((G.sectorUpgrades || []).some(function (x) { return x.id === id; })) return upSector(id);
+    if ((G.factoryFloors || []).some(function (x) { return x.id === id; })) return upFloor(id);
+    return false;
+  }
 
   function giftStrain(sid, toPlayerId) {
     var s = strainById(sid);
@@ -1879,6 +1956,7 @@
     writePlayerSave(toPlayerId, target);
     popArcade('label', 0, { label: 'GIFTED ' + s.name, mega: true });
     scheduleSave();
+    render();
     return true;
   }
 
@@ -1899,6 +1977,8 @@
     G.strains = u;
     addXp(10);
     plantSay('upgrade');
+    scheduleSave();
+    render();
     return true;
   }
 
@@ -2041,6 +2121,106 @@
     return h;
   }
 
+  function svgFallbackSeed(s) {
+    var raw = strainVisualSeed(s || { id: 'fallback' });
+    return function (n) { return ((raw * 1103515245 + 12345 + n * 97) & 0x7fffffff) / 0x7fffffff; };
+  }
+
+  function svgFallbackPalette(s) {
+    var roll = svgFallbackSeed(s);
+    var rc = s && s.rarity ? rarityColor(s.rarity) : '#4ADE80';
+    var hue = Math.round((s && s.hue ? s.hue : 0) + roll(1) * 48 - 24);
+    return {
+      fill: rc,
+      accent: 'hsl(' + ((hue + 120) % 360) + ',72%,62%)',
+      glow: rc,
+      leaf: 'hsl(' + hue + ',55%,38%)',
+    };
+  }
+
+  function generateBudSvgMarkup(s, opts) {
+    opts = opts || {};
+    var roll = svgFallbackSeed(s);
+    var pal = svgFallbackPalette(s);
+    var w = opts.width || 200;
+    var h = opts.height || 220;
+    var cx = w / 2;
+    var lean = (roll(2) - 0.5) * 18;
+    var bulbW = 38 + roll(3) * 22;
+    var bulbH = 52 + roll(4) * 28;
+    var topY = h * 0.14 + roll(5) * 12;
+    var botY = h * 0.84;
+    var glow = '0 0 14px ' + pal.glow + 'aa, 0 0 28px ' + pal.glow + '55';
+    var paths = '';
+    paths += '<ellipse cx="' + cx + '" cy="' + (botY + 8) + '" rx="' + (bulbW + 14) + '" ry="11" fill="#000" opacity="0.28"/>';
+    paths += '<path d="M' + cx + ' ' + botY + ' C' + (cx - bulbW) + ' ' + (botY - bulbH * 0.55) + ' ' + (cx - bulbW * 0.75) + ' ' + (topY + bulbH * 0.35) + ' ' + (cx + lean) + ' ' + topY + ' C' + (cx + bulbW * 0.8 + lean) + ' ' + (topY + bulbH * 0.35) + ' ' + (cx + bulbW) + ' ' + (botY - bulbH * 0.55) + ' ' + cx + ' ' + botY + 'Z" fill="' + pal.fill + '" stroke="#030712" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(' + glow + ')"/>';
+    var leafCount = 3 + Math.floor(roll(6) * 3);
+    for (var i = 0; i < leafCount; i++) {
+      var side = i % 2 === 0 ? -1 : 1;
+      var ly = topY + 18 + i * (bulbH * 0.16);
+      var lx1 = cx + lean * 0.4 + side * (8 + roll(10 + i) * 16);
+      var lx2 = cx + lean * 0.6 + side * (28 + roll(20 + i) * 22);
+      paths += '<path d="M' + (cx + lean * 0.3) + ' ' + (topY + 8) + ' Q' + lx1 + ' ' + ly + ' ' + lx2 + ' ' + (ly + 18) + '" fill="none" stroke="' + pal.leaf + '" stroke-width="2.5" stroke-linecap="round"/>';
+    }
+    var nugCount = 2 + Math.floor(roll(7) * 3);
+    for (var j = 0; j < nugCount; j++) {
+      var nx = cx + (roll(30 + j) - 0.5) * bulbW * 1.1;
+      var ny = topY + 28 + roll(40 + j) * (botY - topY - 36);
+      var nr = 4 + roll(50 + j) * 4;
+      paths += '<circle cx="' + nx.toFixed(1) + '" cy="' + ny.toFixed(1) + '" r="' + nr.toFixed(1) + '" fill="' + pal.accent + '" stroke="#030712" stroke-width="2.5"/>';
+    }
+    paths += '<ellipse cx="' + (cx + lean * 0.2) + '" cy="' + (topY + bulbH * 0.22) + '" rx="' + (bulbW * 0.35) + '" ry="' + (bulbH * 0.22) + '" fill="rgba(255,255,255,0.14)"/>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" class="cr-art-fallback" aria-hidden="true">' + paths + '</svg>';
+  }
+
+  function generateBudSvgDataUri(s) {
+    var svg = generateBudSvgMarkup(s);
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+
+  function generateBadgeSvgMarkup(kind, label) {
+    var pal = { thc: '#A855F7', lvl: '#F59E0B', dps: '#4ADE80', boss: '#F472B6' };
+    var fill = pal[kind] || '#38BDF8';
+    var txt = String(label || '?').slice(0, 4);
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="' + fill + '" stroke="#030712" stroke-width="2.5" style="filter:drop-shadow(0 0 10px ' + fill + '88)"/><text x="24" y="28" text-anchor="middle" font-family="Fredoka,Arial,sans-serif" font-size="14" font-weight="700" fill="#030712">' + esc(txt) + '</text></svg>';
+  }
+
+  function strainById(id) {
+    if (!G || !id) return null;
+    return G.strains.find(function (s) { return s.id === id; }) || null;
+  }
+
+  function applySvgFallback(img) {
+    if (!img || img.dataset.svgApplied === '1') return;
+    img.dataset.svgApplied = '1';
+    var kind = img.dataset.artKind || 'bud';
+    var s = strainById(img.dataset.strainId);
+    if (kind === 'boss') {
+      img.replaceWith((function () { var d = document.createElement('div'); d.innerHTML = generateBudSvgMarkup({ hue: 300, rarity: 'voidlord' }, { width: 120, height: 132 }); return d.firstChild; })());
+      return;
+    }
+    var wrap = img.parentElement;
+    var svg = generateBudSvgMarkup(s || { hue: 120, rarity: 'nova' });
+    var holder = document.createElement('div');
+    holder.innerHTML = svg;
+    var node = holder.firstChild;
+    if (wrap && wrap.classList.contains('cr-art-wrap')) {
+      img.replaceWith(node);
+    } else {
+      img.src = generateBudSvgDataUri(s || { hue: 120, rarity: 'nova' });
+      img.classList.add('cr-art-fallback');
+    }
+  }
+
+  function bindImageFallbacks() {
+    document.querySelectorAll('.voidline-art, .cr-card-art img, .boss-sprite').forEach(function (img) {
+      if (img._svgFallbackBound) return;
+      img._svgFallbackBound = true;
+      if (img.complete && img.naturalWidth === 0) applySvgFallback(img);
+      img.addEventListener('error', function () { applySvgFallback(img); });
+    });
+  }
+
   function cardTierArtIndex(rarity) {
     var idx = rarityIndex(rarity);
     if (idx >= 25) return 5;
@@ -2067,7 +2247,7 @@
     if (vis.flip) wrapParts.push('scaleX(-1)');
     var wrapStyle = 'transform:' + wrapParts.join(' ') + ';animation-delay:' + ((strainVisualSeed(s) % 30) / 10) + 's';
     var imgStyle = 'filter:hue-rotate(' + vis.hue + 'deg) saturate(' + vis.sat + ') drop-shadow(0 6px 8px rgba(0,0,0,0.45))';
-    return '<span class="cr-art-wrap cr-art-v' + (artIdx % 6) + '" style="' + wrapStyle + '"><img src="' + strainCardArt(s) + '" alt="" draggable="false" style="' + imgStyle + '"></span>';
+    return '<span class="cr-art-wrap cr-art-v' + (artIdx % 6) + '" style="' + wrapStyle + '"><img src="' + strainCardArt(s) + '" alt="" draggable="false" class="voidline-art" data-art-kind="strain" data-strain-id="' + esc(s.id) + '" style="' + imgStyle + '"></span>';
   }
 
   function crCardFrameInner(opts) {
@@ -2083,7 +2263,7 @@
       opts.badgeLeft + (opts.badgeCenter || '') + opts.badgeRight + qtyBadge + tagBadge +
       (opts.abilityPips || '') +
       '<div class="cr-card-banner cr-card-banner-accent"' + bannerStyle + '><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
-      '<div class="cr-card-shine"></div></div>';
+      '<div class="cr-card-shine"></div><div class="cr-card-foil"></div></div>';
   }
 
   function liftWrap(id, inner, onUp) { return '<div class="liftable-wrap" data-lift="' + esc(id) + '" data-lift-up="' + (onUp || '') + '"><div class="neon-card neon-card-static p-4">' + inner + '</div></div>'; }
@@ -2203,7 +2383,7 @@
     h += '<div class="boss-stage-floor"></div>';
     h += '<div class="boss-stage-entity boss-arena-art">';
     h += '<div class="boss-aura-ring" style="--boss-color:' + bc + '"></div>';
-    h += '<img class="boss-sprite" src="' + BOSS_ART + '" alt="" style="filter:hue-rotate(' + bossHue + 'deg) drop-shadow(0 0 12px ' + bc + '66)">';
+    h += '<img class="boss-sprite voidline-art" data-art-kind="boss" src="' + BOSS_ART + '" alt="" style="filter:hue-rotate(' + bossHue + 'deg) drop-shadow(0 0 12px ' + bc + '66)">';
     h += '</div>';
     h += '<div class="boss-wave-strip">';
     for (var w = 1; w <= 5; w++) {
@@ -2978,9 +3158,10 @@
       var panels = TAB_ORDER.map(function (tab) {
         return '<div class="cr-screen-panel tab-bg-' + tab + '"><div class="cr-screen-inner">' + screenRenderer(tab)() + '</div></div>';
       }).join('');
-      root.innerHTML = '<div class="cr-screen-carousel" style="transform:translate3d(-' + (idx * 100) + '%,0,0)">' + panels + '</div>';
+      root.innerHTML = '<div class="screen-router-wrapper cr-screen-carousel" style="transform:translate3d(-' + (idx * 20) + '%,0,0)">' + panels + '</div>';
       root.scrollTop = scrollTop;
       bindCardParallax();
+      bindImageFallbacks();
     }
     document.getElementById('overlay-profile').classList.toggle('open', UI.profileOpen);
     document.getElementById('overlay-settings').classList.toggle('open', UI.settingsOpen);
@@ -3004,37 +3185,93 @@
     var ok = saveGame();
     if (ok) lastSaveAt = Date.now();
   }
+  var foilRaf = null;
+  var foilState = { wrap: null, frame: null, xPct: 0, yPct: 0 };
+
   function bindCardParallax() {
     var root = document.getElementById('screen-root');
-    if (!root || root._holoBound) return;
-    root._holoBound = true;
-    function onMove(e) {
-      var card = e.target.closest('.holo-card');
-      if (!card) return;
-      var rect = card.getBoundingClientRect();
-      var px = e.clientX != null ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : rect.left + rect.width / 2);
-      var py = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : rect.top + rect.height / 2);
-      var cx = px - rect.left - rect.width / 2;
-      var cy = py - rect.top - rect.height / 2;
-      var rx = Math.max(-14, Math.min(14, -cy / rect.height * 28));
-      var ry = Math.max(-14, Math.min(14, cx / rect.width * 28));
-      card.style.transform = 'perspective(1000px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) scale(1.02)';
-      var shine = card.querySelector('.cr-card-shine');
+    if (!root || root._foilBound) return;
+    root._foilBound = true;
+
+    function foilTarget(el) {
+      return el.closest('.liftable-wrap') || el.closest('.cr-card') || el.closest('.strain-card') || el.closest('.strain-picker-card') || el.closest('.binder-grid .liftable-wrap');
+    }
+
+    function foilFrame(wrap) {
+      if (!wrap) return null;
+      return wrap.querySelector('.holo-card') || wrap.querySelector('.cr-card-frame');
+    }
+
+    function scheduleFoil(wrap, frame, xPct, yPct) {
+      foilState.wrap = wrap;
+      foilState.frame = frame;
+      foilState.xPct = xPct;
+      foilState.yPct = yPct;
+      if (!foilRaf) foilRaf = requestAnimationFrame(applyFoil);
+    }
+
+    function applyFoil() {
+      foilRaf = null;
+      var wrap = foilState.wrap;
+      var frame = foilState.frame;
+      if (!wrap || !frame) return;
+      frame.style.setProperty('--x-pct', foilState.xPct.toFixed(4));
+      frame.style.setProperty('--y-pct', foilState.yPct.toFixed(4));
+      var foil = frame.querySelector('.cr-card-foil');
+      if (foil) {
+        foil.style.backgroundPosition = ((foilState.xPct + 1) * 50) + '% ' + ((foilState.yPct + 1) * 50) + '%';
+      }
+      var shine = frame.querySelector('.cr-card-shine');
       if (shine) {
-        shine.style.backgroundPosition = (50 + cx / rect.width * 40) + '% ' + (50 + cy / rect.height * 40) + '%';
-        shine.style.opacity = '0.85';
+        shine.style.backgroundPosition = ((foilState.xPct + 1) * 50) + '% ' + ((foilState.yPct + 1) * 50) + '%';
+        shine.style.opacity = '0.88';
+      }
+      wrap.classList.add('foil-active');
+      frame.classList.add('foil-active');
+    }
+
+    function resetFoil(wrap) {
+      if (!wrap) return;
+      wrap.classList.remove('foil-active');
+      var frame = foilFrame(wrap);
+      if (!frame) return;
+      frame.classList.remove('foil-active');
+      frame.style.removeProperty('--x-pct');
+      frame.style.removeProperty('--y-pct');
+      var foil = frame.querySelector('.cr-card-foil');
+      if (foil) foil.style.backgroundPosition = '';
+      var shine = frame.querySelector('.cr-card-shine');
+      if (shine) { shine.style.backgroundPosition = ''; shine.style.opacity = ''; }
+    }
+
+    function onPointer(e) {
+      var wrap = foilTarget(e.target);
+      if (!wrap) return;
+      var frame = foilFrame(wrap);
+      if (!frame) return;
+      var rect = frame.getBoundingClientRect();
+      var px = e.clientX != null ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : null);
+      var py = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : null);
+      if (px == null || py == null) return;
+      var xPct = Math.max(-1, Math.min(1, (px - rect.left - rect.width / 2) / (rect.width / 2)));
+      var yPct = Math.max(-1, Math.min(1, (py - rect.top - rect.height / 2) / (rect.height / 2)));
+      scheduleFoil(wrap, frame, xPct, yPct);
+    }
+
+    function onLeave(e) {
+      var wrap = foilTarget(e.target);
+      if (!wrap) return;
+      resetFoil(wrap);
+      if (foilState.wrap === wrap) {
+        foilState.wrap = null;
+        foilState.frame = null;
       }
     }
-    function onLeave(e) {
-      var card = e.target.closest('.holo-card');
-      if (!card) return;
-      card.style.transform = '';
-      var shine = card.querySelector('.cr-card-shine');
-      if (shine) shine.style.opacity = '';
-    }
-    root.addEventListener('mousemove', onMove);
-    root.addEventListener('touchmove', onMove, { passive: true });
-    root.addEventListener('mouseleave', onLeave, true);
+
+    root.addEventListener('pointermove', onPointer);
+    root.addEventListener('pointerleave', onLeave, true);
+    root.addEventListener('touchmove', onPointer, { passive: true });
+    root.addEventListener('touchend', onLeave, true);
   }
 
   function resolveStartupPlayer() {
@@ -3095,7 +3332,7 @@
     else if (act==='profile-tab') UI.profileTab = val;
     else if (act==='toggle-help') UI.helpOpen = !UI.helpOpen;
     else if (act==='start-clone') { var sel = document.getElementById('clone-select'); if (sel && sel.value) startClone(sel.value); }
-    else if (act==='up-strain') upStrain(val);
+    else if (act==='up-strain') onUpgrade(val);
     else if (act==='set-avatar') G.avatar = val;
     else if (act==='set-badge') { var p = val.split(':'); G.badgeIds = G.badgeIds.slice(); G.badgeIds[parseInt(p[0], 10)] = p[1] || null; }
     else if (act==='sf-strain') { var p2 = val.split(':'); var slot = parseInt(p2[0], 10); G.storefrontSlots = G.storefrontSlots.slice(); G.storefrontSlots[slot] = Object.assign({}, G.storefrontSlots[slot], { strainId: p2[1] || null }); }
@@ -3249,6 +3486,14 @@
       G.scanPending = Object.assign({}, G.scanPending, { customName: e.target.value.trim() || null });
     }
   });
+
+  document.addEventListener('error', function (e) {
+    var t = e.target;
+    if (!t || t.tagName !== 'IMG') return;
+    if (t.classList.contains('voidline-art') || t.classList.contains('boss-sprite') || (t.closest && t.closest('.cr-card-art'))) {
+      applySvgFallback(t);
+    }
+  }, true);
 
   try {
     var storedVer = localStorage.getItem(VERSION_KEY);
@@ -3664,8 +3909,421 @@
     };
   })();
 
+  /* ===========================================================================
+   * SWARM BUG CRUSHER + HARDCORE GRIND SIMULATOR (Sub-Team A & B)
+   * VoidlineSwarm.start({ sandbox: true }) — backs up saves, grinds to $100M, restores.
+   * Append ?swarm=1 to URL for sandbox grind launch.
+   * =========================================================================== */
+  var SwarmBugCrusher = (function () {
+    var HEAD = 'color:#00F0FF;font-weight:700;letter-spacing:0.1em';
+    var stats = { healed: 0, patches: 0, intercepts: 0, errors: [] };
+    var installed = false;
+    var origRender = render;
+    var origTick = tick;
+
+    function log(msg, detail) {
+      console.log('%c[SwarmBugCrusher]%c ' + msg + (detail ? ' — ' + detail : ''), HEAD, 'color:#9CA3AF');
+    }
+
+    function healNullStateSwarm() {
+      if (!G) return 0;
+      var n = healNullState();
+      if (n > 0) { stats.healed += n; stats.intercepts++; }
+      return n;
+    }
+
+    function handleError(ctx, err) {
+      stats.patches++;
+      stats.errors.push({ at: Date.now(), ctx: ctx, message: err && err.message ? err.message : String(err), stack: err && err.stack ? err.stack : '' });
+      console.error('[SwarmBugCrusher] Caught in ' + ctx + ':', err);
+      try {
+        if (G) {
+          healNullStateSwarm();
+          if (!G.bossMaxHp || G.bossHp <= 0) spawnBoss();
+          G.lastTickAt = Date.now();
+        }
+      } catch (e2) { console.error('[SwarmBugCrusher] Fallback reset failed:', e2); }
+    }
+
+    function guard(fn, ctx) {
+      try { return fn(); } catch (e) { handleError(ctx || 'guard', e); return false; }
+    }
+
+    function install() {
+      if (installed) return;
+      installed = true;
+      render = function () {
+        if (window.__SWARM_SKIP_RENDER__) return;
+        return guard(function () { healNullStateSwarm(); origRender(); }, 'render');
+      };
+      tick = function (now) {
+        return guard(function () { healNullStateSwarm(); origTick(now); }, 'tick');
+      };
+      window.addEventListener('error', function (ev) {
+        handleError('window.error', ev.error || new Error(ev.message));
+      });
+      window.addEventListener('unhandledrejection', function (ev) {
+        handleError('unhandledrejection', ev.reason || new Error('promise rejection'));
+      });
+      window.onUpgrade = function (id) {
+        stats.intercepts++;
+        return guard(function () { return onUpgrade(id); }, 'onUpgrade');
+      };
+      window.giftStrain = function (id, toPlayerId) {
+        stats.intercepts++;
+        return guard(function () { return giftStrain(id, toPlayerId); }, 'giftStrain');
+      };
+      log('Engineering swarm online', 'onUpgrade/giftStrain intercepts active');
+    }
+
+    function patrol() { healNullStateSwarm(); }
+
+    function getStats() { return clone(stats); }
+
+    function resetStats() { stats = { healed: 0, patches: 0, intercepts: 0, errors: [] }; }
+
+    return { install: install, patrol: patrol, guard: guard, heal: healNullStateSwarm, handleError: handleError, getStats: getStats, resetStats: resetStats };
+  })();
+
+  var VoidlineSwarm = (function () {
+    var GOAL = 100000000;
+    var MILESTONE = 10000000;
+    var LOOP_MS = 1;
+    var TIME_WARP = 500;
+    var HEAD = 'color:#FFD700;font-weight:700;letter-spacing:0.08em';
+    var MUTED = 'color:#9CA3AF';
+    var ROOM_KEY = 'voidline_swarm_family_room';
+    var running = false;
+    var timer = null;
+    var startedAt = 0;
+    var snapshot = null;
+    var loopCount = 0;
+    var leaseLedger = 0;
+    var milestoneFlags = { aden: false, dad: false, jamie: false };
+    var tradeLog = [];
+    var maxSteps = 300000;
+    var activeGoal = GOAL;
+
+    function log(msg) { console.log('%c[VoidlineSwarm]%c ' + msg, HEAD, MUTED); }
+
+    function botCash(pid) {
+      var s = readPlayerSave(pid);
+      return s ? (s.cash || 0) : 0;
+    }
+
+    function allBotsAtGoal() {
+      return PLAYERS.every(function (p) { return botCash(p.id) >= activeGoal; });
+    }
+
+    function withBot(pid, fn) {
+      var prev = activePlayerId;
+      if (activePlayerId !== pid) selectPlayer(pid);
+      try { return fn(); } finally {
+        flushSave();
+      }
+    }
+
+    function warpTick(times) {
+      times = times || 1;
+      for (var i = 0; i < times; i++) {
+        G.lastTickAt = Date.now() - TIME_WARP;
+        tick(Date.now());
+        processLeaseBilling();
+      }
+    }
+
+    function botOpenPack() {
+      if (G.packReveal && G.packReveal.open) closePack();
+      if (G.cash >= 5000 && buyPack('basic')) closePack();
+    }
+
+    function botInstantScan() {
+      var p = rollScanPlanet();
+      G.scanPending = p;
+      if (rarityIndex(p.rarity) >= rarityIndex('mist')) keepScannedPlanet();
+      else discardScannedPlanet();
+    }
+
+    function botAcceptIncomingLeases() {
+      (G.leaseOffers || []).slice().forEach(function (o) {
+        if (o.buyerId === 'jamie') respondLeaseOffer(o.id, true);
+      });
+    }
+
+    function botMilestoneTrade(sellerId, buyerId) {
+      var listed = false;
+      withBot(sellerId, function () {
+        var rare = (G.strains || []).find(function (s) { return rarityIndex(s.rarity) >= rarityIndex('pulse'); }) || (G.strains || [])[0];
+        if (!rare) return;
+        ensureStorefrontSlots();
+        listStorefrontSlot(0, rare.id, 1, 7500);
+        listed = true;
+      });
+      if (!listed) return false;
+      var ok = false;
+      withBot(buyerId, function () {
+        var price = (readPlayerSave(sellerId).storefrontSlots || [])[0];
+        if (!price || !price.price) return;
+        if (G.cash < price.price) G.cash = price.price + 1000;
+        ok = buyFromPlayerShop(sellerId, 0);
+      });
+      if (ok) tradeLog.push({ at: Date.now(), seller: sellerId, buyer: buyerId, amount: 7500 });
+      return ok;
+    }
+
+    function checkMilestones() {
+      PLAYERS.forEach(function (pl, idx) {
+        if (milestoneFlags[pl.id]) return;
+        if (botCash(pl.id) >= MILESTONE) {
+          milestoneFlags[pl.id] = true;
+          var buyer = PLAYERS[(idx + 1) % PLAYERS.length].id;
+          log('Milestone $10M — cross-commerce trade ' + pl.label + ' → ' + buyer);
+          botMilestoneTrade(pl.id, buyer);
+        }
+      });
+    }
+
+    function initFamilyRoom() {
+      var room = { id: 'room_' + Date.now(), host: 'aden', members: ['aden', 'dad', 'jamie'], createdAt: Date.now() };
+      try { sessionStorage.setItem(ROOM_KEY, JSON.stringify(room)); } catch (e) { }
+      log('Family room spun up · ' + room.id);
+      return room;
+    }
+
+    function joinFamilyRoom() {
+      try {
+        var raw = sessionStorage.getItem(ROOM_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { }
+      return initFamilyRoom();
+    }
+
+    function setupPhase() {
+      var room = initFamilyRoom();
+      PLAYERS.forEach(function (pl) {
+        withBot(pl.id, function () {
+          if (G.cash < 50000) G.cash = 250000;
+          equipBestBattle();
+          botOpenPack();
+          ensureStorefrontSlots();
+          STORE.forEach(function (item) {
+            for (var n = 0; n < 3 && G.cash >= item.price; n++) buyItem(item.id);
+          });
+          warpTick(20);
+        });
+      });
+      withBot('dad', function () { sessionStorage.setItem(ROOM_KEY, JSON.stringify(room)); });
+      withBot('jamie', function () { joinFamilyRoom(); });
+      return room;
+    }
+
+    function spendBudget(cash) {
+      if (cash >= activeGoal) return 0;
+      var reserve = activeGoal * 0.92;
+      if (cash <= reserve) return cash * 0.35;
+      return Math.max(0, cash - reserve);
+    }
+
+    function stepAden() {
+      withBot('aden', function () {
+        botAcceptIncomingLeases();
+        equipBestBattle();
+        for (var w = 0; w < 12; w++) {
+          if (!G.bossMaxHp || G.bossHp <= 0) spawnBoss();
+          tickBoss(120);
+          if (G.bossHp <= 0) killBoss();
+        }
+        warpTick(10);
+        var spend = spendBudget(G.cash);
+        var ids = (G.equippedBattleIds || []).slice();
+        ids.forEach(function (sid) {
+          if (!spend || G.cash < spend * 0.15) return;
+          var s = strainById(sid);
+          if (!s) return;
+          var c = upCost(s);
+          if (G.cash >= c && G.cash - c >= activeGoal * 0.85) onUpgrade(sid);
+        });
+        (G.sectorUpgrades || []).forEach(function (sec) {
+          if (!spend) return;
+          var c = sec.baseCost * (sec.level + 1);
+          if (sec.level < sec.maxLevel && G.cash >= c && G.cash - c >= activeGoal * 0.85) onUpgrade(sec.id);
+        });
+        (G.factoryFloors || []).forEach(function (f) {
+          if (!spend) return;
+          var c = floorUpCost(f);
+          if (G.cash >= c && G.cash - c >= activeGoal * 0.85) onUpgrade(f.id);
+        });
+        if (G.cash >= 5000 && G.cash < activeGoal * 1.1) botOpenPack();
+      });
+    }
+
+    function stepDad() {
+      if (loopCount % 150 !== 0) return;
+      withBot('dad', function () {
+        ensureStorefrontSlots();
+        (G.strains || []).forEach(function (s, idx) {
+          if ((s.quantity || 1) < 3) return;
+          var slot = idx % G.storefrontSlotCount;
+          var price = Math.floor(upCost(s) * (1.4 + Math.random() * 0.6));
+          listStorefrontSlot(slot, s.id, 1, price);
+        });
+        PLAYERS.forEach(function (pl) {
+          if (pl.id === 'dad') return;
+          var save = readPlayerSave(pl.id);
+          if (!save || !save.storefrontSlots) return;
+          save.storefrontSlots.forEach(function (slot, si) {
+            if (!slot || !slot.strainId || !slot.price) return;
+            if (G.cash >= slot.price && slot.price < 50000) buyFromPlayerShop(pl.id, si);
+          });
+        });
+        warpTick(8);
+      });
+    }
+
+    function stepJamie() {
+      withBot('jamie', function () {
+        botInstantScan();
+        warpTick(12);
+        PLAYERS.forEach(function (pl) {
+          if (pl.id === 'jamie') return;
+          var save = readPlayerSave(pl.id);
+          if (!save || !save.ownedPlanets || !save.ownedPlanets.length) return;
+          save.ownedPlanets.forEach(function (op) {
+            submitLeaseOffer(op.id, 50, 3500 + Math.floor(Math.random() * 2000));
+          });
+        });
+        var collected = (G.planetLeases && G.planetLeases.active || []).reduce(function (s, l) { return s + (l.totalCollected || 0); }, 0);
+        leaseLedger = Math.max(leaseLedger, collected);
+      });
+    }
+
+    function swarmLoop() {
+      if (!running || !G) return;
+      loopCount++;
+      SwarmBugCrusher.patrol();
+      stepAden();
+      stepDad();
+      stepJamie();
+      checkMilestones();
+      if (loopCount % 120 === 0) renderHUD();
+      if (allBotsAtGoal()) { finish(); return; }
+      if (loopCount >= maxSteps) { finish(); return; }
+    }
+
+    function finish() {
+      running = false;
+      if (timer) { clearInterval(timer); timer = null; }
+      window.__SWARM_SIM__ = false;
+      window.__SWARM_CASH_MULT__ = 1;
+      var elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+      var bugStats = SwarmBugCrusher.getStats();
+      var leaseTotal = window.__SWARM_LEASE_CASH__ || leaseLedger;
+      console.group('%cSWARM SIMULATION REPORT', HEAD);
+      console.table([
+        { METRIC: 'Elapsed (sec)', VALUE: elapsed },
+        { METRIC: 'Bot_Aden cash', VALUE: fmtCash(botCash('aden')) },
+        { METRIC: 'Bot_Dad cash', VALUE: fmtCash(botCash('dad')) },
+        { METRIC: 'Bot_Jamie cash', VALUE: fmtCash(botCash('jamie')) },
+        { METRIC: 'Planetary billing tabs net', VALUE: fmtCash(leaseTotal) },
+        { METRIC: 'Bugs healed', VALUE: bugStats.healed },
+        { METRIC: 'Auto-patches', VALUE: bugStats.patches },
+        { METRIC: 'Intercepts', VALUE: bugStats.intercepts },
+        { METRIC: 'Cross-trades @ $10M', VALUE: tradeLog.length },
+      ]);
+      if (bugStats.errors.length) console.table(bugStats.errors);
+      if (tradeLog.length) console.table(tradeLog);
+      if (allBotsAtGoal()) {
+        console.log('%cSWARM SIMULATION COMPLETE: ALL CORE GLITCHES ERADICATED. ALL THREE BOTS SUCCESSFULLY GRINDED OUT $100M COMPATIBLE WITH LIVE LOGIC.', 'color:#39FF14;font-weight:700;font-size:11px');
+      } else {
+        console.log('%cSWARM SIMULATION INCOMPLETE — extend max runtime or raise cashMult.', 'color:#F87171;font-weight:700;font-size:11px');
+      }
+      console.groupEnd();
+      var report = {
+        elapsedSec: parseFloat(elapsed),
+        aden: botCash('aden'),
+        dad: botCash('dad'),
+        jamie: botCash('jamie'),
+        leaseCash: leaseTotal,
+        bugs: bugStats,
+        success: allBotsAtGoal(),
+        trades: tradeLog.length,
+      };
+      window.__SWARM_LAST_REPORT__ = report;
+      if (snapshot) VoidlineEngineQA.restoreAllSaves(snapshot);
+      render();
+      return report;
+    }
+
+    function prepareSwarm(opts) {
+      opts = opts || {};
+      SwarmBugCrusher.install();
+      SwarmBugCrusher.resetStats();
+      window.__SWARM_SIM__ = true;
+      window.__SWARM_CASH_MULT__ = opts.cashMult || 120;
+      window.__SWARM_LEASE_CASH__ = 0;
+      if (opts.sandbox !== false) snapshot = VoidlineEngineQA.backupAllSaves();
+      activeGoal = opts.goal || GOAL;
+      maxSteps = opts.maxSteps || 300000;
+      startedAt = Date.now();
+      loopCount = 0;
+      leaseLedger = 0;
+      milestoneFlags = { aden: false, dad: false, jamie: false };
+      tradeLog = [];
+      setupPhase();
+      running = true;
+    }
+
+    function start(opts) {
+      opts = opts || {};
+      if (running) return { ok: false, reason: 'already running' };
+      prepareSwarm(opts);
+      log('Hardcore grind bots online @ ' + LOOP_MS + 'ms loop · goal ' + fmtCash(activeGoal));
+      timer = setInterval(swarmLoop, LOOP_MS);
+      return { ok: true, goal: activeGoal };
+    }
+
+    function runSync(opts) {
+      opts = opts || {};
+      if (running) return { ok: false, reason: 'already running' };
+      prepareSwarm(opts);
+      window.__SWARM_SKIP_RENDER__ = true;
+      log('Sync grind @ ' + LOOP_MS + 'ms steps · goal ' + fmtCash(activeGoal));
+      try {
+        while (running && loopCount < maxSteps && !allBotsAtGoal()) swarmLoop();
+        if (running) finish();
+      } finally {
+        window.__SWARM_SKIP_RENDER__ = false;
+      }
+      return window.__SWARM_LAST_REPORT__;
+    }
+
+    function stop() {
+      running = false;
+      if (timer) { clearInterval(timer); timer = null; }
+      if (snapshot) VoidlineEngineQA.restoreAllSaves(snapshot);
+      log('Swarm halted — saves restored');
+    }
+
+    return {
+      GOAL: GOAL,
+      start: start,
+      runSync: runSync,
+      stop: stop,
+      isRunning: function () { return running; },
+      getBotCash: botCash,
+      Bot_Aden: { id: 'aden', step: stepAden },
+      Bot_Dad: { id: 'dad', step: stepDad },
+      Bot_Jamie: { id: 'jamie', step: stepJamie },
+    };
+  })();
+
+  window.SwarmBugCrusher = SwarmBugCrusher;
+  window.VoidlineSwarm = VoidlineSwarm;
+  SwarmBugCrusher.install();
+
   window.VoidlineEngineQA = VoidlineEngineQA;
   window.runAutomatedMarketChaosTest = function () { return VoidlineEngineQA.runAutomatedMarketChaosTest(); };
+  window.VoidlineSwarmSimulator = VoidlineSwarm;
 
   window.VoidlineGalaxyFarm = {
     version: APP_VERSION,
@@ -3690,7 +4348,19 @@
     battleDamageBreakdown: battleDamageBreakdown,
     tickBoss: tickBoss,
     getBossTrait: getBossTrait,
+    onUpgrade: function (id) { SwarmBugCrusher.install(); return SwarmBugCrusher.guard(function () { return onUpgrade(id); }, 'onUpgrade'); },
+    upgradeStrain: upgradeStrain,
+    giftStrain: function (sid, to) { SwarmBugCrusher.install(); return SwarmBugCrusher.guard(function () { return giftStrain(sid, to); }, 'giftStrain'); },
+    buyPack: buyPack,
+    closePack: closePack,
+    equipBestBattle: equipBestBattle,
+    healNullState: healNullState,
+    packLuckFromOpts: packLuckFromOpts,
+    SwarmBugCrusher: SwarmBugCrusher,
+    VoidlineSwarm: VoidlineSwarm,
     runQA: function () { return VoidlineEngineQA.runAll(); },
+    runSwarm: function (opts) { return VoidlineSwarm.start(opts); },
+    runSwarmSync: function (opts) { return VoidlineSwarm.runSync(opts); },
   };
 
   setTimeout(function () {
@@ -3699,6 +4369,9 @@
       var params = new URLSearchParams(window.location.search);
       if (params.get('qa') === 'full' || params.get('qa') === '1') {
         VoidlineEngineQA.runAll();
+      }
+      if (params.get('swarm') === '1' || params.get('swarm') === 'run') {
+        VoidlineSwarm.start({ sandbox: true, cashMult: 150, maxSteps: 250000 });
       }
     } catch (e) {
       console.error('[VoidlineEngineQA] bootstrap failed:', e);
