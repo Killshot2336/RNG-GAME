@@ -137,7 +137,8 @@
     'voidEssence', 'prestigeVault', 'totalCashEarned',
     'storefrontSlotCount', 'planetLeases', 'leaseOffers',
     'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
-    'mutationEssence', 'mutationItems', 'dailyShowcaseDay',
+    'mutationEssence', 'mutationItems', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
+    'mutationPackLuck', 'strainMutationMap', 'raidEquipIds',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -663,7 +664,7 @@
     return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null };
   var G = null;
   var activePlayerId = null;
   var dialogueState = { lastKey: '', lastAt: 0, count: 0 };
@@ -761,6 +762,8 @@
       indexSearch: '', indexSort: 'recent',
       ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
       mutationEssence: 0, mutationItems: [], dailyShowcaseDay: 0,
+      dailyShowcasePurchased: [false, false, false], dailyShowcaseCache: null,
+      mutationPackLuck: 0, strainMutationMap: {}, raidEquipIds: [],
     };
   }
 
@@ -1049,7 +1052,11 @@
     healArr('equippedBattleIds', []);
     healArr('pendingRewards', []);
     healArr('mutationItems', []);
+    healArr('raidEquipIds', []);
     if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
+    if (G.mutationPackLuck == null || isNaN(G.mutationPackLuck)) G.mutationPackLuck = 0;
+    if (!G.strainMutationMap || typeof G.strainMutationMap !== 'object') { G.strainMutationMap = {}; fixes++; }
+    if (!Array.isArray(G.dailyShowcasePurchased) || G.dailyShowcasePurchased.length !== 3) { G.dailyShowcasePurchased = [false, false, false]; fixes++; }
     if (!G.planetLeases || typeof G.planetLeases !== 'object') {
       G.planetLeases = { active: [], archive: [], pending: [] };
       fixes++;
@@ -1078,6 +1085,10 @@
     if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.mutationItems) G.mutationItems = [];
     if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
+    if (G.mutationPackLuck == null || isNaN(G.mutationPackLuck)) G.mutationPackLuck = 0;
+    if (!G.strainMutationMap) G.strainMutationMap = {};
+    if (!G.raidEquipIds) G.raidEquipIds = [];
+    syncDailyShowcaseDay();
     if (!G.ownedPlanets) G.ownedPlanets = [];
     if (G.scanPending === undefined) G.scanPending = null;
     G.strains = (G.strains || []).map(migrateStrain);
@@ -1192,7 +1203,70 @@
     var luck = blitzMod('packLuck');
     G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
     luck += CoOpSynergyManager.getPackLuckBonus();
+    luck += G.mutationPackLuck || 0;
     return luck;
+  }
+
+  function packWheelPercent(strain, luck) {
+    if (!strain) return 35;
+    var luckVal = luck != null ? luck : packLuckBonus();
+    var tier = rarityIndex(strain.rarity);
+    var pct = Math.floor((tier / Math.max(1, RARITIES.length - 1)) * 72 + luckVal * 100 + (strain.potency || 40) * 0.08);
+    return Math.max(12, Math.min(99, pct));
+  }
+
+  function mutationItemForStrain(sid) {
+    if (!G || !G.strainMutationMap || !sid) return null;
+    var mutId = G.strainMutationMap[sid];
+    if (!mutId) return null;
+    return (G.mutationItems || []).find(function (m) { return m.id === mutId; }) || null;
+  }
+
+  function mutationDpsMult(s) {
+    if (!s) return 1;
+    var m = mutationItemForStrain(s.id);
+    if (!m) return 1;
+    return 1 + (m.power || 1) * 0.06;
+  }
+
+  function spendMutationPackLuck() {
+    var cost = 15;
+    if ((G.mutationEssence || 0) < cost) {
+      showBattleToast('Need ' + cost + ' mutation essence', false);
+      return false;
+    }
+    G.mutationEssence -= cost;
+    G.mutationPackLuck = (G.mutationPackLuck || 0) + 0.03;
+    popArcade('label', 0, { label: '+3% PACK LUCK', mega: true });
+    showBattleToast('Mutation luck boosted · total +' + ((G.mutationPackLuck || 0) * 100).toFixed(0) + '%', true);
+    scheduleSave();
+    return true;
+  }
+
+  function equipMutationItem(mutId, strainId) {
+    var m = (G.mutationItems || []).find(function (x) { return x.id === mutId; });
+    var s = strainById(strainId);
+    if (!m || !s) return false;
+    if (!G.strainMutationMap) G.strainMutationMap = {};
+    Object.keys(G.strainMutationMap).forEach(function (k) {
+      if (G.strainMutationMap[k] === mutId) delete G.strainMutationMap[k];
+    });
+    G.strainMutationMap[strainId] = mutId;
+    showBattleToast('Equipped ' + m.name + ' on ' + s.name, true);
+    scheduleSave();
+    return true;
+  }
+
+  function syncDailyShowcaseDay() {
+    var day = dailyShowcaseSeed();
+    if (G.dailyShowcaseDay !== day) {
+      G.dailyShowcaseDay = day;
+      G.dailyShowcasePurchased = [false, false, false];
+      G.dailyShowcaseCache = null;
+    }
+    if (!Array.isArray(G.dailyShowcasePurchased) || G.dailyShowcasePurchased.length !== 3) {
+      G.dailyShowcasePurchased = [false, false, false];
+    }
   }
 
   function triggerVoidPrestige() {
@@ -1456,6 +1530,7 @@
     var base = (s.yield * s.thcPercent / 100) * rMult(s.rarity) * s.quantity;
     if (hasAbility(s, 'boss_slayer')) base *= 1.3 * abilityBoostMult(s, 'boss_slayer');
     if (hasAbility(s, 'thc_overdrive')) base *= 1.15 * abilityBoostMult(s, 'thc_overdrive');
+    base *= mutationDpsMult(s);
     return base;
   }
 
@@ -1629,6 +1704,44 @@
     G.equippedBattleIds = sorted.slice(0, BATTLE_EQUIP_MAX).map(function (s) { return s.id; });
     scheduleSave();
     return true;
+  }
+
+  function equipRaid(sid) {
+    var ids = (G.raidEquipIds || []).slice();
+    var idx = ids.indexOf(sid);
+    if (idx >= 0) { ids.splice(idx, 1); G.raidEquipIds = ids; scheduleSave(); return true; }
+    if (ids.length >= BATTLE_EQUIP_MAX) return false;
+    if (!strainById(sid)) return false;
+    ids.push(sid);
+    G.raidEquipIds = ids;
+    scheduleSave();
+    return true;
+  }
+
+  function equipBestRaid() {
+    var campaign = G.equippedBattleIds || [];
+    var sorted = G.strains.slice().filter(function (s) { return campaign.indexOf(s.id) < 0; }).sort(function (a, b) { return strainBattleDpsBase(b) - strainBattleDpsBase(a); });
+    G.raidEquipIds = sorted.slice(0, BATTLE_EQUIP_MAX).map(function (s) { return s.id; });
+    scheduleSave();
+    return true;
+  }
+
+  function filteredRaidEquipStrains() {
+    var campaign = G.equippedBattleIds || [];
+    var raid = G.raidEquipIds || [];
+    var list = G.strains.filter(function (s) { return campaign.indexOf(s.id) < 0 && raid.indexOf(s.id) < 0; });
+    var q = (UI.raidEquipSearch || '').toLowerCase();
+    if (q) list = list.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0 || rarityName(s.rarity).toLowerCase().indexOf(q) >= 0; });
+    return sortStrainList(list, UI.raidEquipSort || 'dps', true);
+  }
+
+  function totalRaidDps() {
+    var rng = rngSeed((G.bossSeed || 0) + 99);
+    var total = 0;
+    (G.raidEquipIds || []).forEach(function (id) {
+      total += strainBattleDps(strainById(id), rng);
+    });
+    return total;
   }
 
   function filteredBattleEquipStrains() {
@@ -1815,8 +1928,9 @@
     else if (G.cash < p.price) return false;
     else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
     var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
+    var luck = packLuckBonus();
     G.cash = nc; G.sp = ns;
-    G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true };
+    G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true, wheelPct: packWheelPercent(strain, luck) };
     if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
     popArcade('label', 0, { label: 'PACK OPEN!', mega: true });
     return true;
@@ -2143,6 +2257,37 @@
     };
   }
 
+  function generateBossSvgMarkup(opts) {
+    opts = opts || {};
+    var seed = opts.seed != null ? opts.seed : 42;
+    var hue = opts.hue != null ? opts.hue : (seed % 360);
+    var roll = rngSeed(seed);
+    var w = opts.width || 140;
+    var h = opts.height || 160;
+    var cx = w / 2;
+    var glow = '0 0 16px hsl(' + hue + ',80%,55%)aa';
+    var body = 'M' + cx + ' ' + (h * 0.88);
+    body += ' C' + (cx - 48) + ' ' + (h * 0.72) + ' ' + (cx - 52) + ' ' + (h * 0.28) + ' ' + cx + ' ' + (h * 0.18);
+    body += ' C' + (cx + 52) + ' ' + (h * 0.28) + ' ' + (cx + 48) + ' ' + (h * 0.72) + ' ' + cx + ' ' + (h * 0.88) + 'Z';
+    var hornL = 'M' + (cx - 22) + ' ' + (h * 0.22) + ' Q' + (cx - 58) + ' ' + (h * 0.02) + ' ' + (cx - 34) + ' ' + (h * 0.38);
+    var hornR = 'M' + (cx + 22) + ' ' + (h * 0.22) + ' Q' + (cx + 58) + ' ' + (h * 0.02) + ' ' + (cx + 34) + ' ' + (h * 0.38);
+    var eyeY = h * 0.42;
+    var paths = '';
+    paths += '<ellipse cx="' + cx + '" cy="' + (h * 0.9) + '" rx="46" ry="10" fill="#000" opacity="0.35"/>';
+    paths += '<path d="' + body + '" fill="hsl(' + hue + ',55%,38%)" stroke="#030712" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(' + glow + ')"/>';
+    paths += '<path d="' + hornL + '" fill="none" stroke="#030712" stroke-width="2.5" stroke-linecap="round"/>';
+    paths += '<path d="' + hornR + '" fill="none" stroke="#030712" stroke-width="2.5" stroke-linecap="round"/>';
+    paths += '<circle cx="' + (cx - 16) + '" cy="' + eyeY + '" r="7" fill="#FACC15" stroke="#030712" stroke-width="2.5"/>';
+    paths += '<circle cx="' + (cx + 16) + '" cy="' + eyeY + '" r="7" fill="#FACC15" stroke="#030712" stroke-width="2.5"/>';
+    paths += '<path d="M' + (cx - 20) + ' ' + (h * 0.58) + ' Q' + cx + ' ' + (h * 0.68) + ' ' + (cx + 20) + ' ' + (h * 0.58) + '" fill="none" stroke="#030712" stroke-width="2.5" stroke-linecap="round"/>';
+    for (var i = 0; i < 4; i++) {
+      var sx = cx + (roll(i + 3) - 0.5) * 36;
+      var sy = h * 0.62 + roll(i + 9) * 18;
+      paths += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="4" fill="hsl(' + ((hue + 80) % 360) + ',70%,55%)" stroke="#030712" stroke-width="2"/>';
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h + '" class="cr-art-fallback boss-svg-fallback" aria-hidden="true">' + paths + '</svg>';
+  }
+
   function generateBudSvgMarkup(s, opts) {
     opts = opts || {};
     var roll = svgFallbackSeed(s);
@@ -2201,7 +2346,11 @@
     var kind = img.dataset.artKind || 'bud';
     var s = strainById(img.dataset.strainId);
     if (kind === 'boss') {
-      img.replaceWith((function () { var d = document.createElement('div'); d.innerHTML = generateBudSvgMarkup({ hue: 300, rarity: 'voidlord' }, { width: 120, height: 132 }); return d.firstChild; })());
+      var bossHue = G && G.bossSeed != null ? G.bossSeed % 360 : 280;
+      var svgBoss = generateBossSvgMarkup({ seed: G && G.bossSeed, hue: bossHue, width: 120, height: 132 });
+      var holderBoss = document.createElement('div');
+      holderBoss.innerHTML = svgBoss;
+      img.replaceWith(holderBoss.firstChild);
       return;
     }
     var wrap = img.parentElement;
@@ -2331,8 +2480,6 @@
       var tab = b.dataset.tab;
       b.classList.toggle('active', tab === UI.activeTab && !UI.farmOpen);
     });
-    var rocket = document.getElementById('hub-rocket-btn');
-    if (rocket) rocket.classList.toggle('active', UI.farmOpen);
     var s = topStrain(), mascot = document.getElementById('plant-mascot'), label = document.getElementById('plant-label');
     if (mascot) {
       if (s) mascot.innerHTML = budImg(s, '1.5rem');
@@ -2359,12 +2506,14 @@
 
   function processPendingReward(r) {
     if (!r) return;
+    var luck = packLuckBonus();
     if (r.kind === 'dual') {
       var pair = genUniqueStrainPair(r.packType === 'boss' ? 'bloom' : 'pulse', r.packType);
-      G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null, wheelSpin: true };
+      var top = pair[0];
+      G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null, wheelSpin: true, wheelPct: packWheelPercent(top, luck) };
     } else if (r.kind === 'single') {
-      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
-      G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s, wheelSpin: true };
+      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), { scanBonus: scanMult(), packLuckBonus: luck });
+      G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s, wheelSpin: true, wheelPct: packWheelPercent(s, luck) };
     }
   }
 
@@ -2398,8 +2547,10 @@
     } else {
       G.strains = G.strains.filter(function (x) { return x.id !== id; });
       G.equippedBattleIds = (G.equippedBattleIds || []).filter(function (x) { return x !== id; });
+      G.raidEquipIds = (G.raidEquipIds || []).filter(function (x) { return x !== id; });
       if (G.breedSlotA === id) G.breedSlotA = null;
       if (G.breedSlotB === id) G.breedSlotB = null;
+      if (G.strainMutationMap && G.strainMutationMap[id]) delete G.strainMutationMap[id];
     }
     var power = 1 + rarityIndex(s.rarity);
     G.mutationEssence = (G.mutationEssence || 0) + power;
@@ -2419,8 +2570,9 @@
   function dailyShowcaseSeed() { return Math.floor(Date.now() / 86400000); }
 
   function dailyShowcaseItems() {
+    syncDailyShowcaseDay();
+    if (G.dailyShowcaseCache && G.dailyShowcaseCache.length === 3) return G.dailyShowcaseCache;
     var day = dailyShowcaseSeed();
-    if (G.dailyShowcaseDay !== day) G.dailyShowcaseDay = day;
     var pid = (activePlayerId || 'aden').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
     var rng = rngSeed(day * 7919 + pid);
     var items = [];
@@ -2430,14 +2582,21 @@
       var price = Math.floor(12000 + rarityIndex(rar) * 6500 + rng() * 18000);
       items.push({ slot: i, strain: strain, price: price, label: i === 2 ? 'MYTHIC' : (i === 1 ? 'LEGENDARY' : 'EPIC') });
     }
+    G.dailyShowcaseCache = items;
     return items;
   }
 
   function buyDailyShowcase(slot) {
+    syncDailyShowcaseDay();
+    if (G.dailyShowcasePurchased[slot]) {
+      showBattleToast('Already acquired today', false);
+      return false;
+    }
     var items = dailyShowcaseItems();
     var item = items[slot];
     if (!item || G.cash < item.price) return false;
     G.cash -= item.price;
+    G.dailyShowcasePurchased[slot] = true;
     G.strains = mergeStrains(G.strains, item.strain);
     if (!G.focusedStrainId) G.focusedStrainId = item.strain.id;
     addXp(20);
@@ -2512,16 +2671,18 @@
   }
 
   function fightTopBarHtml(farmMode) {
-    var h = '<div class="fight-top-bar mb-2"><button type="button" id="hub-rocket-btn" class="hub-rocket-btn' + (farmMode ? ' active' : '') + '" data-action="toggle-farm" title="' + (farmMode ? 'Back to Battle' : 'Portal Farm') + '"><img src="/public/art/rocket.svg" alt="" style="width:1.35rem;height:1.35rem"></button>';
+    var h = '<div class="fight-top-bar mb-2 halftone-panel glass-panel ink-border p-2">';
     if (farmMode) {
-      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div></div>';
+      h += '<div class="flex-between gap-2 w-full"><div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div>';
+      h += '<button type="button" class="game-btn game-btn-sm" data-action="toggle-farm">✕ CLOSE</button></div>';
     } else {
       var wave = battleWaveNum();
       var mega = isBossWave();
       h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
-      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div></div>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div>';
     }
+    h += '</div>';
     return h;
   }
 
@@ -2530,11 +2691,11 @@
     var h = '<div class="screen-section home-command halftone-panel boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += fightTopBarHtml(false);
     h += '<div class="home-command-body">';
-    h += '<div class="home-arena-frame glass-panel halftone-panel">';
+    h += '<div class="home-arena-frame glass-panel halftone-panel ink-border">';
     h += bossArenaStageHtml();
-    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', '🗼') + hubOrbBtn('RAID', 'hub-raid', '⚔') + hubOrbBtn('MUTATION LAB', 'open-merge-lab', '🧬') + '</div>';
     h += '</div>';
-    h += '<div class="home-chest-rail glass-panel halftone-panel">';
+    h += '<div class="home-hub-dock">' + hubOrbBtn('TOWER', 'toggle-farm', '🗼') + hubOrbBtn('RAID', 'hub-raid', '⚔') + hubOrbBtn('MUTATION LAB', 'hub-mutation-lab', '🧬') + '</div>';
+    h += '<div class="home-chest-rail glass-panel halftone-panel ink-border">';
     h += '<div class="section-label section-label-green" style="margin:0 0 0.5rem;text-align:left">PENDING CHESTS · INSTANT OPEN</div>';
     h += homeChestSlotsHtml();
     h += '</div></div></div>';
@@ -2542,8 +2703,9 @@
   }
 
   function renderFarm() {
-    var h = '<div class="screen-section">' + fightTopBarHtml(true);
-    h += '<div class="neon-card neon-card-green neon-card-pulse p-3 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
+    var panel = 'halftone-panel glass-panel ink-border p-3 mb-3';
+    var h = '<div class="screen-section farm-screen">' + fightTopBarHtml(true);
+    h += '<div class="' + panel + ' neon-card-green neon-card-pulse text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
     h += '<div class="farm-tabs mb-3">';
     ['upgrade', 'control', 'portal'].forEach(function (t) {
       var lbl = { upgrade: 'UPGRADE DECK', control: 'CONTROL DECK', portal: 'PORTAL FARM' }[t];
@@ -2554,14 +2716,14 @@
       h += '<div class="section-label mb-2">SECTOR SCAN RATE UPGRADES</div>';
       G.sectorUpgrades.forEach(function (s) {
         var c = s.baseCost * (s.level + 1);
-        h += '<div class="neon-card p-4 mb-3"><div class="flex-between mb-2"><div><div style="font-weight:600;font-size:0.875rem">' + esc(s.name) + '</div><div class="text-muted" style="font-size:0.55rem">Lv.' + s.level + '/' + s.maxLevel + ' · +' + ((s.level * s.scanRateBonus * 100).toFixed(0)) + '% scan</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="up-sector" data-id="' + s.id + '"' + (s.level >= s.maxLevel || G.cash < c ? ' disabled' : '') + '>' + (s.level >= s.maxLevel ? 'MAX' : fmtCash(c)) + '</button></div><div class="progress-bar"><div class="progress-fill" style="width:' + (s.level / s.maxLevel * 100) + '%"></div></div></div>';
+        h += '<div class="' + panel + '"><div class="flex-between mb-2"><div><div style="font-weight:600;font-size:0.875rem">' + esc(s.name) + '</div><div class="text-muted" style="font-size:0.55rem">Lv.' + s.level + '/' + s.maxLevel + ' · +' + ((s.level * s.scanRateBonus * 100).toFixed(0)) + '% scan</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="up-sector" data-id="' + s.id + '"' + (s.level >= s.maxLevel || G.cash < c ? ' disabled' : '') + '>' + (s.level >= s.maxLevel ? 'MAX' : fmtCash(c)) + '</button></div><div class="progress-bar"><div class="progress-fill" style="width:' + (s.level / s.maxLevel * 100) + '%"></div></div></div>';
       });
     } else if (G.farmSubTab === 'control') {
       var offers = getSharedOffers();
       h += '<div class="section-label mb-2">PLANET SHARE BOARD</div><p class="text-muted text-xs text-center mb-3">Real listings from Aden, Dad, or Jamie — set slots in Profile.</p>';
-      if (!offers.length) h += '<div class="neon-card p-4 text-center text-muted text-sm">No listings yet.</div>';
+      if (!offers.length) h += '<div class="' + panel + ' text-center text-muted text-sm">No listings yet.</div>';
       offers.forEach(function (o) {
-        h += '<div class="neon-card p-4 mb-3"><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(o.sellerName) + '</div><div style="font-weight:600;font-size:0.875rem">' + esc(o.strainName) + '</div><div class="text-green" style="font-size:0.55rem">THC ' + o.thcPercent + '% · Yield ' + o.yield + '</div><div class="font-mono text-cyan mb-3" style="font-weight:700;font-size:0.875rem">Ask: ' + fmtCash(o.offerPrice) + '</div><input type="number" class="input-field mb-2" placeholder="Counter price" data-action="counter-input" data-id="' + o.id + '" value="' + (G.counterPrices[o.id] || '') + '"><div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="accept-offer" data-id="' + o.id + '"' + (G.cash < o.offerPrice ? ' disabled' : '') + '>ACCEPT</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="counter-offer" data-id="' + o.id + '"' + (function () { var c = G.counterPrices[o.id]; return (!c || c <= 0 || c < o.offerPrice * 0.85 || G.cash < c) ? ' disabled' : ''; })() + '>COUNTER</button></div></div>';
+        h += '<div class="' + panel + '"><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(o.sellerName) + '</div><div style="font-weight:600;font-size:0.875rem">' + esc(o.strainName) + '</div><div class="text-green" style="font-size:0.55rem">THC ' + o.thcPercent + '% · Yield ' + o.yield + '</div><div class="font-mono text-cyan mb-3" style="font-weight:700;font-size:0.875rem">Ask: ' + fmtCash(o.offerPrice) + '</div><input type="number" class="input-field mb-2" placeholder="Counter price" data-action="counter-input" data-id="' + o.id + '" value="' + (G.counterPrices[o.id] || '') + '"><div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="accept-offer" data-id="' + o.id + '"' + (G.cash < o.offerPrice ? ' disabled' : '') + '>ACCEPT</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="counter-offer" data-id="' + o.id + '"' + (function () { var c = G.counterPrices[o.id]; return (!c || c <= 0 || c < o.offerPrice * 0.85 || G.cash < c) ? ' disabled' : ''; })() + '>COUNTER</button></div></div>';
       });
     } else {
       h += '<div class="rocket-shaft mb-3">';
@@ -2572,12 +2734,12 @@
       if (!G.factoryFloors.length) h += '<div class="rocket-floor rocket-floor-empty"><div class="text-muted text-xs">Empty shaft</div></div>';
       h += '</div><div class="section-label mb-2">PORTAL FARM</div>';
       if (!G.factoryFloors.length) {
-        h += '<div class="neon-card p-5 text-center mb-3"><div style="font-size:2.5rem;margin-bottom:0.5rem">🌀</div><div class="text-muted text-sm mb-3">No portals yet. Buy your first floor to start mining.</div><button type="button" class="game-btn game-btn-green w-full" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>BUY FLOOR · ' + fmtCash(portalCost()) + '</button></div>';
+        h += '<div class="' + panel + ' text-center mb-3"><div style="font-size:2.5rem;margin-bottom:0.5rem">🌀</div><div class="text-muted text-sm mb-3">No portals yet. Buy your first floor to start mining.</div><button type="button" class="game-btn game-btn-green w-full" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>BUY FLOOR · ' + fmtCash(portalCost()) + '</button></div>';
       }
       G.factoryFloors.forEach(function (f) {
         var eq = f.equippedStrainId ? strainById(f.equippedStrainId) : null;
         var uc = floorUpCost(f);
-        h += '<div class="neon-card p-4 mb-3"><div class="flex-between mb-3"><div><div style="font-weight:600">' + esc(f.name) + '</div><div class="text-muted" style="font-size:0.55rem">Floor Lv.' + f.level + '</div></div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-floor" data-id="' + f.id + '"' + (G.cash < uc ? ' disabled' : '') + '>UP · ' + fmtCash(uc) + '</button></div>';
+        h += '<div class="' + panel + '"><div class="flex-between mb-3"><div><div style="font-weight:600">' + esc(f.name) + '</div><div class="text-muted" style="font-size:0.55rem">Floor Lv.' + f.level + '</div></div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-floor" data-id="' + f.id + '"' + (G.cash < uc ? ' disabled' : '') + '>UP · ' + fmtCash(uc) + '</button></div>';
         if (eq) {
           h += '<div class="flex-row mb-2 portal-equipped"><div style="flex-shrink:0">' + budImg(eq, '1.5rem') + '</div><div style="flex:1;min-width:0"><div class="font-mono text-green text-xs" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(eq.name) + '</div><div class="text-muted text-xs">' + esc(rarityName(eq.rarity)) + ' · x' + eq.quantity + '</div></div></div>';
         } else {
@@ -2589,7 +2751,7 @@
       });
       if (G.factoryFloors.length) h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>+ BUY FLOOR · ' + fmtCash(portalCost()) + '</button>';
       var cr = cloneRem();
-      h += '<div class="neon-card capsule-cloner p-4 mb-3"><div class="clone-bubbles"></div><div class="font-mono text-muted mb-2" style="font-size:0.55rem;letter-spacing:0.15em">CAPSULE CLONER</div>';
+      h += '<div class="' + panel + ' capsule-cloner mb-3"><div class="clone-bubbles"></div><div class="font-mono text-muted mb-2" style="font-size:0.55rem;letter-spacing:0.15em">CAPSULE CLONER</div>';
       if (G.cloneJob) {
         var cs = strainById(G.cloneJob.strainId);
         h += '<div class="text-center py-4 clone-active"><div>' + (cs ? budImg(cs, '2.5rem') : '🧬') + '</div><div class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(cr) + '</div><div class="text-muted text-xs">Cloning ' + (cs ? esc(cs.name) : 'strain') + '...</div></div>';
@@ -2628,17 +2790,20 @@
     dailyShowcaseItems().forEach(function (item) {
       var s = item.strain;
       var rc = rarityColor(s.rarity);
-      var dis = G.cash < item.price;
-      h += '<div class="shop-daily-slot glass-panel halftone-panel" style="--daily-accent:' + rc + '">';
+      var sold = G.dailyShowcasePurchased[item.slot];
+      var dis = sold || G.cash < item.price;
+      h += '<div class="shop-daily-slot glass-panel halftone-panel ink-border' + (sold ? ' sold-out' : '') + '" style="--daily-accent:' + rc + '">';
       h += '<div class="shop-daily-tag">' + esc(item.label) + '</div>';
       h += '<div class="shop-daily-card">' + crCardHtml(s, { noFocus: true }) + '</div>';
       h += '<div class="shop-daily-price font-mono text-green">' + fmtCash(item.price) + '</div>';
-      h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="buy-showcase" data-id="' + item.slot + '"' + (dis ? ' disabled' : '') + '>ACQUIRE</button></div>';
+      if (sold) h += '<div class="shop-daily-sold">SOLD OUT</div>';
+      else h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="buy-showcase" data-id="' + item.slot + '"' + (dis ? ' disabled' : '') + '>ACQUIRE</button>';
+      h += '</div>';
     });
     h += '</div>';
     h += '<div class="neon-card neon-card-green neon-card-pulse glass-panel halftone-panel p-4 mb-3"><div class="flex-between mb-3"><div><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">BLITZ WINDOW</div><div style="font-weight:700;font-size:0.875rem">Permanent Upgrades</div></div><div id="blitz-timer" class="font-mono text-green" style="font-size:1.125rem;font-weight:700">' + fmtCd(blitzRem()) + '</div></div>';
     blitzShopRows().forEach(function (u) {
-      h += '<div class="flex-between p-3 mb-2 shop-blitz-row" style="background:rgba(0,0,0,0.35);border-radius:0.75rem;border:1px solid ' + (u.purchased ? 'rgba(100,100,100,0.3)' : 'rgba(57,255,20,0.25)') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
+      h += '<div class="flex-between shop-blitz-row halftone-panel glass-panel ink-border' + (u.purchased ? ' purchased' : '') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
     h += '</div><div class="section-label mb-2" style="text-align:left">GENERAL STORE</div>';
     G.inventory.forEach(function (it) {
@@ -2682,16 +2847,28 @@
       h += '<button type="button" class="game-btn game-btn-sm" data-action="open-strain-picker" data-id="' + esc(f.id) + '">SET</button></div>';
     });
     h += '</div>';
-    h += '<div class="deck-section glass-panel halftone-panel p-3"><div class="section-label mb-2" style="text-align:left">RAID LOADOUT</div>';
-    h += '<div class="text-muted text-xs mb-2">Mirrors Campaign squad for boss raids · ' + totalBattleDps().toFixed(1) + ' DPS</div>';
-    h += '<div class="battle-loadout-grid">';
-    for (var rs = 0; rs < Math.min(4, BATTLE_EQUIP_MAX); rs++) {
-      var rid = equipped[rs];
+    h += '<div class="deck-section glass-panel halftone-panel ink-border p-3"><div class="section-label mb-2" style="text-align:left">RAID LOADOUT</div>';
+    h += '<div class="flex-between mb-2"><div class="text-muted text-xs">Independent raid squad · ' + totalRaidDps().toFixed(1) + ' DPS</div><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="equip-best-raid">EQUIP BEST</button></div>';
+    h += '<div class="battle-loadout-grid mb-2">';
+    var raidEquipped = G.raidEquipIds || [];
+    for (var rs = 0; rs < BATTLE_EQUIP_MAX; rs++) {
+      var rid = raidEquipped[rs];
       var rsStrain = rid ? strainById(rid) : null;
-      if (rsStrain) h += '<div class="battle-slot">' + crCardHtml(rsStrain, { noFocus: true, showDps: true }) + '</div>';
+      if (rsStrain) h += '<div class="battle-slot liftable-wrap" data-lift="raid-slot-' + esc(rsStrain.id) + '">' + crCardHtml(rsStrain, { noFocus: true, showDps: true }) + '</div>';
       else h += '<div class="battle-slot battle-slot-empty"><span class="text-muted text-xs">—</span></div>';
     }
-    h += '</div></div></div>';
+    h += '</div><input type="search" class="input-field mb-2" placeholder="Search raid candidates..." data-action="raid-equip-search" value="' + esc(UI.raidEquipSearch || '') + '">';
+    h += sortChipsHtml('raid-equip-sort', UI.raidEquipSort || 'dps', BATTLE_SORT_CHIPS);
+    var raidPool = filteredRaidEquipStrains();
+    if (!raidPool.length) h += '<div class="text-muted text-xs text-center p-2">No raid candidates match.</div>';
+    else {
+      h += '<div class="binder-grid battle-equip-grid">';
+      raidPool.forEach(function (s) {
+        h += '<div class="battle-equip-card liftable-wrap" data-lift="raid-pool-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, showDps: true }) + '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div></div>';
     return h;
   }
 
@@ -2701,7 +2878,8 @@
     h += '<div class="mutation-mode-tabs mb-3">';
     h += '<button type="button" class="mutation-mode-tab' + (mode === 'destroy' ? ' active' : '') + '" data-action="mutation-mode" data-id="destroy">DESTROY</button>';
     h += '<button type="button" class="mutation-mode-tab' + (mode === 'create' ? ' active' : '') + '" data-action="mutation-mode" data-id="create">CREATE</button></div>';
-    h += '<div class="font-mono text-xs text-green mb-2">Mutation Essence: ' + (G.mutationEssence || 0) + ' · Items: ' + ((G.mutationItems || []).length) + '</div>';
+    h += '<div class="font-mono text-xs text-green mb-2">Mutation Essence: ' + (G.mutationEssence || 0) + ' · Items: ' + ((G.mutationItems || []).length) + ' · Pack Luck +' + ((G.mutationPackLuck || 0) * 100).toFixed(0) + '%</div>';
+    h += '<button type="button" class="game-btn game-btn-sm game-btn-green w-full mb-3" data-action="mutation-buy-luck"' + ((G.mutationEssence || 0) < 15 ? ' disabled' : '') + '>BOOST PACK LUCK · 15 ESS (+3%)</button>';
     if (mode === 'destroy') {
       h += '<p class="text-muted text-xs mb-2">Burn strains into permanent mutation shards. Higher rarity = more essence.</p>';
       h += '<div class="binder-grid mutation-burn-grid mb-2" style="max-height:42vh;overflow-y:auto">';
@@ -2713,11 +2891,19 @@
       h += '</div>';
       if (!(G.mutationItems || []).length) h += '<div class="text-muted text-xs text-center">No mutation items yet — destroy cards to forge shards.</div>';
       else {
-        h += '<div class="mutation-item-list">';
-        (G.mutationItems || []).slice(-6).reverse().forEach(function (m) {
-          h += '<div class="mutation-item-chip" style="--chip-color:' + rarityColor(m.tier) + '"><span class="font-mono text-xs">' + esc(m.name) + '</span><span class="text-muted text-xs">+' + m.power + '</span></div>';
+        h += '<div class="section-label mb-2 mt-2">EQUIP SHARDS ON STRAINS</div><div class="mutation-item-list mb-2">';
+        (G.mutationItems || []).slice(-8).reverse().forEach(function (m) {
+          h += '<div class="mutation-item-chip mutation-equip-chip" data-action="equip-mutation-pick" data-id="' + esc(m.id) + '" style="--chip-color:' + rarityColor(m.tier) + '"><span class="font-mono text-xs">' + esc(m.name) + '</span><span class="text-muted text-xs">+' + m.power + ' PWR</span></div>';
         });
         h += '</div>';
+        if (UI.mutationEquipPick) {
+          h += '<p class="text-xs text-green mb-2">Tap a strain to equip selected shard:</p><div class="binder-grid mutation-pick-grid mb-2" style="max-height:24vh;overflow-y:auto">';
+          G.strains.forEach(function (s) {
+            var eq = mutationItemForStrain(s.id);
+            h += '<button type="button" class="merge-pick-card' + (eq ? ' selected' : '') + '" data-action="equip-mutation" data-id="' + esc(UI.mutationEquipPick) + ':' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + (eq ? '<div class="mutation-burn-tag">' + esc(eq.name) + '</div>' : '') + '</button>';
+          });
+          h += '</div>';
+        }
       }
     } else {
       var err = mergeLabError();
@@ -2804,7 +2990,7 @@
       var fpl = UI.focusedPlanetId ? owned.find(function (p) { return p.id === UI.focusedPlanetId; }) : owned[0];
       if (fpl) {
         var strain = strainById(fpl.exclusiveStrainId);
-        h += '<div class="neon-card p-3 mb-3 planet-owned-detail"><div style="font-weight:600;font-size:0.9rem;text-align:center">' + esc(planetDisplayName(fpl)) + '</div>';
+        h += '<div class="halftone-panel glass-panel ink-border p-3 mb-3 planet-owned-detail"><div style="font-weight:600;font-size:0.9rem;text-align:center">' + esc(planetDisplayName(fpl)) + '</div>';
         h += '<div class="text-muted text-xs text-center mb-2">' + fmtRev(planetOutputPerSec(fpl) * 8) + ' · x' + (fpl.upgraderMult || 1) + ' mult</div>';
         if (strain) h += '<div class="text-green text-xs text-center mb-2">' + esc(strain.name) + ' · stored ' + Math.floor(fpl.storedYield || 0) + '</div>';
         h += '<input type="text" class="input-field mb-2" placeholder="Rename planet" data-action="planet-rename" data-id="' + esc(fpl.id) + '" value="' + esc(fpl.customName || '') + '">';
@@ -2978,7 +3164,7 @@
     var src = (sources || []).map(function (s) {
       return '<div class="text-xs text-muted" style="padding:0.15rem 0 0 0.5rem">· ' + s + '</div>';
     }).join('');
-    return '<div class="neon-card p-3 mb-2"><div class="flex-between"><span class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.1em">' + esc(title) + '</span><span class="font-mono text-xs" style="font-weight:700;color:var(--green)">' + esc(value) + '</span></div>' + src + '</div>';
+    return '<div class="halftone-panel glass-panel ink-border p-3 mb-2"><div class="flex-between"><span class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.1em">' + esc(title) + '</span><span class="font-mono text-xs" style="font-weight:700;color:var(--green)">' + esc(value) + '</span></div>' + src + '</div>';
   }
 
   function profileModifiersHtml() {
@@ -3216,7 +3402,7 @@
   function renderSettings() {
     var helpOpen = UI.helpOpen;
     var h = '<div class="flex-between mb-3"><h3 class="font-display" style="font-size:0.875rem;letter-spacing:0.2em">SYSTEM CONFIG</h3><button type="button" data-close="settings" style="background:none;border:none;color:var(--muted);font-size:1.125rem;cursor:pointer">✕</button></div>';
-    h += '<div class="flex-between p-4 mb-3" style="border-radius:0.75rem;background:' + (UI.realityWarp ? 'rgba(57,255,20,0.08)' : 'rgba(31,0,51,0.5)') + ';border:1px solid ' + (UI.realityWarp ? 'rgba(57,255,20,0.4)' : 'rgba(61,0,102,0.6)') + '"><div><div class="chromatic-text" style="font-weight:600;font-size:0.875rem">Reality Warp Mode</div><div class="text-muted" style="font-size:0.65rem">Subtle color drift & soft pulse</div></div><button type="button" class="toggle-switch" data-action="toggle-warp" style="background:' + (UI.realityWarp ? 'linear-gradient(90deg,#39FF14,#A855F7)' : 'rgba(61,0,102,0.8)') + '"><span class="toggle-knob" style="left:' + (UI.realityWarp ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div>';
+    h += '<div class="halftone-panel glass-panel ink-border flex-between p-4 mb-3"><div><div class="chromatic-text" style="font-weight:600;font-size:0.875rem">Reality Warp Mode</div><div class="text-muted" style="font-size:0.65rem">Subtle color drift & soft pulse</div></div><button type="button" class="toggle-switch" data-action="toggle-warp" style="background:' + (UI.realityWarp ? 'linear-gradient(90deg,#39FF14,#A855F7)' : 'rgba(61,0,102,0.8)') + '"><span class="toggle-knob" style="left:' + (UI.realityWarp ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div>';
     h += '<button type="button" class="game-btn w-full mb-2" data-action="toggle-help">' + (helpOpen ? '✕ CLOSE HELP' : '📖 GAME ENCYCLOPEDIA') + '</button>';
     if (helpOpen) h += helpEncyclopediaHtml();
     h += '<button type="button" class="game-btn w-full mb-2" data-action="switch-player">⇄ SWITCH PLAYER</button>';
@@ -3231,7 +3417,7 @@
     var title = (pr.packType || 'reward').toUpperCase().replace(/-/g, ' ');
     var wheelHtml = '';
     if (pr.wheelSpin) {
-      var pct = 35 + Math.floor(Math.random() * 45);
+      var pct = pr.wheelPct != null ? pr.wheelPct : packWheelPercent(pr.strain || (pr.strains && pr.strains[0]), packLuckBonus());
       wheelHtml = '<div class="pack-reveal-wheel-stage mb-3"><div class="pack-reveal-wheel"><div class="pack-reveal-wheel-ring"></div><div class="pack-reveal-wheel-pointer"></div><div class="pack-reveal-wheel-center font-display">' + pct + '%</div></div><div class="font-mono text-xs text-cyan mt-2" style="letter-spacing:0.2em">SIEGE ROLL · DICE LOCK</div></div>';
     }
     var inner = wheelHtml + '<div class="font-mono text-muted mb-2" style="font-size:0.6rem;letter-spacing:0.4em">' + esc(title) + '</div>';
@@ -3255,6 +3441,7 @@
     if (!id) return null;
     if (id.indexOf('index-') === 0) return strainById(id.slice(6));
     if (id.indexOf('battle-slot-') === 0 || id.indexOf('battle-pool-') === 0) return strainById(id.slice(12));
+    if (id.indexOf('raid-slot-') === 0 || id.indexOf('raid-pool-') === 0) return strainById(id.slice(10));
     return null;
   }
 
@@ -3272,6 +3459,14 @@
     if (id.indexOf('battle-slot-') === 0) {
       var sid2 = id.slice(12);
       return '<button type="button" class="game-btn" data-action="equip-battle" data-id="' + esc(sid2) + '">UNEQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+    }
+    if (id.indexOf('raid-pool-') === 0) {
+      var rsid = id.slice(10);
+      return '<button type="button" class="game-btn game-btn-green" data-action="equip-raid" data-id="' + esc(rsid) + '">⚔ RAID EQUIP</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
+    }
+    if (id.indexOf('raid-slot-') === 0) {
+      var rsid2 = id.slice(10);
+      return '<button type="button" class="game-btn" data-action="equip-raid" data-id="' + esc(rsid2) + '">UNEQUIP RAID</button><button type="button" class="game-btn" data-action="dismiss-lift">CLOSE</button>';
     }
     if (id.indexOf('index-') === 0) {
       var sid3 = id.slice(6);
@@ -3662,6 +3857,14 @@
     else if (act==='up-ability') { var ab = val.split(':'); upStrainAbility(ab[0], ab[1]); }
     else if (act==='open-chest') { openChestSlot(val); return; }
     else if (act==='hub-raid') { UI.activeTab = 'index'; UI.indexPane = 'decks'; UI.farmOpen = false; }
+    else if (act==='hub-mutation-lab') { UI.activeTab = 'index'; UI.indexPane = 'mutations'; UI.farmOpen = false; UI.mergeLab = { open: false, phase: 'idle', child: null, error: '' }; }
+    else if (act==='mutation-buy-luck') spendMutationPackLuck();
+    else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
+    else if (act==='equip-mutation') { var em = val.split(':'); equipMutationItem(em[0], em[1]); UI.mutationEquipPick = null; }
+    else if (act==='equip-raid') { equipRaid(val); UI.liftedCardId = null; }
+    else if (act==='equip-best-raid') equipBestRaid();
+    else if (act==='raid-equip-search') UI.raidEquipSearch = val;
+    else if (act==='raid-equip-sort') UI.raidEquipSort = val;
     else if (act==='index-pane') UI.indexPane = val;
     else if (act==='mutation-mode') UI.mutationMode = val;
     else if (act==='destroy-strain') destroyStrain(val);
