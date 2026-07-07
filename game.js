@@ -395,8 +395,8 @@
       G.scanPending = rollScanPlanet();
       UI.scanAnimating = false;
       shakeScreen();
-      popArcade('label', 0, { label: 'SIGNAL FOUND!', mega: true });
-      popArcade('label', 0, { label: 'NEW WORLD', jackpot: true, delay: 150 });
+      popLabel('SIGNAL FOUND!', { mega: true });
+      popLabel('NEW WORLD', { jackpot: true, delay: 150 });
       plantSay('tab_map', true);
       scheduleSave();
       render();
@@ -452,7 +452,7 @@
     var planet = rollScanPlanet();
     if (rarityIndex(planet.rarity) < rarityIndex(AUTO_SCAN_MIN_RARITY)) return;
     if (autoClaimPlanet(planet)) {
-      popArcade('label', 0, { label: 'FLEET CLAIM: ' + planetDisplayName(planet), mega: true });
+      popLabel('FLEET CLAIM: ' + planetDisplayName(planet), { mega: true });
       scheduleSave();
     }
   }
@@ -537,24 +537,6 @@
     });
     UI._planetCashAcc = (UI._planetCashAcc || 0) + cashAcc;
     UI._planetSpAcc = (UI._planetSpAcc || 0) + spAcc;
-    maybePlanetPops();
-  }
-
-  function maybePlanetPops() {
-    var now = Date.now();
-    if (now - (UI._lastPlanetPop || 0) < 2000) return;
-    var items = [];
-    if ((UI._planetCashAcc || 0) >= 25) {
-      items.push({ type: 'cash', amount: UI._planetCashAcc, big: UI._planetCashAcc >= 400 });
-      UI._planetCashAcc = 0;
-    }
-    if ((UI._planetSpAcc || 0) >= 1.5) {
-      items.push({ type: 'sp', amount: Math.max(1, Math.floor(UI._planetSpAcc)), big: UI._planetSpAcc >= 8 });
-      UI._planetSpAcc = 0;
-    }
-    if (!items.length) return;
-    popArcadeBurst(items);
-    UI._lastPlanetPop = now;
   }
 
   function breedStrains(idA, idB, opts) {
@@ -629,7 +611,7 @@
     G.breedSlotB = null;
     addXp(25);
     popStrain(child, { mega: true, delay: 80 });
-    popArcade('label', 0, { label: 'FUSION COMPLETE!', mega: true });
+    popLabel('FUSION COMPLETE!', { mega: true });
     plantSay('breed', true);
     UI.mergeLab = { open: false, phase: 'idle', child: null, error: '' };
     scheduleSave();
@@ -697,7 +679,7 @@
     return '<img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" style="width:' + (px || '2rem') + ';filter:hue-rotate(' + ((s && s.hue) || 0) + 'deg)">';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', arcadePops: [], _arcadeDirty: false, _passiveCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, arcadePops: false, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -708,14 +690,15 @@
   var visualRafId = 0;
   var lastDamageVisualAt = 0;
   var DAMAGE_VISUAL_MS = 130;
-  var ARCADE_POP_CAP = 10;
+  var ARCADE_POOL_SIZE = 15;
+  var arcadePool = [];
+  var poolLayerCached = null;
   var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null };
 
   function isWalletDirty() { return !!UI.dirty.wallet; }
   function isHudDirty() { return !!UI.dirty.hud; }
   function isBossHpDirty() { return !!UI.dirty.bossHp; }
   function isBossDpsDirty() { return !!UI.dirty.bossDps; }
-  function isArcadeDirty() { return !!UI._arcadeDirty || !!UI.dirty.arcadePops; }
   function isToastsDirty() { return !!UI.dirty.toasts; }
   function isTabDirty() { return !!UI.dirty.activeTab; }
   function markWalletDirty() { UI.dirty.wallet = true; }
@@ -733,7 +716,6 @@
     markBossTraitDirty();
     markBossShieldDirty();
     markTabDirty();
-    UI.dirty.arcadePops = true;
     UI.dirty.toasts = true;
     UI.dirty.shell = true;
   }
@@ -1500,7 +1482,7 @@
     }
     G.mutationEssence -= cost;
     G.mutationPackLuck = (G.mutationPackLuck || 0) + 0.03;
-    popArcade('label', 0, { label: '+3% PACK LUCK', mega: true });
+    popLabel('+3% PACK LUCK', { mega: true });
     showBattleToast('Mutation luck boosted · total +' + ((G.mutationPackLuck || 0) * 100).toFixed(0) + '%', true);
     scheduleSave();
     return true;
@@ -1514,7 +1496,7 @@
     }
     G.mutationEssence -= cost;
     G.mutationGuaranteeCharges = (G.mutationGuaranteeCharges || 0) + 1;
-    popArcade('label', 0, { label: '+1 ABILITY GUARANTEE', mega: true });
+    popLabel('+1 ABILITY GUARANTEE', { mega: true });
     showBattleToast('Guaranteed ability charge · ' + G.mutationGuaranteeCharges + ' ready', true);
     scheduleSave();
     return true;
@@ -1622,7 +1604,7 @@
       { type: 'label', label: 'LV.' + newLvl, mega: true, delay: 100 },
       { type: 'label', label: 'NEW STRAIN!', mega: true, delay: 200 },
     ]);
-    if (newLvl % 10 === 0) popArcade('label', 0, { label: 'MILESTONE PACK!', jackpot: true, delay: 400 });
+    if (newLvl % 10 === 0) popLabel('MILESTONE PACK!', { jackpot: true, delay: 400 });
     showBattleToast('LEVEL UP! LV.' + newLvl, true);
     shakeScreen();
     plantSay('level_up', true);
@@ -1635,41 +1617,163 @@
     UI.dirty.toasts = true;
   }
 
-  function popArcade(type, amount, opts) {
-    opts = opts || {};
-    var text;
-    if (type === 'label') text = opts.label || '';
-    else if (type === 'strain') text = opts.label || '+STRAIN';
-    else if (type === 'cash') text = '+' + fmtCash(amount);
-    else if (type === 'xp') text = '+' + Math.floor(amount) + ' XP';
-    else if (type === 'sp') text = '+' + Math.floor(amount) + ' SP';
-    else text = String(amount);
-    if (type !== 'label' && type !== 'strain' && (!amount || amount <= 0)) return;
-    UI.arcadePops = UI.arcadePops || [];
-    var big = !!(opts.big || opts.mega || opts.jackpot);
-    if (!big && type === 'cash' && amount >= 2500) big = true;
-    if (!big && type === 'xp' && amount >= 40) big = true;
-    if (!big && type === 'sp' && amount >= 10) big = true;
-    UI.arcadePops.push({
-      type: type === 'label' ? (opts.jackpot ? 'jackpot' : 'mega') : type,
-      text: text,
-      rarity: opts.rarity || null,
-      big: big,
-      mega: !!(opts.mega || opts.jackpot),
-      jackpot: !!opts.jackpot,
-      x: opts.x != null ? opts.x : (10 + Math.random() * 80),
-      y: opts.y != null ? opts.y : (28 + Math.random() * 38),
-      at: Date.now(),
-      delay: opts.delay || 0,
-      dur: opts.jackpot ? 2600 : (opts.mega ? 2100 : 1550),
-    });
-    if (UI.arcadePops.length > ARCADE_POP_CAP) UI.arcadePops.splice(0, UI.arcadePops.length - ARCADE_POP_CAP);
-    if (arcadePopsAllowed()) markArcadeDirty();
+  function arcadePopsAllowed() {
+    return UI.activeTab === 'battle' && !UI.farmOpen && !UI.playerSelectOpen;
   }
 
-  function popCash(amt, opts) { popArcade('cash', amt, opts || {}); }
-  function popXp(amt, opts) { popArcade('xp', amt, opts || {}); }
-  function popSp(amt, opts) { popArcade('sp', amt, opts || {}); }
+  function arcadePopColor(type, rarity) {
+    if (rarity) return rarityColor(rarity);
+    if (type === 'cash') return '#39FF14';
+    if (type === 'xp') return '#F472B6';
+    if (type === 'sp') return '#22D3EE';
+    if (type === 'strain') return '#C084FC';
+    if (type === 'jackpot') return '#FFD700';
+    return '#E879F9';
+  }
+
+  function initArcadePool() {
+    poolLayerCached = DOM.arcadePopLayer || document.getElementById('arcade-pop-layer');
+    if (!poolLayerCached) return;
+    poolLayerCached.innerHTML = '';
+    arcadePool = [];
+    for (var i = 0; i < ARCADE_POOL_SIZE; i++) {
+      var el = document.createElement('div');
+      el.className = 'arcade-pop';
+      el.style.cssText = 'display:none;position:absolute;will-change:transform,opacity;pointer-events:none';
+      poolLayerCached.appendChild(el);
+      arcadePool.push({ el: el, active: false, expiresAt: 0, spawnAt: 0, delay: 0, dur: 1550, shown: false });
+    }
+  }
+
+  function spawnOptimizedPop(type, text, rarity, isBig, customX, customY, delay, extra) {
+    if (!text || !arcadePopsAllowed()) return;
+    extra = extra || {};
+    var now = Date.now();
+    delay = delay || 0;
+    var token = null;
+    for (var i = 0; i < arcadePool.length; i++) {
+      if (!arcadePool[i].active) { token = arcadePool[i]; break; }
+    }
+    if (!token) {
+      token = arcadePool[0];
+      for (var j = 1; j < arcadePool.length; j++) {
+        if (arcadePool[j].expiresAt < token.expiresAt) token = arcadePool[j];
+      }
+      token.el.style.display = 'none';
+      token.shown = false;
+    }
+    var isJackpot = !!(extra.jackpot || type === 'jackpot');
+    var isMega = !!(extra.mega || isJackpot || type === 'mega' || type === 'label');
+    var cssType = isJackpot ? 'jackpot' : (type === 'label' ? 'mega' : type);
+    var dur = isJackpot ? 2600 : (isMega ? 2100 : 1550);
+    var cls = 'arcade-pop arcade-pop-' + cssType;
+    if (isBig) cls += ' arcade-pop-big';
+    if (isMega && !isJackpot) cls += ' arcade-pop-mega';
+    if (isJackpot) cls += ' arcade-pop-jackpot';
+    var x = customX != null ? customX : (10 + Math.random() * 80);
+    var y = customY != null ? customY : (28 + Math.random() * 38);
+    token.el.className = cls;
+    token.el.textContent = text;
+    token.el.style.left = x + '%';
+    token.el.style.top = y + '%';
+    token.el.style.color = arcadePopColor(cssType, rarity);
+    token.el.style.animationDuration = (dur / 1000) + 's';
+    token.el.style.display = 'none';
+    token.active = true;
+    token.spawnAt = now;
+    token.delay = delay;
+    token.dur = dur;
+    token.expiresAt = now + delay + dur;
+    token.shown = false;
+  }
+
+  function updateArcadeLayerTick() {
+    if (!poolLayerCached) return;
+    var now = Date.now();
+    if (!G || !arcadePopsAllowed()) {
+      for (var h = 0; h < arcadePool.length; h++) {
+        if (arcadePool[h].active) {
+          arcadePool[h].active = false;
+          arcadePool[h].el.style.display = 'none';
+          arcadePool[h].shown = false;
+        }
+      }
+      return;
+    }
+    if (now - (UI._lastPassivePop || 0) >= 1200 && (UI._passiveCashAcc || 0) >= 35) {
+      popCash(UI._passiveCashAcc, { big: UI._passiveCashAcc >= 500 });
+      UI._passiveCashAcc = 0;
+      UI._lastPassivePop = now;
+    }
+    if (now - (UI._lastPlanetPop || 0) >= 1500 && (UI._planetCashAcc || 0) >= 25) {
+      popCash(UI._planetCashAcc, { big: UI._planetCashAcc >= 400 });
+      UI._planetCashAcc = 0;
+      UI._lastPlanetPop = now;
+    }
+    if (now - (UI._lastPlanetSpPop || 0) >= 2000 && (UI._planetSpAcc || 0) >= 1.5) {
+      popSp(Math.max(1, Math.floor(UI._planetSpAcc)), { big: UI._planetSpAcc >= 8 });
+      UI._planetSpAcc = 0;
+      UI._lastPlanetSpPop = now;
+    }
+    for (var k = 0; k < arcadePool.length; k++) {
+      var t = arcadePool[k];
+      if (!t.active) continue;
+      if (now < t.spawnAt + t.delay) {
+        if (t.shown) { t.el.style.display = 'none'; t.shown = false; }
+        continue;
+      }
+      if (now >= t.expiresAt) {
+        t.active = false;
+        t.el.style.display = 'none';
+        t.shown = false;
+        continue;
+      }
+      if (!t.shown) {
+        t.el.style.display = '';
+        t.el.style.animation = 'none';
+        void t.el.offsetWidth;
+        t.el.style.animation = '';
+        t.shown = true;
+      }
+    }
+  }
+
+  function clearArcadePops() {
+    for (var i = 0; i < arcadePool.length; i++) {
+      arcadePool[i].active = false;
+      arcadePool[i].el.style.display = 'none';
+      arcadePool[i].shown = false;
+    }
+  }
+
+  function popLabel(text, opts) {
+    opts = opts || {};
+    spawnOptimizedPop('label', text, null, !!(opts.big || opts.mega || opts.jackpot), opts.x, opts.y, opts.delay, opts);
+  }
+
+  function popCash(amt, opts) {
+    opts = opts || {};
+    if (!amt || amt <= 0) return;
+    var big = !!(opts.big || opts.mega || opts.jackpot);
+    if (!big && amt >= 2500) big = true;
+    spawnOptimizedPop('cash', '+' + fmtCash(amt), null, big, opts.x, opts.y, opts.delay, opts);
+  }
+
+  function popXp(amt, opts) {
+    opts = opts || {};
+    if (!amt || amt <= 0) return;
+    var big = !!(opts.big || opts.mega || opts.jackpot);
+    if (!big && amt >= 40) big = true;
+    spawnOptimizedPop('xp', '+' + Math.floor(amt) + ' XP', null, big, opts.x, opts.y, opts.delay, opts);
+  }
+
+  function popSp(amt, opts) {
+    opts = opts || {};
+    if (!amt || amt <= 0) return;
+    var big = !!(opts.big || opts.mega || opts.jackpot);
+    if (!big && amt >= 10) big = true;
+    spawnOptimizedPop('sp', '+' + Math.floor(amt) + ' SP', null, big, opts.x, opts.y, opts.delay, opts);
+  }
 
   function popStrain(strain, opts) {
     if (!strain) return;
@@ -1679,72 +1783,22 @@
     if (name.length > 22) name = name.slice(0, 20) + '…';
     var text = qty > 1 ? '+' + qty + ' ' + name : '+' + name;
     var idx = rarityIndex(strain.rarity);
-    popArcade('strain', 0, {
-      label: text,
-      rarity: strain.rarity,
-      big: opts.big || idx >= 8,
+    spawnOptimizedPop('strain', text, strain.rarity, opts.big || idx >= 8, opts.x, opts.y, opts.delay, {
       mega: opts.mega || idx >= 12,
       jackpot: opts.jackpot || idx >= 16,
-      delay: opts.delay,
-      x: opts.x,
-      y: opts.y,
     });
   }
 
   function popArcadeBurst(items) {
     items.forEach(function (it, i) {
       setTimeout(function () {
-        if (it.type === 'label') popArcade('label', 0, { label: it.label, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 18 + i * 22, y: 30 + (i % 3) * 10 });
+        if (it.type === 'label') popLabel(it.label, { mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 18 + i * 22, y: 30 + (i % 3) * 10 });
         else if (it.type === 'strain') popStrain(it.strain, { qty: it.qty, big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
-        else popArcade(it.type, it.amount, { big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
+        else if (it.type === 'cash') popCash(it.amount, { big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
+        else if (it.type === 'xp') popXp(it.amount, { big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
+        else if (it.type === 'sp') popSp(it.amount, { big: it.big, mega: it.mega, jackpot: it.jackpot, delay: it.delay, x: 15 + i * 20 + Math.random() * 8, y: 32 + (i % 2) * 12 });
       }, (it.delay || 0) + i * 85);
     });
-  }
-
-  function markArcadeDirty() { UI._arcadeDirty = true; UI.dirty.arcadePops = true; }
-
-  function clearArcadePops() {
-    UI.arcadePops = [];
-    UI._arcadeDirty = false;
-    UI.dirty.arcadePops = false;
-    var el = DOM.arcadePopLayer || document.getElementById('arcade-pop-layer');
-    if (el) el.innerHTML = '';
-  }
-
-  function arcadePopsAllowed() {
-    return UI.activeTab === 'battle' && !UI.farmOpen && !UI.playerSelectOpen;
-  }
-
-  function renderArcadePops() {
-    var el = DOM.arcadePopLayer || document.getElementById('arcade-pop-layer');
-    if (!el) return;
-    if (!arcadePopsAllowed()) { el.innerHTML = ''; return; }
-    var now = Date.now();
-    UI.arcadePops = (UI.arcadePops || []).filter(function (p) { return now - p.at - (p.delay || 0) < (p.dur || 1550); });
-    if (UI.arcadePops.length > ARCADE_POP_CAP) UI.arcadePops = UI.arcadePops.slice(-ARCADE_POP_CAP);
-    el.innerHTML = UI.arcadePops.map(function (p) {
-      var age = now - p.at - (p.delay || 0);
-      if (age < 0) return '';
-      var cls = 'arcade-pop arcade-pop-' + esc(p.type) + (p.big ? ' arcade-pop-big' : '') + (p.mega ? ' arcade-pop-mega' : '') + (p.jackpot ? ' arcade-pop-jackpot' : '');
-      var style = 'left:' + p.x + '%;top:' + p.y + '%;animation-duration:' + ((p.dur || 1550) / 1000) + 's';
-      if (p.rarity) style += ';color:' + rarityDef(p.rarity).color;
-      return '<div class="' + cls + '" style="' + style + '">' + esc(p.text) + '</div>';
-    }).join('');
-    UI._arcadeDirty = false;
-    UI.dirty.arcadePops = false;
-  }
-
-  function renderArcadePopsIfDirty() {
-    if (isArcadeDirty()) renderArcadePops();
-  }
-
-  function maybePassiveCashPop() {
-    var now = Date.now();
-    if (now - (UI._lastPassivePop || 0) < 2800) return;
-    if ((UI._passiveCashAcc || 0) < 35) return;
-    popCash(UI._passiveCashAcc, { big: UI._passiveCashAcc >= 500 });
-    UI._passiveCashAcc = 0;
-    UI._lastPassivePop = now;
   }
 
   function renderBattleToasts() {
@@ -1909,8 +1963,8 @@
       { type: 'xp', amount: xpFinal, big: true, mega: mega },
     ]);
     if (mega) {
-      popArcade('label', 0, { label: 'BOSS JACKPOT!', jackpot: true, delay: 280 });
-      popArcade('label', 0, { label: 'RIFT TWIN PACK!', mega: true, delay: 380 });
+      popLabel('BOSS JACKPOT!', { jackpot: true, delay: 280 });
+      popLabel('RIFT TWIN PACK!', { mega: true, delay: 380 });
       UI.battleWaveFlash = 'boss-kill-celebrate';
     } else {
       UI.battleWaveFlash = 'boss-wave-clear';
@@ -2259,7 +2313,7 @@
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true, wheelPct: packWheelPercent(strain, luck) };
     if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
-    popArcade('label', 0, { label: 'PACK OPEN!', mega: true });
+    popLabel('PACK OPEN!', { mega: true });
     return true;
   }
   function closePack() {
@@ -2281,8 +2335,8 @@
       if (!G.focusedStrainId) G.focusedStrainId = G.packReveal.strain.id;
       addXp(25);
       var isBoss = pr.packType === 'boss' || pr.packType === 'milestone';
-      if (pr.packType === 'breed') popArcade('label', 0, { label: 'FUSION COMPLETE!', mega: true });
-      else if (isBoss) popArcade('label', 0, { label: 'LEGENDARY DROP!', jackpot: true });
+      if (pr.packType === 'breed') popLabel('FUSION COMPLETE!', { mega: true });
+      else if (isBoss) popLabel('LEGENDARY DROP!', { jackpot: true });
       popStrain(pr.strain, { mega: pr.packType === 'breed' || isBoss, jackpot: isBoss, delay: 120 });
       plantSay('pack', true);
     }
@@ -2401,7 +2455,7 @@
       });
     }
     writePlayerSave(toPlayerId, target);
-    popArcade('label', 0, { label: 'GIFTED ' + s.name, mega: true });
+    popLabel('GIFTED ' + s.name, { mega: true });
     scheduleSave();
     render();
     return true;
@@ -2793,7 +2847,6 @@
     syncWalletDom(true);
     syncXpDom(true);
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
-    if (isArcadeDirty()) renderArcadePopsIfDirty();
     syncHudShell(true);
     var s = topStrain(), mascot = DOM.plantMascot || document.getElementById('plant-mascot'), label = DOM.plantLabel || document.getElementById('plant-label');
     if (mascot) {
@@ -2943,7 +2996,7 @@
     if (hadCrit) {
       if (!UI._lastCritPop || now - UI._lastCritPop > 1200) {
         UI._lastCritPop = now;
-        popArcade('label', 0, { label: 'CRIT!', mega: true, x: 42 + Math.random() * 16, y: 38 + Math.random() * 10 });
+        popLabel('CRIT!', { mega: true, x: 42 + Math.random() * 16, y: 38 + Math.random() * 10 });
       }
       flashBossHit(true);
     } else if (batch.length) {
@@ -2956,13 +3009,12 @@
     if (!G || UI.playerSelectOpen) return;
     var now = Date.now();
     processDamagePopQueue(now);
-    maybePassiveCashPop();
+    updateArcadeLayerTick();
     syncWalletDom(false);
     syncXpDom(false);
     syncHudShell(false);
     syncBossBattleDom();
     syncTabTimers();
-    if (isArcadeDirty()) renderArcadePopsIfDirty();
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
   }
 
@@ -3054,7 +3106,7 @@
       power: power,
       burnedAt: Date.now(),
     }]);
-    popArcade('label', 0, { label: '+' + power + ' MUTATION', mega: true });
+    popLabel('+' + power + ' MUTATION', { mega: true });
     showBattleToast('Burned ' + s.name + ' → +' + power + ' mutation', true);
     scheduleSave();
     return true;
@@ -4578,6 +4630,7 @@
 
   try {
     cacheDomRefs();
+    initArcadePool();
     startVisualLoop();
     var storedVer = localStorage.getItem(VERSION_KEY);
     if (storedVer !== APP_VERSION) localStorage.setItem(VERSION_KEY, APP_VERSION);
