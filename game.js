@@ -1394,6 +1394,11 @@
     G.totalCashEarned = 0;
     G.equippedBattleIds = [];
     G.raidEquipIds = [];
+    G.mutationEssence = 0;
+    G.mutationItems = [];
+    G.strainMutationMap = {};
+    G.mutationPackLuck = 0;
+    G.mutationGuaranteeCharges = 0;
     G.factoryFloors = (G.factoryFloors || []).map(function (f) { return Object.assign({}, f, { equippedStrainId: null }); });
     G.bossHp = 0;
     G.bossMaxHp = 0;
@@ -1427,18 +1432,14 @@
 
   function queueReward(kind, packType) {
     G.pendingRewards = G.pendingRewards || [];
+    if (G.pendingRewards.length >= 4) G.pendingRewards.shift();
     G.pendingRewards.push({ kind: kind, packType: packType || kind });
-    drainRewardQueue();
+    scheduleSave();
+    render();
   }
 
   function drainRewardQueue() {
-    if (!G || (G.packReveal && G.packReveal.open)) return;
-    var q = G.pendingRewards;
-    if (!q || !q.length) return;
-    var r = q.shift();
-    processPendingReward(r);
-    scheduleSave();
-    render();
+    // Chest-first: rewards stay in pendingRewards until open-chest.
   }
 
   function onLevelUp(newLvl) {
@@ -1663,17 +1664,20 @@
     ids.forEach(function (id) {
       var s = strainById(id);
       if (!s) return;
-      if (hasAbility(s, 'poison_cloud')) dotPerSec += 5 * s.quantity * abilityBoostMult(s, 'poison_cloud');
-      if (hasAbility(s, 'regen_mist')) regenMult += 0.03 * (wave - 1) * abilityBoostMult(s, 'regen_mist');
+      if (hasAbility(s, 'poison_cloud')) dotPerSec += 5 * s.quantity * abilityBoostMult(s, 'poison_cloud') * mutationAbilityMult(s);
+      if (hasAbility(s, 'regen_mist')) regenMult += 0.03 * (wave - 1) * abilityBoostMult(s, 'regen_mist') * mutationAbilityMult(s);
     });
     ids.forEach(function (id) {
       var s = strainById(id);
       if (!s || isStrainSolarSilenced(id)) return;
-      var base = (s.yield * s.thcPercent / 100) * rMult(s.rarity) * s.quantity;
-      if (hasAbility(s, 'boss_slayer')) base *= 1.3 * abilityBoostMult(s, 'boss_slayer');
-      if (hasAbility(s, 'thc_overdrive')) base *= 1.15 * abilityBoostMult(s, 'thc_overdrive');
+      var base = (effectiveYield(s) * s.thcPercent / 100) * rMult(s.rarity) * s.quantity;
+      if (hasAbility(s, 'boss_slayer')) base *= 1.3 * abilityBoostMult(s, 'boss_slayer') * mutationAbilityMult(s);
+      if (hasAbility(s, 'thc_overdrive')) base *= 1.15 * abilityBoostMult(s, 'thc_overdrive') * mutationAbilityMult(s);
+      var mp = mutationItemForStrain(s.id);
+      if (mp && (mp.stat || 'dps') === 'potency') base *= 1 + (mp.power || 1) * 0.04;
+      base *= mutationDpsMult(s);
       var isCrit = forTick && hasAbility(s, 'crit_burst') && rng() < 0.15;
-      if (isCrit) { critPerSec += base * 3; hadCrit = true; }
+      if (isCrit) { critPerSec += base * 3 * mutationAbilityMult(s); hadCrit = true; }
       else normalPerSec += base;
     });
     var mult = (1 + blitzMod('battle')) * regenMult * voidEssenceMult();
@@ -1930,7 +1934,7 @@
     UI.farmOpen = false;
     plantSay('welcome', true);
     render();
-    if (G.pendingRewards && G.pendingRewards.length) drainRewardQueue();
+    if (G.pendingRewards && G.pendingRewards.length) render();
   }
 
   function switchPlayerPrompt() { saveGame(); UI.playerSelectOpen = true; UI.profileOpen = false; UI.settingsOpen = false; render(); }
@@ -2041,7 +2045,13 @@
     if (type === 'omega' && G.cash < p.price && p.spCost && G.sp >= p.spCost) ns -= p.spCost;
     else if (G.cash < p.price) return false;
     else { nc -= p.price; spEarn = Math.floor(p.price / 2500); ns += spEarn; }
-    var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
+    var useGuarantee = UI.packGuarantee && (G.mutationGuaranteeCharges || 0) > 0;
+    var packOpts = { scanBonus: scanMult(), packLuckBonus: packLuckBonus(), guaranteeAbility: useGuarantee };
+    var strain = genPack(type, Date.now() + Math.floor(Math.random() * 99999), packOpts);
+    if (useGuarantee) {
+      consumeMutationGuarantee();
+      showBattleToast('Guaranteed ability roll applied to pack', true);
+    }
     var luck = packLuckBonus();
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true, wheelPct: packWheelPercent(strain, luck) };
@@ -2074,7 +2084,8 @@
       plantSay('pack', true);
     }
     G.packReveal = { open: false, packType: null, strain: null, strains: null, wheelSpin: false };
-    drainRewardQueue();
+    scheduleSave();
+    render();
   }
   function buyBlitz(id) {
     var u = blitzShopRows().find(function (b) { return b.id === id; });
@@ -2621,12 +2632,23 @@
   function processPendingReward(r) {
     if (!r) return;
     var luck = packLuckBonus();
+    var useGuarantee = UI.packGuarantee && (G.mutationGuaranteeCharges || 0) > 0;
+    var opts = { scanBonus: scanMult(), packLuckBonus: luck, guaranteeAbility: useGuarantee };
     if (r.kind === 'dual') {
       var pair = genUniqueStrainPair(r.packType === 'boss' ? 'bloom' : 'pulse', r.packType);
+      if (useGuarantee) {
+        pair.forEach(function (s) { applyGuaranteeAbility(s, opts); });
+        consumeMutationGuarantee();
+        showBattleToast('Guaranteed ability roll applied to chest', true);
+      }
       var top = pair[0];
       G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null, wheelSpin: true, wheelPct: packWheelPercent(top, luck) };
     } else if (r.kind === 'single') {
-      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), { scanBonus: scanMult(), packLuckBonus: luck });
+      var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), opts);
+      if (useGuarantee) {
+        consumeMutationGuarantee();
+        showBattleToast('Guaranteed ability roll applied to chest', true);
+      }
       G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s, wheelSpin: true, wheelPct: packWheelPercent(s, luck) };
     }
   }
@@ -2685,8 +2707,13 @@
 
   function dailyShowcaseItems() {
     syncDailyShowcaseDay();
-    if (G.dailyShowcaseCache && G.dailyShowcaseCache.length === 3) return G.dailyShowcaseCache;
     var day = dailyShowcaseSeed();
+    if (G.dailyShowcaseCache && Array.isArray(G.dailyShowcaseCache)) {
+      G.dailyShowcaseCache = { day: G.dailyShowcaseDay || day, items: G.dailyShowcaseCache };
+    }
+    if (G.dailyShowcaseCache && G.dailyShowcaseCache.day === day && G.dailyShowcaseCache.items && G.dailyShowcaseCache.items.length === 3) {
+      return G.dailyShowcaseCache.items;
+    }
     var pid = (activePlayerId || 'aden').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
     var rng = rngSeed(day * 7919 + pid);
     var items = [];
@@ -2696,7 +2723,8 @@
       var price = Math.floor(12000 + rarityIndex(rar) * 6500 + rng() * 18000);
       items.push({ slot: i, strain: strain, price: price, label: i === 2 ? 'MYTHIC' : (i === 1 ? 'LEGENDARY' : 'EPIC') });
     }
-    G.dailyShowcaseCache = items;
+    G.dailyShowcaseCache = { day: day, items: items };
+    G.dailyShowcaseDay = day;
     return items;
   }
 
