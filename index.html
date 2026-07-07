@@ -537,6 +537,21 @@
     .cr-arena-9 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3A1A4A 0%, #180A20 70%); }
     .cr-arena-10 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5A1A2A 0%, #280A12 70%); }
     .cr-arena-11 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1A5A4A 0%, #082820 70%); }
+    .cr-frame-accent-0 .cr-card-bevel::after { background: linear-gradient(135deg, rgba(74,222,128,0.12), transparent 60%); }
+    .cr-frame-accent-1 .cr-card-bevel::after { background: linear-gradient(225deg, rgba(56,189,248,0.14), transparent 55%); }
+    .cr-frame-accent-2 .cr-card-bevel::after { background: linear-gradient(45deg, rgba(250,204,21,0.12), transparent 50%); }
+    .cr-frame-accent-3 .cr-card-bevel::after { background: linear-gradient(315deg, rgba(168,85,247,0.14), transparent 55%); }
+    .cr-frame-accent-4 .cr-card-bevel::after { background: radial-gradient(circle at 80% 20%, rgba(244,114,182,0.12), transparent 50%); }
+    .cr-frame-accent-5 .cr-card-bevel::after { background: radial-gradient(circle at 20% 80%, rgba(52,211,153,0.12), transparent 50%); }
+    .cr-card-bevel::after {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
+    }
+    .cr-card-sparkle {
+      position: absolute; top: 8%; right: 10%; width: 0.35rem; height: 0.35rem; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 6px #fff, 12px 8px 0 -1px rgba(255,255,255,0.6);
+      animation: cr-sparkle 2.2s ease-in-out infinite; pointer-events: none; z-index: 4;
+    }
+    @keyframes cr-sparkle { 0%,100%{opacity:0.3;transform:scale(0.8)} 50%{opacity:1;transform:scale(1.2)} }
     .cr-card-particles {
       position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
       pointer-events: none; z-index: 2; overflow: hidden; opacity: 0.7;
@@ -708,6 +723,13 @@
     .boss-stage-entity.boss-crit-flash .boss-sprite { animation: boss-crit 0.35s ease; }
     @keyframes boss-hit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.4) drop-shadow(0 0 12px #39FF14)} }
     @keyframes boss-crit { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.6) drop-shadow(0 0 20px #00F0FF)} }
+    .boss-wave-clear .boss-stage { animation: boss-wave-clear 0.55s ease; }
+    .boss-wave-advance .boss-stage { animation: boss-wave-advance 0.65s ease; }
+    .boss-kill-celebrate .boss-stage { animation: boss-kill-celebrate 0.9s ease; }
+    .boss-kill-celebrate .boss-stage-mega { box-shadow: inset 0 0 120px rgba(250,204,21,0.25), 0 0 60px rgba(236,72,153,0.45), 0 8px 32px rgba(0,0,0,0.4); }
+    @keyframes boss-wave-clear { 0%{filter:brightness(1)} 40%{filter:brightness(1.35)} 100%{filter:brightness(1)} }
+    @keyframes boss-wave-advance { 0%{transform:scale(1)} 30%{transform:scale(1.02)} 60%{box-shadow:0 0 30px rgba(250,204,21,0.35)} 100%{transform:scale(1)} }
+    @keyframes boss-kill-celebrate { 0%{transform:scale(1);filter:brightness(1)} 25%{transform:scale(1.04);filter:brightness(1.5)} 50%{transform:scale(0.98)} 75%{filter:brightness(1.3)} 100%{transform:scale(1);filter:brightness(1)} }
     .dual-pack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .dual-pack-card { border-radius: 0.75rem; border: 2px solid; padding: 0.75rem; background: rgba(0,0,0,0.35); }
     .map-scan-rail {
@@ -868,7 +890,7 @@
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
   </div>
-  <script src="catalog.js?v=21"></script>
-  <script src="game.js?v=21"></script>
+  <script src="catalog.js?v=22"></script>
+  <script src="game.js?v=22"></script>
 </body>
 </html>

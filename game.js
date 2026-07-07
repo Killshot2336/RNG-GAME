@@ -1853,7 +1853,7 @@
     var equipped = G.equippedBattleIds || [];
     var wave = battleWaveNum();
     var bossHue = G.bossSeed % 360;
-    var h = '<div class="screen-section battle-screen boss-arena' + (mega ? ' boss-arena-mega' : '') + '">';
+    var h = '<div class="screen-section battle-screen boss-arena' + (mega ? ' boss-arena-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += fightTopBarHtml(false);
     h += '<div class="battle-layout"><div class="battle-main">';
     h += '<div class="boss-stage' + (mega ? ' boss-stage-mega' : '') + '">';
