@@ -7,10 +7,10 @@ import { chromium } from 'playwright';
 const BASE = process.env.SMOKE_URL || 'http://127.0.0.1:3458';
 const errors = [];
 
-async function click(page, selector, label) {
+async function click(page, selector, label, opts) {
   const el = page.locator(selector).first();
   await el.waitFor({ state: 'visible', timeout: 8000 });
-  await el.click();
+  await el.click(opts && opts.force ? { force: true } : undefined);
   console.log('  ok:', label);
 }
 
@@ -27,8 +27,8 @@ async function main() {
   // Player picker
   await click(page, '[data-action="pick-player"][data-pid="aden"]', 'pick Aden');
 
-  // Nav tabs (v5 labels)
-  for (const tab of ['battle', 'shop', 'index', 'coop', 'casino']) {
+  // Nav tabs
+  for (const tab of ['battle', 'shop', 'index', 'map', 'coop', 'casino']) {
     await click(page, '[data-tab="' + tab + '"]', 'tab ' + tab);
   }
 
@@ -37,7 +37,10 @@ async function main() {
   const boss = page.locator('.boss-arena');
   if (!(await boss.count())) errors.push('missing .boss-arena on battle tab');
 
-  // Hub rocket → portal farm
+  // Battle loadout
+  await click(page, '[data-action="equip-best"]', 'equip best loadout');
+
+  // Hub rocket → portal farm (rocket stays visible in farm view)
   await click(page, '#hub-rocket-btn', 'toggle portal farm');
   await click(page, '[data-action="farm-tab"][data-id="upgrade"]', 'farm upgrade deck');
   await click(page, '[data-action="farm-tab"][data-id="control"]', 'farm control deck');
@@ -46,21 +49,33 @@ async function main() {
   // Shop pack
   await click(page, '[data-tab="shop"]', 'shop');
   await click(page, '[data-action="buy-pack"][data-pack="basic"]', 'open basic pack');
-  await click(page, '[data-close="pack"]', 'close pack');
+  await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelector('.pack-reveal-card [data-close="pack"]')?.click());
+  await page.waitForFunction(() => !document.getElementById('overlay-pack-reveal')?.classList.contains('open'));
+  console.log('  ok: close pack');
 
-  // Index lift
+  // Index lift + merge lab
   await click(page, '[data-tab="index"]', 'index');
   const card = page.locator('.binder-grid .liftable-wrap').first();
   if (await card.count()) {
     await card.click();
-    await click(page, '[data-action="dismiss-lift"]', 'dismiss lift');
+    await page.evaluate(() => document.querySelector('[data-action="dismiss-lift"]')?.click());
+    await page.waitForFunction(() => !document.getElementById('overlay-card-lift')?.innerHTML);
+    console.log('  ok: dismiss lift');
   }
+  await click(page, '[data-action="open-merge-lab"]', 'open merge lab');
+  await click(page, '#overlay-merge-lab .profile-close[data-action="close-merge-lab"]', 'close merge lab');
 
-  // Profile + settings
+  // Profile stats + settings help
   await click(page, '[data-action="open-profile"]', 'profile');
+  const statsGrid = page.locator('.profile-stat-grid');
+  if (!(await statsGrid.count())) errors.push('missing profile stats grid');
+  await click(page, '[data-action="profile-tab"][data-id="custom"]', 'profile customize tab');
+  await click(page, '[data-action="profile-tab"][data-id="stats"]', 'profile stats tab');
   await click(page, '[data-action="open-settings"]', 'settings');
-  await click(page, '[data-close="settings"]', 'close settings');
-  await click(page, '[data-close="profile"]', 'close profile');
+  await click(page, '[data-action="toggle-help"]', 'open game encyclopedia');
+  await click(page, '[data-action="toggle-help"]', 'close game encyclopedia');
+  await click(page, '#settings-panel button[data-close="settings"]', 'close settings');
 
   // Casino
   await click(page, '[data-tab="casino"]', 'casino');

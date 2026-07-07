@@ -1580,7 +1580,6 @@
     shell.classList.toggle('dimmed', !!UI.liftedCardId || !!UI.strainPickerFloorId);
     document.getElementById('voidline-app').classList.toggle('reality-warp-active', UI.realityWarp);
     document.getElementById('overlay-reality-warp').classList.toggle('active', UI.realityWarp);
-    document.getElementById('phone-shell').className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
     document.querySelectorAll('.nav-btn').forEach(function (b) {
       var tab = b.dataset.tab;
       b.classList.toggle('active', tab === UI.activeTab && !UI.farmOpen);
@@ -1611,17 +1610,28 @@
     el.innerHTML = h;
   }
 
+  function fightTopBarHtml(farmMode) {
+    var h = '<div class="fight-top-bar mb-2"><button type="button" id="hub-rocket-btn" class="hub-rocket-btn' + (farmMode ? ' active' : '') + '" data-action="toggle-farm" title="' + (farmMode ? 'Back to Battle' : 'Portal Farm') + '"><img src="/public/art/rocket.svg" alt="" style="width:1.35rem;height:1.35rem"></button>';
+    if (farmMode) {
+      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">PORTAL FARM</h2>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Passive ' + fmtRev(revSecTotal()) + '</p></div></div>';
+    } else {
+      var wave = battleWaveNum();
+      var mega = isBossWave();
+      h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
+      h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div></div>';
+    }
+    return h;
+  }
+
   function renderBattle() {
     var hpPct = G.bossMaxHp ? Math.max(0, G.bossHp / G.bossMaxHp * 100) : 0;
     var bc = rarityColor(G.bossRarity);
     var dps = totalBattleDps();
-    var wave = battleWaveNum();
     var mega = isBossWave();
     var equipped = G.equippedBattleIds || [];
     var h = '<div class="screen-section battle-screen boss-arena' + (mega ? ' boss-arena-mega' : '') + '">';
-    h += '<div class="fight-top-bar mb-2"><button type="button" id="hub-rocket-btn" class="hub-rocket-btn" data-action="toggle-farm" title="' + (UI.farmOpen ? 'Back to Battle' : 'Portal Farm') + '"><img src="/public/art/rocket.svg" alt="" style="width:1.35rem;height:1.35rem"></button>';
-    h += '<div class="fight-top-info"><h2 class="font-display chromatic-text" style="font-size:0.95rem;letter-spacing:0.15em;margin:0">' + (mega ? 'BOSS ARENA' : 'VOID SKIRMISH') + '</h2>';
-    h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">Wave ' + wave + '/5 · Cycle ' + Math.ceil(G.bossRound / 5) + (mega ? ' · <span class="text-green">MEGA</span>' : '') + '</p></div></div>';
+    h += fightTopBarHtml(false);
     h += '<div class="battle-layout"><div class="battle-main">';
     h += '<div class="neon-card neon-card-static p-4 mb-3 text-center' + (mega ? ' boss-card-mega' : '') + '"><div class="boss-arena-art"><img src="' + BOSS_ART + '" alt="" style="width:' + (mega ? '7rem' : '5rem') + ';height:' + (mega ? '7rem' : '5rem') + ';filter:hue-rotate(' + (G.bossSeed % 360) + 'deg)"></div><div class="font-display mt-2" style="font-size:1rem;color:' + bc + '">' + esc(G.bossName) + '</div><div class="font-mono text-xs text-muted">' + esc(rarityName(G.bossRarity)) + ' tier</div>';
     if (mega) h += '<div class="font-mono text-green text-xs mt-1">RIFT TWIN PACK on kill</div>';
@@ -1656,7 +1666,8 @@
   }
 
   function renderFarm() {
-    var h = '<div class="screen-section"><div class="neon-card neon-card-green neon-card-pulse p-3 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
+    var h = '<div class="screen-section">' + fightTopBarHtml(true);
+    h += '<div class="neon-card neon-card-green neon-card-pulse p-3 text-center mb-2"><div class="font-mono text-green" style="font-size:0.55rem;letter-spacing:0.15em">PASSIVE REVENUE · SCAN +' + ((scanMult() * 100).toFixed(0)) + '%</div><div class="font-display chromatic-text" style="font-size:1.125rem;font-weight:700">' + fmtRev(revSecTotal()) + '</div></div>';
     h += '<div class="farm-tabs mb-3">';
     ['upgrade', 'control', 'portal'].forEach(function (t) {
       var lbl = { upgrade: 'UPGRADE DECK', control: 'CONTROL DECK', portal: 'PORTAL FARM' }[t];
