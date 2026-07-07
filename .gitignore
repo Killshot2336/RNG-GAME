@@ -4,3 +4,5 @@
 node_modules/
 dist/
 tools/mingit/
+.cursor/
+FULL_CODEBASE_BUNDLE.txt
