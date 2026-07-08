@@ -4852,7 +4852,7 @@
       var cost = idleBuildingCost(def, st);
       var inc = idleBuildingIncomePerSec(def, st);
       var rebirthCost = cost * 8;
-      h += '<div class="idle-building-card idle-building-tier-' + tier + ' mb-2">';
+      h += '<div class="idle-building-card idle-building-tier-' + tier + ' mb-2" data-idle-building="' + def.id + '">';
       h += '<div class="idle-building-head"><span class="idle-building-icon">' + farmIcon(def.icon, { lg: true }) + '</span>';
       h += '<div><div class="idle-building-name">' + esc(idleBuildingTierName(def, st)) + '</div>';
       h += '<div class="text-muted text-xs">' + esc(def.name) + ' · Lv.' + (st.level || 0);
@@ -6595,6 +6595,31 @@
     if (panels[idx]) UI.tabScroll[tab] = panels[idx].scrollTop;
   }
 
+  function captureIdleOverlayScroll() {
+    if (!UI.idleOpen) return;
+    var panel = document.querySelector('.idle-cap-panel');
+    if (!panel) return;
+    if (!UI.idleScroll) UI.idleScroll = {};
+    UI.idleScroll[UI.idleTab || 'buildings'] = panel.scrollTop;
+  }
+
+  function restoreIdleOverlayScroll() {
+    if (!UI.idleOpen) return;
+    requestAnimationFrame(function () {
+      var panel = document.querySelector('.idle-cap-panel');
+      if (!panel) return;
+      if (UI._idleFocusBuilding) {
+        var card = document.querySelector('[data-idle-building="' + UI._idleFocusBuilding + '"]');
+        if (card) scrollElementInPanel(card, panel);
+        UI._idleFocusBuilding = null;
+        return;
+      }
+      var tab = UI.idleTab || 'buildings';
+      var top = UI.idleScroll && UI.idleScroll[tab] != null ? UI.idleScroll[tab] : null;
+      if (top != null) panel.scrollTop = top;
+    });
+  }
+
   function scrollElementInPanel(el, panel) {
     if (!el || !panel) return;
     try {
@@ -6634,6 +6659,7 @@
 
   function render() {
     if (!G) return;
+    captureIdleOverlayScroll();
     var root = DOM.screenRoot || document.getElementById('screen-root');
     if (root && UI.activeTab) saveTabScroll(UI.activeTab);
     if (!UI.tabScroll) UI.tabScroll = {};
@@ -6653,6 +6679,7 @@
     renderStrainPicker();
     renderMergeLab();
     renderAuxOverlays();
+    restoreIdleOverlayScroll();
     scrollCampaignTrailToCurrent();
     scrollBattlePassToCurrent();
     if (UI.activeTab === 'map') {
@@ -6900,8 +6927,8 @@
     }
     if (act==='toggle-idle-capitalist') { UI.idleOpen = !UI.idleOpen; render(); return; }
     if (act==='idle-tab') { UI.idleTab = val; render(); return; }
-    if (act==='buy-idle-building') { buyIdleBuilding(val); render(); return; }
-    if (act==='rebirth-idle-building') { rebirthIdleBuilding(val); render(); return; }
+    if (act==='buy-idle-building') { UI._idleFocusBuilding = val; buyIdleBuilding(val); render(); return; }
+    if (act==='rebirth-idle-building') { UI._idleFocusBuilding = val; rebirthIdleBuilding(val); render(); return; }
     if (act==='toggle-party-popup') { UI.partyOpen = !UI.partyOpen; render(); return; }
     if (act==='open-rocket-lift') { UI.liftedCardId = 'rocket-unlock'; render(); return; }
     if (act==='buy-map-unlock') { if (unlockMapTab()) render(); return; }
