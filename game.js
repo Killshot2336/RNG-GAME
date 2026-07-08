@@ -274,7 +274,7 @@
     'bossTrait', 'bossShieldHp', 'bossShieldMax', 'bossWaveStartedAt', 'bossTraitState',
     'voidEssence', 'prestigeVault', 'totalCashEarned',
     'storefrontSlotCount', 'planetLeases', 'leaseOffers',
-    'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
+    'indexSearch', 'indexSort', 'fleetSearch', 'fleetSort', 'mapProspectProgress', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
     'mutationEssence', 'mutationItems', 'mutationPool', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
     'mutationPackLuck', 'mutationGuaranteeCharges', 'strainMutationMap', 'raidEquipIds',
     'campaignNode', 'campaignNodeClears',
@@ -532,13 +532,23 @@
 
   function startMapScan() {
     if (UI.scanAnimating) return;
+    if (G.scanPending) {
+      showBattleToast('Claim or pass on the detected site first', false);
+      UI._scrollMapDiscover = true;
+      render();
+      return;
+    }
     UI.scanAnimating = true;
+    UI._mapScanAnimStart = Date.now();
     G.scanPending = null;
     render();
     setTimeout(function () {
+      if (!G) return;
       G.scanPending = rollScanPlanet();
+      G.mapProspectProgress = Math.min(100, (G.mapProspectProgress || 0) + 8);
       UI.scanAnimating = false;
       UI._mapProgressFlash = Date.now();
+      UI._scrollMapDiscover = true;
       bumpBattlePassChallenge('bp_scan', 1);
       addBattlePassXp(25, { silent: true });
       shakeScreen();
@@ -548,6 +558,9 @@
       scheduleSave();
       render();
     }, 1800);
+    setTimeout(function () {
+      if (UI.scanAnimating) { UI.scanAnimating = false; render(); }
+    }, 3200);
   }
 
   function keepScannedPlanet() {
@@ -564,6 +577,7 @@
     G.ownedPlanets = (G.ownedPlanets || []).concat([p]);
     G.scanPending = null;
     UI._mapDiscoverFlash = Date.now();
+    G.mapProspectProgress = Math.min(100, (G.mapProspectProgress || 0) + 4);
     if (!UI.focusedPlanetId) UI.focusedPlanetId = p.id;
     flashMapPlanet(p.id, 'claim');
     addXp(30, true);
@@ -793,13 +807,18 @@
   }
 
   function mapScanProgressPct() {
-    var sectorMax = G.sectorUpgrades.reduce(function (a, s) { return a + s.maxLevel; }, 0);
-    var sectorLv = G.sectorUpgrades.reduce(function (a, s) { return a + s.level; }, 0);
+    var prospect = G.mapProspectProgress || 0;
+    var sectorMax = (G.sectorUpgrades || []).reduce(function (a, s) { return a + s.maxLevel; }, 0);
+    var sectorLv = (G.sectorUpgrades || []).reduce(function (a, s) { return a + s.level; }, 0);
     var planetCount = (G.ownedPlanets || []).length;
-    var sectorPct = sectorMax ? (sectorLv / sectorMax) * 50 : 0;
-    var planetPct = Math.min(50, (planetCount / 12) * 50);
-    var scanPulse = UI.scanAnimating ? 2 : 0;
-    return Math.min(100, Math.round(sectorPct + planetPct + scanPulse));
+    var sectorPct = sectorMax ? (sectorLv / sectorMax) * 20 : 0;
+    var planetPct = Math.min(20, (planetCount / 12) * 20);
+    var base = Math.min(60, prospect) + sectorPct + planetPct;
+    if (UI.scanAnimating && UI._mapScanAnimStart) {
+      var t = Math.min(1, (Date.now() - UI._mapScanAnimStart) / 1800);
+      base += 8 * t;
+    }
+    return Math.min(100, Math.round(base));
   }
 
   var MAP_WORLD_W = 2600;
@@ -1392,7 +1411,7 @@
       bossRound: 1, bossHp: 0, bossMaxHp: 0, bossName: '', bossSeed: 0, bossRarity: 'dust', equippedBattleIds: [],
       bossTrait: 1, bossShieldHp: 0, bossShieldMax: 0, bossWaveStartedAt: Date.now(), bossTraitState: { solarAcc: 0, solarSilence: null },
       voidEssence: 0, prestigeVault: [], totalCashEarned: 0,
-      indexSearch: '', indexSort: 'recent',
+      indexSearch: '', indexSort: 'recent', fleetSearch: '', fleetSort: 'rarity', mapProspectProgress: 0,
       ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
       mutationEssence: 0, mutationItems: [], mutationPool: [], dailyShowcaseDay: 0,
       dailyShowcasePurchased: [false, false, false], dailyShowcaseCache: null,
@@ -1798,6 +1817,13 @@
     if (G.equippedBattleIds.length > BATTLE_EQUIP_MAX) G.equippedBattleIds = G.equippedBattleIds.slice(0, BATTLE_EQUIP_MAX);
     if (!G.indexSearch) G.indexSearch = '';
     if (!G.indexSort) G.indexSort = 'recent';
+    if (!G.fleetSearch) G.fleetSearch = '';
+    if (!G.fleetSort) G.fleetSort = 'rarity';
+    if (G.mapProspectProgress == null || isNaN(G.mapProspectProgress)) G.mapProspectProgress = 0;
+    if (!G.mapProspectProgress && ((G.ownedPlanets || []).length || (G.sectorUpgrades || []).some(function (s) { return s.level > 0; }))) {
+      var secLv = (G.sectorUpgrades || []).reduce(function (a, s) { return a + (s.level || 0); }, 0);
+      G.mapProspectProgress = Math.min(60, (G.ownedPlanets || []).length * 8 + secLv * 2);
+    }
     if (!G.bossRound) G.bossRound = 1;
     if (G.campaignNode == null || isNaN(G.campaignNode) || G.campaignNode < 1) {
       G.campaignNode = Math.max(1, Math.min(CAMPAIGN_NODE_COUNT, Math.ceil((G.bossRound || 1) / 2)));
@@ -3203,6 +3229,15 @@
     { id: 'level', label: 'Level' },
   ];
 
+  var PLANET_SORT_CHIPS = [
+    { id: 'rarity', label: 'Rarity' },
+    { id: 'recent', label: 'Recent' },
+    { id: 'name', label: 'A→Z' },
+    { id: 'name-desc', label: 'Z→A' },
+    { id: 'output', label: 'Output' },
+    { id: 'level', label: 'Level' },
+  ];
+
   function sortChipsHtml(sortAction, current, chips) {
     var actAttr = 'data-' + 'action';
     return '<div class="sort-chip-row">' + chips.map(function (c) {
@@ -3216,6 +3251,24 @@
     var q = (G.indexSearch || '').toLowerCase();
     if (q) list = list.filter(function (s) { return s.name.toLowerCase().indexOf(q) >= 0; });
     return sortStrainList(list, G.indexSort || 'recent', false);
+  }
+
+  function filteredFleetPlanets() {
+    var list = (G.ownedPlanets || []).slice();
+    var q = (G.fleetSearch || '').toLowerCase();
+    if (q) {
+      list = list.filter(function (p) {
+        return planetDisplayName(p).toLowerCase().indexOf(q) >= 0 || rarityName(p.rarity).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    var sort = G.fleetSort || 'rarity';
+    if (sort === 'rarity') list.sort(function (a, b) { return rarityIndex(b.rarity) - rarityIndex(a.rarity); });
+    else if (sort === 'name') list.sort(function (a, b) { return planetDisplayName(a).localeCompare(planetDisplayName(b)); });
+    else if (sort === 'name-desc') list.sort(function (a, b) { return planetDisplayName(b).localeCompare(planetDisplayName(a)); });
+    else if (sort === 'output') list.sort(function (a, b) { return planetOutputPerSec(b) - planetOutputPerSec(a); });
+    else if (sort === 'level') list.sort(function (a, b) { return planetMiningLevel(b) - planetMiningLevel(a); });
+    else list.reverse();
+    return list;
   }
 
   function filteredPickerStrains() {
@@ -3754,6 +3807,27 @@
     }
   }
 
+  function syncMapProspectDom() {
+    if (UI.activeTab !== 'map') return;
+    var pct = mapScanProgressPct();
+    var fill = document.querySelector('.mining-prospect-fill');
+    var label = document.querySelector('.mining-prospect-text');
+    if (fill) fill.style.width = pct + '%';
+    if (label) label.textContent = pct + '%';
+  }
+
+  function scrollMapDiscoverPanel() {
+    if (!UI._scrollMapDiscover) return;
+    UI._scrollMapDiscover = false;
+    try {
+      setTimeout(function () {
+        var el = document.querySelector('.mining-discover-panel');
+        var panel = activeScreenPanel();
+        if (el && panel) scrollElementInPanel(el, panel);
+      }, 60);
+    } catch (err) { console.error('scrollMapDiscoverPanel', err); }
+  }
+
   function visualLoop() {
     visualRafId = requestAnimationFrame(visualLoop);
     if (!G || UI.playerSelectOpen) return;
@@ -3768,6 +3842,7 @@
     syncTabTimers();
     syncCloudHud(false);
     tickBattleToasts();
+    if (UI.activeTab === 'map' && (UI.scanAnimating || (UI._mapProgressFlash && now - UI._mapProgressFlash < 1200))) syncMapProspectDom();
   }
 
   function startVisualLoop() {
@@ -5024,7 +5099,7 @@
     h += '<div class="map-scan-progress mining-prospect-progress mb-2' + (mapFlash ? ' map-progress-flash' : '') + '"><div class="map-scan-progress-label flex-between"><span class="font-mono text-xs text-muted">PROSPECT PROGRESS</span><span class="font-mono text-xs mining-prospect-text">' + scanPct + '%</span></div>';
     h += '<div class="map-scan-progress-bar mining-prospect-bar"><div class="map-scan-progress-fill mining-prospect-fill" style="width:' + scanPct + '%"></div></div></div>';
     h += '<div class="map-scan-rail mining-prospect-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line mining-prospect-line"></div><div class="map-scan-beam mining-prospect-beam"></div>';
-    h += '<button type="button" class="map-scan-bubble mining-prospect-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">' + farmIcon('pipe') + ' PROSPECT SECTOR</span></button></div>';
+    h += '<button type="button" class="map-scan-bubble mining-prospect-bubble" data-action="map-scan"' + (UI.scanAnimating || G.scanPending ? ' disabled' : '') + '><span class="map-scan-label">' + farmIcon('pipe') + ' PROSPECT SECTOR</span></button></div>';
     if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Deploying survey drones…</div>';
     if (G.scanPending) {
       var p = G.scanPending;
@@ -5039,8 +5114,12 @@
     }
     if (owned.length) {
       h += '<div class="section-label mb-2">MINING FLEET</div>';
+      h += '<input type="search" class="input-field mb-2" placeholder="Search mining sites..." data-action="fleet-search" value="' + esc(G.fleetSearch || '') + '">';
+      h += sortChipsHtml('fleet-sort', G.fleetSort || 'rarity', PLANET_SORT_CHIPS);
+      var fleet = filteredFleetPlanets();
+      if (!fleet.length) h += '<div class="text-muted text-xs text-center mb-3">No sites match your search.</div>';
       h += '<div class="binder-grid planet-owned-grid mb-3">';
-      owned.forEach(function (pl) {
+      fleet.forEach(function (pl) {
         h += '<div class="liftable-wrap planet-lift-wrap" data-lift="planet-' + esc(pl.id) + '">' + planetCardHtml(pl) + '</div>';
       });
       h += '</div>';
@@ -5946,6 +6025,7 @@
       requestAnimationFrame(function () {
         applyMapPanTransform();
         syncMapFieldNodes(true);
+        scrollMapDiscoverPanel();
       });
     }
   }
@@ -6261,6 +6341,8 @@
     else if (act==='lift-upgrade' && UI.liftOnUpgrade) { runAction(UI.liftOnUpgrade.split(':')[0], UI.liftOnUpgrade.split(':').slice(1).join(':')); UI.liftedCardId = null; UI.liftOnUpgrade = null; }
     else if (act==='index-search') G.indexSearch = val;
     else if (act==='index-sort') G.indexSort = val;
+    else if (act==='fleet-search') G.fleetSearch = val;
+    else if (act==='fleet-sort') G.fleetSort = val;
     else if (act==='map-scan') { startMapScan(); scheduleSave(); render(); return; }
     else if (act==='planet-keep') { keepScannedPlanet(); }
     else if (act==='planet-discard') { discardScannedPlanet(); }
@@ -6540,6 +6622,7 @@
     if (e.target.id === 'edit-name') G.name = e.target.value.trim() || playerDef(activePlayerId).defaultName;
     if (e.target.dataset.action === 'counter-input') { G.counterPrices = Object.assign({}, G.counterPrices, { [e.target.dataset.id]: Number(e.target.value) }); render(); }
     if (e.target.dataset.action === 'index-search') { G.indexSearch = e.target.value; render(); }
+    if (e.target.dataset.action === 'fleet-search') { G.fleetSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'battle-equip-search') { UI.battleEquipSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'strain-picker-search') { UI.strainPickerSearch = e.target.value; renderStrainPicker(); }
     if (e.target.dataset.action === 'planet-rename') { renamePlanet(e.target.dataset.id, e.target.value); }
