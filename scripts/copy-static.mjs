@@ -24,7 +24,7 @@ function cpDir(srcDir, destDir) {
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
-for (const f of ['index.html', 'index.css', 'catalog.js', 'cloud-auth.js', 'game.js']) {
+for (const f of ['index.html', 'index.css', 'catalog.js', 'cloud-auth.js', 'clan-system.js', 'game.js']) {
   cp(path.join(root, f), path.join(dist, f));
 }
 

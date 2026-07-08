@@ -18,6 +18,27 @@
   var cloudTimers = {};
   var cloudEnabled = false;
   var booted = false;
+  var syncState = 'offline';
+  var syncListeners = [];
+
+  function setSyncState(s) {
+    if (syncState === s) return;
+    syncState = s;
+    syncListeners.forEach(function (fn) { try { fn(getSyncStatus()); } catch (e) { } });
+  }
+
+  function getSyncStatus() {
+    return {
+      state: syncState,
+      email: session && session.user ? session.user.email : null,
+      enabled: cloudEnabled,
+      mode: mode,
+    };
+  }
+
+  function onSyncChange(fn) {
+    if (typeof fn === 'function') syncListeners.push(fn);
+  }
 
   function esc(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -60,6 +81,7 @@
       .then(function (res) {
         if (!res.ok || !res.body.url || !res.body.anonKey) {
           cloudEnabled = false;
+          setSyncState('offline');
           return null;
         }
         config = res.body;
@@ -68,6 +90,7 @@
       })
       .catch(function () {
         cloudEnabled = false;
+        setSyncState('offline');
         return null;
       });
   }
@@ -252,32 +275,43 @@
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,player_id' })
       .then(function (res) {
-        if (res.error) console.warn('[VoidlineCloud] upsert failed', res.error.message);
+        if (res.error) {
+          console.warn('[VoidlineCloud] upsert failed', res.error.message);
+          throw res.error;
+        }
       });
   }
 
   function scheduleCloudPush(playerId, saveJson) {
     if (mode !== 'user' || !session) return;
+    setSyncState('syncing');
     if (cloudTimers[playerId]) clearTimeout(cloudTimers[playerId]);
     cloudTimers[playerId] = setTimeout(function () {
-      pushCloudSave(playerId, saveJson);
+      pushCloudSave(playerId, saveJson)
+        .then(function () { setSyncState('synced'); })
+        .catch(function () { setSyncState('error'); });
     }, CLOUD_DEBOUNCE_MS);
   }
 
   function flushCloudPush(playerId, saveJson) {
     if (mode !== 'user' || !session) return;
+    setSyncState('syncing');
     if (cloudTimers[playerId]) { clearTimeout(cloudTimers[playerId]); cloudTimers[playerId] = null; }
-    pushCloudSave(playerId, saveJson);
+    pushCloudSave(playerId, saveJson)
+      .then(function () { setSyncState('synced'); })
+      .catch(function () { setSyncState('error'); });
   }
 
   function afterUserSession() {
     setMode('user');
+    setSyncState('synced');
     return pullCloudSaves().then(function (rows) {
       detectConflicts(rows);
       if (conflicts.length) renderConflictStep();
       else { hideGate(); finishBoot(); }
     }).catch(function (err) {
       setAuthMsg('Cloud pull failed: ' + (err.message || 'unknown'), false);
+      setSyncState('error');
       hideGate();
       finishBoot();
     });
@@ -292,6 +326,7 @@
   function continueGuest() {
     setMode('guest');
     session = null;
+    setSyncState('guest');
     hideGate();
     finishBoot();
   }
@@ -354,6 +389,7 @@
     return p.then(function () {
       session = null;
       setMode('guest');
+      setSyncState('guest');
     });
   }
 
@@ -407,6 +443,7 @@
     fetchConfig().then(function () {
       ensureClient();
       if (mode === 'guest') {
+        setSyncState('guest');
         hideGate();
         finishBoot();
         return;
@@ -436,5 +473,7 @@
     showAuthGate: function () { showGate(renderAuthForm('signin')); },
     switchToGuest: function () { return signOut().then(function () { continueGuest(); }); },
     switchToAccount: function () { showGate(renderAuthForm('signin')); },
+    getSyncStatus: getSyncStatus,
+    onSyncChange: onSyncChange,
   };
 })();

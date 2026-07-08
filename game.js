@@ -195,6 +195,26 @@
   var WEEKLY_QUEST_DEFS = [
     { id: 'earn_cash', name: 'Earn $500K', icon: 'bill', target: 500000 },
   ];
+  var BATTLE_PASS_SEASON = 1;
+  var BATTLE_PASS_MAX_TIER = 50;
+  var BATTLE_PASS_XP_PER_TIER = 120;
+  var BATTLE_PASS_REWARDS = (function () {
+    var out = [];
+    for (var t = 1; t <= BATTLE_PASS_MAX_TIER; t++) {
+      var prem = t % 5 === 0;
+      out.push({
+        tier: t,
+        free: t % 3 === 0 ? { sp: 5 + Math.floor(t / 3) } : { cash: 3000 + t * 800 },
+        premium: prem ? { cash: 15000 + t * 2000, sp: 10 } : { cash: 8000 + t * 1200 },
+      });
+    }
+    return out;
+  })();
+  var SHOP_FLASH_BUNDLES = [
+    { id: 'rift_starter', name: 'Rift Starter Bundle', packs: 3, packType: 'guaranteed', priceMult: 0.85, icon: 'gift' },
+    { id: 'omega_vault', name: 'Omega Vault Deal', packs: 1, packType: 'omega', priceMult: 0.9, icon: 'vault' },
+    { id: 'blitz_surge', name: 'Blitz Surge Crate', cash: 50000, sp: 25, priceMult: 1, icon: 'blitz' },
+  ];
   var SECTORS = [
     { id: 'thrusters', name: 'Frictionless Thrusters', level: 0, maxLevel: 10, baseCost: 15000, scanRateBonus: 0.08 },
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
@@ -220,6 +240,8 @@
     'achievementsUnlocked', 'achievementStats', 'trophyPoints', 'trophyRoadClaimed',
     'cardOfDaySeed', 'cardOfDayPurchased',
     'dailyQuestDay', 'dailyQuestProgress', 'weeklyQuestWeek', 'weeklyQuestProgress',
+    'battlePassSeason', 'battlePassXp', 'battlePassTier', 'battlePassPremium', 'battlePassClaimed',
+    'strainMastery', 'shopFlashPurchased',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -759,7 +781,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, clanCreateOpen: false, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -773,7 +795,7 @@
   var ARCADE_POOL_SIZE = 15;
   var arcadePool = [];
   var poolLayerCached = null;
-  var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null, eventCd: null, hubRev: null };
+  var UI_LAST = { cash: null, sp: null, dps: null, bossHpPct: null, bossShieldPct: null, bossTrait: null, xpPct: null, xpText: null, blitzCd: null, cloneCd: null, eventCd: null, hubRev: null, shopFlashCd: null, cloudSyncLabel: null };
 
   function isWalletDirty() { return !!UI.dirty.wallet; }
   function isHudDirty() { return !!UI.dirty.hud; }
@@ -816,6 +838,7 @@
     DOM.battleToastLayer = document.getElementById('battle-toast-layer');
     DOM.plantMascot = document.getElementById('plant-mascot');
     DOM.plantLabel = document.getElementById('plant-label');
+    DOM.cloudSyncStrip = document.getElementById('hud-cloud-sync');
   }
 
   function creditCash(amt) {
@@ -923,6 +946,9 @@
       achievementsUnlocked: [], achievementStats: {}, trophyPoints: 0, trophyRoadClaimed: [],
       cardOfDaySeed: 0, cardOfDayPurchased: false,
       dailyQuestDay: 0, dailyQuestProgress: {}, weeklyQuestWeek: 0, weeklyQuestProgress: {},
+      battlePassSeason: BATTLE_PASS_SEASON, battlePassXp: 0, battlePassTier: 0, battlePassPremium: false,
+      battlePassClaimed: { free: [], premium: [] },
+      strainMastery: {}, shopFlashPurchased: false,
     };
   }
 
@@ -2096,6 +2122,8 @@
       plantSay('wave_clear', true);
     }
     addTrophyPoints(mega ? 15 : 8);
+    addBattlePassXp(mega ? 35 : 18);
+    if (window.VoidlineClan && window.VoidlineClan.addTrophies) window.VoidlineClan.addTrophies(mega ? 5 : 2);
     checkAchievements();
     scheduleSave();
   }
@@ -2451,6 +2479,9 @@
       plantSay('pack', true);
     }
     bumpQuestProgress('open_packs', 1);
+    addBattlePassXp(15);
+    if (pr.strain) bumpStrainMastery(pr.strain.rarity);
+    if (pr.strains) pr.strains.forEach(function (s) { bumpStrainMastery(s.rarity); });
     G.packReveal = { open: false, packType: null, strain: null, strains: null, wheelSpin: false };
     scheduleSave();
     render();
@@ -2964,6 +2995,7 @@
       else { mascot.innerHTML = farmIcon('bud', { img: true, size: '1.5rem' }); }
     }
     if (label) label.textContent = s ? s.name : 'No strain';
+    syncCloudHud(true);
     UI.dirty.hud = false;
     UI.dirty.shell = false;
   }
@@ -3120,6 +3152,14 @@
           UI_LAST.blitzCd = blitzStr;
         }
       }
+      var sf = document.getElementById('shop-flash-timer');
+      if (sf) {
+        var sfStr = fmtLongCd(shopFlashEndsMs());
+        if (UI_LAST.shopFlashCd !== sfStr) {
+          sf.textContent = sfStr;
+          UI_LAST.shopFlashCd = sfStr;
+        }
+      }
     }
     if (UI.farmOpen && G.farmSubTab === 'portal' && G.cloneJob) {
       var cr = document.querySelector('.clone-active .font-mono.text-green');
@@ -3163,6 +3203,7 @@
     syncBossBattleDom();
     syncBattleHubTimers();
     syncTabTimers();
+    syncCloudHud(false);
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
   }
 
@@ -3356,6 +3397,163 @@
     } else {
       G.dailyQuestProgress[id] = (G.dailyQuestProgress[id] || 0) + amt;
     }
+    addBattlePassXp(Math.max(1, Math.floor(amt * 8)));
+  }
+
+  function ensureBattlePass() {
+    if (G.battlePassSeason !== BATTLE_PASS_SEASON) {
+      G.battlePassSeason = BATTLE_PASS_SEASON;
+      G.battlePassXp = 0;
+      G.battlePassTier = 0;
+      G.battlePassClaimed = { free: [], premium: [] };
+    }
+    if (!G.battlePassClaimed || typeof G.battlePassClaimed !== 'object') {
+      G.battlePassClaimed = { free: [], premium: [] };
+    }
+    if (!Array.isArray(G.battlePassClaimed.free)) G.battlePassClaimed.free = [];
+    if (!Array.isArray(G.battlePassClaimed.premium)) G.battlePassClaimed.premium = [];
+    while (G.battlePassXp >= BATTLE_PASS_XP_PER_TIER && G.battlePassTier < BATTLE_PASS_MAX_TIER) {
+      G.battlePassXp -= BATTLE_PASS_XP_PER_TIER;
+      G.battlePassTier++;
+    }
+  }
+
+  function addBattlePassXp(amt) {
+    if (!amt) return;
+    ensureBattlePass();
+    G.battlePassXp = (G.battlePassXp || 0) + amt;
+    var leveled = false;
+    while (G.battlePassXp >= BATTLE_PASS_XP_PER_TIER && G.battlePassTier < BATTLE_PASS_MAX_TIER) {
+      G.battlePassXp -= BATTLE_PASS_XP_PER_TIER;
+      G.battlePassTier++;
+      leveled = true;
+    }
+    if (leveled) showBattleToast('Battle Pass Tier ' + G.battlePassTier + '!', true);
+  }
+
+  function battlePassRewardFor(tier, track) {
+    var row = BATTLE_PASS_REWARDS[tier - 1];
+    if (!row) return null;
+    return track === 'premium' ? row.premium : row.free;
+  }
+
+  function claimBattlePassTier(tier, track) {
+    ensureBattlePass();
+    tier = parseInt(tier, 10);
+    if (isNaN(tier) || tier < 1 || tier > G.battlePassTier) {
+      showBattleToast('Reach tier ' + tier + ' first', false);
+      return false;
+    }
+    if (track === 'premium' && !G.battlePassPremium) {
+      showBattleToast('Premium track locked', false);
+      return false;
+    }
+    var list = track === 'premium' ? G.battlePassClaimed.premium : G.battlePassClaimed.free;
+    if (list.indexOf(tier) >= 0) {
+      showBattleToast('Already claimed', false);
+      return false;
+    }
+    var reward = battlePassRewardFor(tier, track);
+    if (!reward) return false;
+    grantEngagementReward(reward);
+    list.push(tier);
+    G.battlePassClaimed = { free: G.battlePassClaimed.free.slice(), premium: G.battlePassClaimed.premium.slice() };
+    showBattleToast('Battle Pass reward claimed!', true);
+    scheduleSave();
+    return true;
+  }
+
+  function shopFlashBundle() {
+    var week = Math.floor(Date.now() / (7 * 86400000));
+    return SHOP_FLASH_BUNDLES[week % SHOP_FLASH_BUNDLES.length];
+  }
+
+  function shopFlashEndsMs() {
+    var weekMs = 7 * 86400000;
+    var elapsed = Date.now() % weekMs;
+    return weekMs - elapsed;
+  }
+
+  function syncShopFlashWeek() {
+    var week = Math.floor(Date.now() / (7 * 86400000));
+    if (G._shopFlashWeek !== week) {
+      G._shopFlashWeek = week;
+      G.shopFlashPurchased = false;
+    }
+  }
+
+  function buyShopFlash() {
+    syncShopFlashWeek();
+    if (G.shopFlashPurchased) {
+      showBattleToast('Flash deal already claimed this week', false);
+      return false;
+    }
+    var bundle = shopFlashBundle();
+    var price = Math.floor(35000 * (bundle.priceMult || 1));
+    if (G.cash < price) return false;
+    G.cash -= price;
+    if (bundle.cash) G.cash += bundle.cash;
+    if (bundle.sp) G.sp = (G.sp || 0) + bundle.sp;
+    if (bundle.packs && bundle.packType) {
+      for (var i = 0; i < bundle.packs; i++) {
+        var s = genPack(bundle.packType, Date.now() + i * 9973, { scanBonus: scanMult(), packLuckBonus: packLuckBonus() });
+        G.strains = mergeStrains(G.strains, s);
+        bumpStrainMastery(s.rarity);
+      }
+      popLabel(bundle.name + '!', { mega: true, jackpot: true });
+    }
+    G.shopFlashPurchased = true;
+    addBattlePassXp(40);
+    addXp(30);
+    scheduleSave();
+    showBattleToast(bundle.name + ' acquired!', true);
+    return true;
+  }
+
+  function bumpStrainMastery(rarity) {
+    if (!rarity) return;
+    if (!G.strainMastery || typeof G.strainMastery !== 'object') G.strainMastery = {};
+    G.strainMastery[rarity] = (G.strainMastery[rarity] || 0) + 1;
+  }
+
+  function battlePassRewardLabel(reward) {
+    if (!reward) return '—';
+    var parts = [];
+    if (reward.cash) parts.push(fmtCash(reward.cash));
+    if (reward.sp) parts.push(reward.sp + ' SP');
+    return parts.join(' + ') || '—';
+  }
+
+  function syncCloudHud(force) {
+    if (!force && !UI.dirty.cloudSync) return;
+    var el = DOM.cloudSyncStrip || document.getElementById('hud-cloud-sync');
+    if (!el) return;
+    var cloud = window.VoidlineCloud;
+    var status = cloud && cloud.getSyncStatus ? cloud.getSyncStatus() : { state: 'offline' };
+    var label = 'LOCAL SAVE';
+    var cls = 'hud-cloud-sync-strip';
+    if (status.state === 'guest') {
+      label = 'GUEST · LOCAL SAVE';
+      cls += ' cloud-guest';
+    } else if (status.state === 'offline') {
+      label = 'OFFLINE · LOCAL SAVE';
+      cls += ' cloud-offline';
+    } else if (status.state === 'syncing') {
+      label = 'SYNCING TO CLOUD…';
+      cls += ' cloud-syncing';
+    } else if (status.state === 'error') {
+      label = 'CLOUD SYNC ERROR';
+      cls += ' cloud-error';
+    } else if (cloud && cloud.isLoggedIn && cloud.isLoggedIn()) {
+      label = 'CLOUD · ' + (status.email || cloud.getEmail() || 'synced');
+      cls += status.state === 'synced' ? ' cloud-synced' : ' cloud-linked';
+    }
+    if (force || UI_LAST.cloudSyncLabel !== label) {
+      el.className = cls;
+      el.innerHTML = '<span class="cloud-sync-dot"></span><span id="hud-cloud-sync-text">' + esc(label) + '</span>';
+      UI_LAST.cloudSyncLabel = label;
+    }
+    UI.dirty.cloudSync = false;
   }
 
   function questProgressFor(def, scope) {
@@ -3825,7 +4023,18 @@
     var h = '<div class="screen-section shop-screen">';
     h += '<div class="shop-hero ' + SKIN_PANEL + ' text-center mb-2">';
     h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">NEBULA REVENUE GRID</h2>';
-    h += '<p class="font-mono text-muted" style="font-size:0.6rem;margin:0.35rem 0 0">Balance ' + fmtCash(G.cash) + ' · ' + fmtSp(G.sp || 0) + '</p></div>';
+    h += '<p class="font-mono text-muted" style="font-size:0.6rem;margin:0.35rem 0 0">Balance ' + fmtCash(G.cash) + ' · ' + fmtSp(G.sp || 0) + '</p>';
+    ensureBattlePass();
+    h += '<div class="shop-hero-actions mt-2"><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="open-battle-pass">BATTLE PASS · T' + G.battlePassTier + '</button></div></div>';
+    syncShopFlashWeek();
+    var flash = shopFlashBundle();
+    var flashPrice = Math.floor(35000 * (flash.priceMult || 1));
+    h += '<div class="shop-flash-offer ' + SKIN_PANEL + ' mb-3"><div class="shop-flash-glow"></div><div class="shop-flash-body">';
+    h += '<div class="shop-flash-icon">' + farmIcon(flash.icon, { lg: true }) + '</div>';
+    h += '<div class="shop-flash-info"><div class="shop-flash-title">' + esc(flash.name) + '</div>';
+    h += '<div class="shop-flash-timer" id="shop-flash-timer">' + fmtLongCd(shopFlashEndsMs()) + '</div></div>';
+    h += '<button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-shop-flash"' + (G.shopFlashPurchased || G.cash < flashPrice ? ' disabled' : '') + '>' + (G.shopFlashPurchased ? 'CLAIMED' : fmtCash(flashPrice)) + '</button>';
+    h += '</div></div>';
     h += '<div class="section-label section-label-green mb-2" style="text-align:left">PREMIUM CHEST TIERS</div>';
     h += '<div class="shop-chest-stack mb-3">';
     CHEST_TIERS.forEach(function (tier) {
@@ -4128,16 +4337,90 @@
   function renderCoop() {
     ensureStorefrontSlots();
     var view = UI.coopView || 'hub';
-    var h = '<div class="screen-section coop-screen"><div class="text-center mb-2"><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em">ROADSIDE GROUP</h2><p class="text-muted text-xs">Hay Day-style local family marketplace</p></div>';
-    if (view === 'myshop') {
-      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
-      h += '<div class="section-label section-label-green mb-2">MY ROADSIDE SHOP · ' + G.storefrontSlotCount + '/' + STOREFRONT_MAX + ' SLOTS</div>';
-      h += '<div class="roadside-grid mb-3">';
-      for (var si = 0; si < STOREFRONT_MAX; si++) h += renderStorefrontSlot(si, true);
+    var clan = window.VoidlineClan ? window.VoidlineClan.getState() : { inClan: false };
+    var h = '<div class="screen-section coop-screen clan-screen">';
+    h += '<div class="clan-hero ' + SKIN_PANEL + ' text-center mb-2">';
+    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">VOID CLAN HQ</h2>';
+    if (clan.inClan) {
+      h += '<p class="font-mono text-green text-xs mt-1">[' + esc(clan.tag) + '] ' + esc(clan.name) + ' · ' + clan.memberCount + '/' + (window.VoidlineClan ? window.VoidlineClan.MAX_MEMBERS : 50) + '</p>';
+      h += '<p class="text-muted text-xs">🏆 ' + (clan.trophies || 0) + ' · ⚔️ ' + (clan.territories || []).length + ' zones</p>';
+    } else {
+      h += '<p class="text-muted text-xs mt-1">Join or create a clan · trade · war · chat</p>';
+    }
+    h += '</div>';
+
+    if (view !== 'myshop' && view.indexOf('shop:') !== 0) {
+      h += '<div class="clan-nav-row mb-2">';
+      [['hub', 'HUB'], ['clan-chat', 'CHAT'], ['clan-war', 'WAR'], ['clan-trade', 'TRADE'], ['market', 'MARKET']].forEach(function (pair) {
+        h += '<button type="button" class="clan-nav-btn' + (view === pair[0] ? ' active' : '') + '" data-action="clan-view" data-id="' + pair[0] + '">' + pair[1] + '</button>';
+      });
       h += '</div>';
-      if (G.storefrontSlotCount < STOREFRONT_MAX) {
-        var sc = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
-        h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="sf-buy-slot"' + (G.cash < sc ? ' disabled' : '') + '>UNLOCK SLOT · ' + fmtCash(sc) + '</button>';
+    }
+
+    if (view === 'clan-chat') {
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
+      h += '<div class="clan-chat-panel ' + SKIN_PANEL + '"><div class="clan-chat-scroll" id="clan-chat-scroll">';
+      (clan.messages || []).forEach(function (m) {
+        h += '<div class="clan-chat-line"><span class="clan-chat-user">' + esc(m.user) + '</span> ';
+        if (m.emote) h += '<span class="clan-chat-emote">' + esc(m.emote) + '</span> ';
+        h += '<span class="clan-chat-body">' + esc(m.body) + '</span></div>';
+      });
+      h += '</div><div class="clan-emote-row">';
+      (clan.emotes || []).forEach(function (em) {
+        h += '<button type="button" class="clan-emote-btn" data-action="clan-emote" data-id="' + esc(em) + '">' + em + '</button>';
+      });
+      h += '</div><input type="text" class="input-field mb-2" id="clan-chat-input" placeholder="Message clan..." maxlength="500">';
+      h += '<button type="button" class="game-btn game-btn-green w-full" data-action="clan-send-chat">SEND</button></div>';
+    } else if (view === 'clan-war') {
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
+      h += '<div class="clan-war-map ' + SKIN_PANEL + ' p-3 mb-2"><div class="section-label mb-2">TERRITORY CONTROL</div><div class="clan-war-grid">';
+      (clan.warZones || []).forEach(function (z) {
+        var owned = z.ownerTag === clan.tag;
+        h += '<button type="button" class="clan-war-zone' + (owned ? ' owned' : '') + '" data-action="clan-war-attack" data-id="' + esc(z.id) + '"' + (!clan.inClan ? ' disabled' : '') + '>';
+        h += '<div class="clan-war-zone-label">' + esc(z.label) + '</div>';
+        h += '<div class="clan-war-zone-owner">' + (z.ownerTag ? '[' + esc(z.ownerTag) + ']' : 'CONTESTED') + '</div></button>';
+      });
+      h += '</div><div class="text-muted text-xs text-center mt-2">War points: ' + (clan.warPoints || 0) + '/100 per capture</div></div>';
+      var lb = window.VoidlineClan ? window.VoidlineClan.getLeaderboard() : [];
+      h += '<div class="section-label mb-2">CLAN LEADERBOARD</div>';
+      lb.forEach(function (row, i) {
+        h += '<div class="clan-lb-row ' + SKIN_PANEL + ' p-2 mb-1"><span class="font-mono text-cyan">#' + (i + 1) + '</span> [' + esc(row.tag) + '] ' + esc(row.name) + ' · ' + row.trophies + ' 🏆</div>';
+      });
+    } else if (view === 'clan-trade') {
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
+      h += '<div class="' + SKIN_PANEL + ' p-3 text-center text-muted text-sm mb-2">Gift strains to clanmates from Index → lift card → GIFT. Cloud trade ledger ships in next patch.</div>';
+      if (G.strains.length) {
+        h += '<div class="binder-grid">';
+        G.strains.slice(0, 6).forEach(function (s) {
+          h += '<div class="liftable-wrap" data-lift="index-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
+        });
+        h += '</div>';
+      }
+    } else if (view === 'market' || view === 'myshop') {
+      if (view === 'market') h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
+      if (view === 'myshop') {
+        h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
+        h += '<div class="section-label section-label-green mb-2">MY ROADSIDE SHOP · ' + G.storefrontSlotCount + '/' + STOREFRONT_MAX + ' SLOTS</div>';
+        h += '<div class="roadside-grid mb-3">';
+        for (var si = 0; si < STOREFRONT_MAX; si++) h += renderStorefrontSlot(si, true);
+        h += '</div>';
+        if (G.storefrontSlotCount < STOREFRONT_MAX) {
+          var sc = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
+          h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="sf-buy-slot"' + (G.cash < sc ? ' disabled' : '') + '>UNLOCK SLOT · ' + fmtCash(sc) + '</button>';
+        }
+      } else {
+        h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
+        h += '<div class="section-label mb-2">FAMILY MARKET</div>';
+        PLAYERS.forEach(function (pl) {
+          var save = readPlayerSave(pl.id) || {};
+          var dps = playerBattleDps(save).toFixed(1);
+          h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-3 mb-2' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
+          h += '<div class="flex-row gap-2"><div>' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2rem') + '</div>';
+          h += '<div style="flex:1"><div style="font-weight:700;font-size:0.8rem">' + esc(save.name || pl.label) + '</div>';
+          h += '<div class="font-mono text-xs text-green">DPS ' + dps + '</div></div>';
+          if (pl.id !== activePlayerId) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
+          h += '</div></div>';
+        });
       }
     } else if (view.indexOf('shop:') === 0) {
       var pid = view.slice(5);
@@ -4147,26 +4430,22 @@
       h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div>' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2.5rem') + '</div><div style="font-weight:700">' + esc(save.name || pl.label) + '</div></div>';
       h += renderPlayerShopGrid(pid);
     } else {
-      h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
-      h += '<div class="section-label mb-2">FAMILY MEMBERS</div>';
-      PLAYERS.forEach(function (pl) {
-        var save = readPlayerSave(pl.id) || {};
-        var badges = (save.badgeIds || []).filter(Boolean).map(function (bid) {
-          var b = BADGES.find(function (x) { return x.id === bid; });
-          return b ? farmIcon(b.icon) : '';
-        }).join(' ');
-        var dps = playerBattleDps(save).toFixed(1);
-        var rev = fmtRev(playerRevSec(save));
-        h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-4 mb-3' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
-        h += '<div class="flex-row gap-3 mb-2"><div class="coop-player-av">' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2.5rem') + '</div><div style="flex:1;min-width:0">';
-        h += '<div style="font-weight:700;font-size:0.9rem">' + esc(save.name || pl.label) + '</div>';
-        h += '<div class="font-mono text-xs text-green">DPS ' + dps + ' · ' + rev + '</div>';
-        h += '<div class="text-xs text-muted">' + badges + '</div></div></div>';
-        if (pl.id !== activePlayerId) h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
-        h += '</div>';
-      });
+      if (!clan.inClan) {
+        h += '<div class="clan-join-panel ' + SKIN_PANEL + ' p-3 mb-3">';
+        h += '<div class="section-label mb-2">JOIN OR CREATE</div>';
+        h += '<input type="text" class="input-field mb-2" id="clan-join-tag" placeholder="Clan tag (e.g. VOID)" maxlength="5">';
+        h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="clan-join">JOIN CLAN</button>';
+        h += '<input type="text" class="input-field mb-2" id="clan-create-name" placeholder="New clan name" maxlength="24">';
+        h += '<input type="text" class="input-field mb-2" id="clan-create-tag" placeholder="New clan tag" maxlength="5">';
+        h += '<button type="button" class="game-btn w-full" data-action="clan-create">CREATE CLAN</button></div>';
+      } else {
+        h += '<button type="button" class="game-btn game-btn-sm w-full mb-2" data-action="clan-leave">LEAVE CLAN</button>';
+      }
+      h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="clan-view" data-id="market">' + farmIcon('shop') + ' FAMILY MARKET</button>';
+      h += '<button type="button" class="game-btn w-full mb-2" data-action="open-battle-pass">' + farmIcon('mega') + ' BATTLE PASS</button>';
     }
-    if ((G.leaseOffers || []).length) {
+
+    if ((G.leaseOffers || []).length && view === 'hub') {
       h += '<div class="section-label mb-2 mt-3">LEASE OFFERS</div>';
       G.leaseOffers.forEach(function (o) {
         h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="text-xs text-muted">' + esc(o.buyerId) + ' wants ' + o.percent + '% of ' + esc(o.planetName) + '</div>';
@@ -4517,10 +4796,11 @@
     var revealRar = hasDual ? pr.strains[0] : pr.strain;
     var rIdx = revealRar ? rarityIndex(revealRar.rarity) : 0;
     var revealCls = 'pack-reveal-aaa';
-    if (rIdx >= rarityIndex('legend')) revealCls += ' pack-reveal-legend';
-    else if (rIdx >= rarityIndex('bloom')) revealCls += ' pack-reveal-epic';
+    if (rIdx >= rarityIndex('legend')) revealCls += ' pack-reveal-legend pack-reveal-particles';
+    else if (rIdx >= rarityIndex('bloom')) revealCls += ' pack-reveal-epic pack-reveal-particles';
     else if (rIdx >= rarityIndex('pulse')) revealCls += ' pack-reveal-rare';
-    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card ' + revealCls + ' ' + SKIN_PANEL + '" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:3px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66, inset 0 1px 0 rgba(255,255,255,0.08)"><div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button></div></div>';
+    var particleHtml = rIdx >= rarityIndex('bloom') ? '<div class="pack-reveal-particles-layer" aria-hidden="true"></div>' : '';
+    document.getElementById('pack-panel').innerHTML = '<div class="overlay-panel pack-reveal-card ' + revealCls + ' ' + SKIN_PANEL + '" style="background:linear-gradient(160deg,rgba(61,0,102,0.9),#0C011A 50%,#1a0040);border:3px solid ' + borderC + ';box-shadow:0 0 60px ' + borderC + '66, inset 0 1px 0 rgba(255,255,255,0.08)">' + particleHtml + '<div class="pack-shimmer"></div><div class="p-5 text-center" style="position:relative">' + inner + '<button type="button" class="game-btn game-btn-green w-full" data-close="pack">ADD TO INDEX</button><button type="button" class="game-btn w-full mt-2 pack-showcase-btn" data-action="pack-showcase">SHOWCASE PULL</button></div></div>';
     document.getElementById('overlay-pack-reveal').classList.add('open');
   }
 
@@ -4718,6 +4998,40 @@
         h += '<div class="achievement-row' + (done ? ' done' : '') + '"><div style="flex:1"><div style="font-weight:600;font-size:0.75rem">' + esc(a.name) + '</div><div class="text-muted text-xs">' + esc(a.desc) + '</div></div><div class="text-xs text-green">' + (done ? 'DONE' : rw) + '</div></div>';
       });
       h += '<button type="button" class="game-btn w-full mt-2" data-action="close-achievements">CLOSE</button></div></div>';
+    }
+    if (UI.battlePassOpen) {
+      ensureBattlePass();
+      var bpXpPct = Math.min(100, (G.battlePassXp / BATTLE_PASS_XP_PER_TIER) * 100);
+      h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="close-battle-pass"></button>';
+      h += '<div class="overlay-panel battle-pass-panel ' + SKIN_PANEL + ' p-4" style="max-height:75vh;overflow-y:auto">';
+      h += '<h3 class="font-display text-sm mb-1">VOID SEASON ' + BATTLE_PASS_SEASON + ' · BATTLE PASS</h3>';
+      h += '<p class="text-muted text-xs mb-2">Tier ' + G.battlePassTier + '/' + BATTLE_PASS_MAX_TIER + ' · ' + Math.floor(G.battlePassXp) + '/' + BATTLE_PASS_XP_PER_TIER + ' XP</p>';
+      h += '<div class="battle-pass-xp-bar mb-2"><div class="battle-pass-xp-fill" style="width:' + bpXpPct + '%"></div></div>';
+      if (!G.battlePassPremium) {
+        h += '<button type="button" class="game-btn game-btn-sm game-btn-green w-full mb-3" data-action="unlock-battle-pass-premium">UNLOCK PREMIUM TRACK (DEMO)</button>';
+      } else {
+        h += '<div class="battle-pass-premium-badge mb-3">PREMIUM ACTIVE</div>';
+      }
+      h += '<div class="battle-pass-scroll">';
+      for (var bpt = 1; bpt <= BATTLE_PASS_MAX_TIER; bpt++) {
+        var bpUnlocked = G.battlePassTier >= bpt;
+        var bpFreeClaimed = G.battlePassClaimed.free.indexOf(bpt) >= 0;
+        var bpPremClaimed = G.battlePassClaimed.premium.indexOf(bpt) >= 0;
+        var bpFreeRw = battlePassRewardFor(bpt, 'free');
+        var bpPremRw = battlePassRewardFor(bpt, 'premium');
+        h += '<div class="battle-pass-tier-row' + (bpUnlocked ? ' unlocked' : ' locked') + '">';
+        h += '<div class="battle-pass-tier-num">T' + bpt + '</div>';
+        h += '<div class="battle-pass-track free"><div class="battle-pass-track-label">FREE</div><div class="battle-pass-reward">' + battlePassRewardLabel(bpFreeRw) + '</div>';
+        if (bpUnlocked && !bpFreeClaimed) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="claim-battle-pass" data-id="' + bpt + ':free">CLAIM</button>';
+        else if (bpFreeClaimed) h += '<span class="text-green text-xs">✓</span>';
+        h += '</div>';
+        h += '<div class="battle-pass-track premium"><div class="battle-pass-track-label">VIP</div><div class="battle-pass-reward">' + battlePassRewardLabel(bpPremRw) + '</div>';
+        if (bpUnlocked && G.battlePassPremium && !bpPremClaimed) h += '<button type="button" class="game-btn game-btn-sm" data-action="claim-battle-pass" data-id="' + bpt + ':premium">CLAIM</button>';
+        else if (bpPremClaimed) h += '<span class="text-green text-xs">✓</span>';
+        else if (!G.battlePassPremium) h += '<span class="text-muted text-xs">🔒</span>';
+        h += '</div></div>';
+      }
+      h += '</div><button type="button" class="game-btn w-full mt-2" data-action="close-battle-pass">CLOSE</button></div></div>';
     }
     el.innerHTML = h;
     el.classList.toggle('open', !!h);
@@ -5109,8 +5423,99 @@
       if (window.VoidlineCloud) {
         window.VoidlineCloud.signOut().then(function () {
           UI.settingsOpen = false;
+          UI.dirty.cloudSync = true;
           showBattleToast('Signed out — playing as guest', true);
           render();
+        });
+      }
+      return;
+    }
+    else if (act==='open-battle-pass') { UI.battlePassOpen = true; render(); return; }
+    else if (act==='close-battle-pass') { UI.battlePassOpen = false; render(); return; }
+    else if (act==='claim-battle-pass') {
+      var cbt = val.split(':');
+      claimBattlePassTier(cbt[0], cbt[1] || 'free');
+      render();
+      return;
+    }
+    else if (act==='unlock-battle-pass-premium') {
+      G.battlePassPremium = true;
+      showBattleToast('Premium track unlocked!', true);
+      scheduleSave();
+      render();
+      return;
+    }
+    else if (act==='buy-shop-flash') { buyShopFlash(); render(); return; }
+    else if (act==='pack-showcase') {
+      if (G.packReveal && G.packReveal.strain) {
+        var ps = G.packReveal.strain;
+        showBattleToast('Showcased ' + ps.name + ' · ' + rarityName(ps.rarity) + '!', true);
+        addBattlePassXp(10);
+        scheduleSave();
+      }
+      render();
+      return;
+    }
+    else if (act==='clan-view') { UI.coopView = val; render(); return; }
+    else if (act==='clan-join') {
+      var cjTag = document.getElementById('clan-join-tag');
+      if (window.VoidlineClan && cjTag) {
+        window.VoidlineClan.joinClan(cjTag.value, G.name).then(function (r) {
+          showBattleToast(r.ok ? 'Joined [' + (r.state && r.state.tag ? r.state.tag : '') + ']' : (r.error || 'Join failed'), r.ok);
+          if (r.ok) UI.coopView = 'clan-chat';
+          render();
+        });
+      }
+      return;
+    }
+    else if (act==='clan-create') {
+      var ccName = document.getElementById('clan-create-name');
+      var ccTag = document.getElementById('clan-create-tag');
+      if (window.VoidlineClan && ccName && ccTag) {
+        window.VoidlineClan.createClan(ccName.value, ccTag.value, G.name).then(function (r) {
+          showBattleToast(r.ok ? 'Clan [' + (r.state && r.state.tag ? r.state.tag : '') + '] founded!' : (r.error || 'Create failed'), r.ok);
+          if (r.ok) UI.coopView = 'clan-chat';
+          render();
+        });
+      }
+      return;
+    }
+    else if (act==='clan-leave') {
+      if (window.VoidlineClan) {
+        window.VoidlineClan.leaveClan().then(function () {
+          showBattleToast('Left clan', true);
+          UI.coopView = 'hub';
+          render();
+        });
+      }
+      return;
+    }
+    else if (act==='clan-send-chat') {
+      var ccInput = document.getElementById('clan-chat-input');
+      if (window.VoidlineClan && ccInput) {
+        window.VoidlineClan.sendMessage(ccInput.value, '', G.name).then(function (r) {
+          if (!r.ok) showBattleToast(r.error || 'Send failed', false);
+          else { ccInput.value = ''; render(); }
+        });
+      }
+      return;
+    }
+    else if (act==='clan-emote') {
+      var ceInput = document.getElementById('clan-chat-input');
+      if (ceInput) ceInput.value = (ceInput.value || '') + val;
+      render();
+      return;
+    }
+    else if (act==='clan-war-attack') {
+      if (window.VoidlineClan) {
+        var warPower = Math.max(5, Math.floor(totalBattleDps()));
+        window.VoidlineClan.contributeWar(val, warPower).then(function (r) {
+          if (!r.ok) showBattleToast(r.error || 'War failed', false);
+          else {
+            showBattleToast(r.captured ? 'Territory captured!' : '+' + warPower + ' war power', true);
+            addBattlePassXp(5);
+            render();
+          }
         });
       }
       return;
@@ -5206,6 +5611,18 @@
 
   function bootGame() {
     try {
+      if (window.VoidlineClan && typeof window.VoidlineClan.boot === 'function') {
+        window.VoidlineClan.boot();
+        if (window.VoidlineClan.onStateChange) {
+          window.VoidlineClan.onStateChange(function () {
+            if (UI.activeTab === 'coop') render();
+          });
+        }
+      }
+      if (window.VoidlineCloud && window.VoidlineCloud.onSyncChange) {
+        window.VoidlineCloud.onSyncChange(function () { UI.dirty.cloudSync = true; });
+        UI.dirty.cloudSync = true;
+      }
       var startPid = resolveStartupPlayer();
       if (startPid) {
         selectPlayer(startPid);
