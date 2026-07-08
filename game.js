@@ -6153,7 +6153,9 @@
     root._foilBound = true;
 
     function foilTarget(el) {
-      return el.closest('.liftable-wrap') || el.closest('.cr-card') || el.closest('.strain-card') || el.closest('.strain-picker-card') || el.closest('.binder-grid .liftable-wrap');
+      var wrap = el.closest('.liftable-wrap') || el.closest('.cr-card') || el.closest('.strain-card') || el.closest('.strain-picker-card') || el.closest('.binder-grid .liftable-wrap');
+      if (wrap && wrap.closest('.map-screen')) return null;
+      return wrap;
     }
 
     function foilFrame(wrap) {

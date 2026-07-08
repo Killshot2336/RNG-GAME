@@ -2637,6 +2637,90 @@
     .planet-owned-grid .cr-card { width: 100%; }
     .planet-owned-grid .liftable-wrap { display: flex; justify-content: center; }
 
+    /* Map fleet cards — keep glow/animation inside card bounds */
+    .map-screen .planet-lift-wrap,
+    .map-screen .planet-scan-card-wrap {
+      position: relative;
+      padding: 0.42rem 0.32rem 0.12rem;
+      overflow: hidden;
+      border-radius: 0.85rem;
+      contain: paint;
+      isolation: isolate;
+    }
+    .map-screen .planet-owned-grid .cr-card,
+    .map-screen .planet-scan-card-wrap .cr-card {
+      overflow: hidden;
+      border-radius: 0.75rem;
+      box-shadow: none;
+      animation: none;
+    }
+    .map-screen .planet-owned-grid .cr-card:hover,
+    .map-screen .planet-scan-card-wrap .cr-card:hover,
+    .map-screen .planet-owned-grid .cr-card:active,
+    .map-screen .planet-scan-card-wrap .cr-card:active {
+      transform: none;
+      filter: brightness(1.08);
+    }
+    .map-screen .planet-owned-grid .cr-card-frame,
+    .map-screen .planet-scan-card-wrap .cr-card-frame {
+      overflow: hidden;
+      transform: none !important;
+      animation: none !important;
+    }
+    .map-screen .planet-owned-grid .foil-active .cr-card-frame,
+    .map-screen .planet-scan-card-wrap .foil-active .cr-card-frame,
+    .map-screen .planet-owned-grid .cr-card-frame.foil-active,
+    .map-screen .planet-scan-card-wrap .cr-card-frame.foil-active {
+      transform: none !important;
+    }
+    .map-screen .planet-owned-grid .cr-card-shine,
+    .map-screen .planet-scan-card-wrap .cr-card-shine {
+      opacity: 0;
+      animation: none;
+    }
+    .map-screen .planet-owned-grid .cr-card-foil,
+    .map-screen .planet-scan-card-wrap .cr-card-foil {
+      opacity: 0;
+    }
+    .map-screen .planet-owned-grid .cr-art-wrap,
+    .map-screen .planet-scan-card-wrap .cr-art-wrap,
+    .map-screen .planet-owned-grid .cr-planet-orb,
+    .map-screen .planet-scan-card-wrap .cr-planet-orb {
+      animation: none !important;
+    }
+    .map-screen .planet-owned-grid .planet-glow-active,
+    .map-screen .planet-scan-card-wrap .planet-glow-active {
+      box-shadow: none;
+    }
+    .map-screen .planet-owned-grid .planet-glow-active .cr-card-frame,
+    .map-screen .planet-scan-card-wrap .planet-glow-active .cr-card-frame {
+      box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.5),
+        inset 0 0 20px color-mix(in srgb, var(--planet-color, var(--leaf)) 45%, transparent),
+        inset 0 2px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+    }
+    .map-screen .planet-owned-grid .cr-tier-rare,
+    .map-screen .planet-owned-grid .cr-tier-epic,
+    .map-screen .planet-owned-grid .cr-tier-legend,
+    .map-screen .planet-owned-grid .cr-tier-champion,
+    .map-screen .planet-owned-grid .cr-tier-god,
+    .map-screen .planet-owned-grid .cr-tier-godroll,
+    .map-screen .planet-owned-grid .cr-tier-mythic,
+    .map-screen .planet-scan-card-wrap .cr-tier-rare,
+    .map-screen .planet-scan-card-wrap .cr-tier-epic,
+    .map-screen .planet-scan-card-wrap .cr-tier-legend,
+    .map-screen .planet-scan-card-wrap .cr-tier-champion,
+    .map-screen .planet-scan-card-wrap .cr-tier-god,
+    .map-screen .planet-scan-card-wrap .cr-tier-godroll,
+    .map-screen .planet-scan-card-wrap .cr-tier-mythic {
+      box-shadow: none;
+      animation: none !important;
+    }
+    .map-screen .mining-discover-panel {
+      overflow: hidden;
+    }
+
     .mining-planet-card {
       display: block; width: 100%; padding: 0.45rem 0.4rem 0.5rem; border-radius: 0.65rem; cursor: pointer; text-align: left;
       background: rgba(0, 0, 0, 0.4); border: 2px solid rgba(251, 146, 60, 0.2);
