@@ -2262,7 +2262,42 @@
     return 1 + Math.min(0.5, bonus);
   }
 
+  function tryRecoverPlayerSave(pid) {
+    var recovered = false;
+    if (window.VoidlineCloud && window.VoidlineCloud.recoverLocalSave) {
+      var res = window.VoidlineCloud.recoverLocalSave(pid);
+      if (res && res.recovered) recovered = true;
+    }
+    if (pid === 'aden') {
+      try {
+        var leg = localStorage.getItem(LEGACY_SAVE);
+        if (leg) {
+          var legacy = JSON.parse(leg);
+          var current = readPlayerSave(pid);
+          var scoreFn = window.VoidlineCloud && window.VoidlineCloud.saveProgressScore;
+          var cs = scoreFn ? scoreFn(current) : 0;
+          var ls = scoreFn ? scoreFn(legacy) : 0;
+          if (ls > cs + 50) {
+            writePlayerSave(pid, legacy);
+            recovered = true;
+          }
+        }
+      } catch (e) { }
+    }
+    return recovered;
+  }
+
+  function reloadActivePlayerFromDisk() {
+    if (!activePlayerId) return;
+    tryRecoverPlayerSave(activePlayerId);
+    loadGame(activePlayerId);
+    markAllVisualDirty();
+    saveGame();
+    render();
+  }
+
   function loadGame(pid) {
+    tryRecoverPlayerSave(pid);
     var d = readPlayerSave(pid);
     if (!d && pid === 'aden') { try { var leg = localStorage.getItem(LEGACY_SAVE); if (leg) d = JSON.parse(leg); } catch (e) { } }
     G = d ? Object.assign(freshState(pid), d, { playerId: pid }) : freshState(pid);
@@ -6158,6 +6193,7 @@
       } else {
         h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="auth-signin-open">SIGN IN FOR CLOUD SAVE</button>';
       }
+      h += '<button type="button" class="game-btn w-full mb-2" data-action="recover-save">' + farmIcon('help') + ' RECOVER BACKUP SAVE</button>';
     }
     document.getElementById('settings-panel').innerHTML = h;
   }
@@ -7198,6 +7234,15 @@
       }
       return;
     }
+    else if (act==='recover-save') {
+      var rpid = activePlayerId || 'aden';
+      var wasRecovered = tryRecoverPlayerSave(rpid);
+      if (activePlayerId) reloadActivePlayerFromDisk();
+      else if (wasRecovered) showBattleToast('Backup found — select your profile to load it', true);
+      else showBattleToast('No better backup save found on this device', false);
+      render();
+      return;
+    }
     else if (act==='open-battle-pass') { UI.battlePassOpen = true; UI._scrollBattlePass = true; render(); return; }
     else if (act==='close-battle-pass') { UI.battlePassOpen = false; render(); return; }
     else if (act==='claim-battle-pass') {
@@ -7328,6 +7373,19 @@
       if (window.VoidlineCloud && window.VoidlineCloud.onSyncChange) {
         window.VoidlineCloud.onSyncChange(function () { UI.dirty.cloudSync = true; });
         UI.dirty.cloudSync = true;
+      }
+      if (window.VoidlineCloud && window.VoidlineCloud.onAuthComplete) {
+        window.VoidlineCloud.onAuthComplete(function () {
+          if (activePlayerId) {
+            var wasRecovered = tryRecoverPlayerSave(activePlayerId);
+            reloadActivePlayerFromDisk();
+            showBattleToast(wasRecovered ? 'Progress restored from backup' : 'Cloud account linked — progress synced', true);
+          } else {
+            var startPid = resolveStartupPlayer();
+            if (startPid) selectPlayer(startPid);
+            else render();
+          }
+        });
       }
       var startPid = resolveStartupPlayer();
       if (startPid) {

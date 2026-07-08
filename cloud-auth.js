@@ -20,6 +20,8 @@
   var booted = false;
   var syncState = 'offline';
   var syncListeners = [];
+  var authCompleteListeners = [];
+  var pendingCloudPushes = [];
 
   function setSyncState(s) {
     if (syncState === s) return;
@@ -67,6 +69,62 @@
   function localTs(save) {
     if (!save) return 0;
     return save.lastTickAt || save.updated_at || 0;
+  }
+
+  /** Progress score — never prefer a newer-but-empty cloud save over rich local guest data. */
+  function saveProgressScore(save) {
+    if (!save) return 0;
+    var score = 0;
+    score += (save.strains || []).length * 500;
+    score += (save.ownedPlanets || []).length * 800;
+    score += (save.campaignNodeClears || []).length * 300;
+    score += Math.max(0, (save.empireLevel || 1) - 1) * 250;
+    score += (save.purchasedBlitzIds || []).length * 400;
+    score += (save.factoryFloors || []).length * 350;
+    score += Math.max(0, save.totalCashEarned || 0);
+    score += (save.trophyPoints || 0) * 15;
+    score += (save.battlePassTier || 0) * 200;
+    score += Math.max(0, ((save.cash || 0) - 250000) * 0.02);
+    return Math.floor(score);
+  }
+
+  function isTrivialSave(save) {
+    return saveProgressScore(save) < 150;
+  }
+
+  function saveProgressLabel(save) {
+    if (!save) return 'empty';
+    var strains = (save.strains || []).length;
+    var lv = save.empireLevel || 1;
+    var cash = save.cash || 0;
+    return 'Lv.' + lv + ' · ' + strains + ' strains · $' + (cash >= 1e6 ? (cash / 1e6).toFixed(1) + 'M' : Math.round(cash).toLocaleString());
+  }
+
+  function pickBetterSave(local, cloudData, cloudRow) {
+    var ls = saveProgressScore(local);
+    var cs = saveProgressScore(cloudData);
+    if (ls > cs + 80) return { pick: local, reason: 'local-progress' };
+    if (cs > ls + 80) return { pick: cloudData, reason: 'cloud-progress' };
+    var lt = localTs(local);
+    var ct = cloudTs(cloudRow);
+    if (ct > lt + 1500) return { pick: cloudData, reason: 'cloud-newer' };
+    if (lt > ct + 1500) return { pick: local, reason: 'local-newer' };
+    return { pick: ls >= cs ? local : cloudData, reason: 'tie-score' };
+  }
+
+  function notifyAuthComplete() {
+    authCompleteListeners.forEach(function (fn) {
+      try { fn(getSyncStatus()); } catch (e) { console.warn('[VoidlineCloud] authComplete listener', e); }
+    });
+  }
+
+  function flushPendingCloudPushes() {
+    if (!pendingCloudPushes.length || mode !== 'user' || !session) return Promise.resolve();
+    var jobs = pendingCloudPushes.slice();
+    pendingCloudPushes = [];
+    return Promise.all(jobs.map(function (job) {
+      return pushCloudSave(job.playerId, job.saveJson);
+    })).then(function () { setSyncState('synced'); }).catch(function () { setSyncState('error'); });
   }
 
   function cloudTs(row) {
@@ -197,13 +255,13 @@
     h += '<h2 class="font-display chromatic-text" style="font-size:0.85rem;letter-spacing:0.12em">SAVE CONFLICT</h2>';
     h += '<p class="text-muted text-xs mt-2">Profile <strong>' + esc(label) + '</strong> has different local and cloud data.</p></div>';
     h += '<div class="auth-conflict-grid mb-3">';
-    h += '<div class="auth-conflict-card halftone-panel"><div class="font-mono text-green text-xs">LOCAL</div><div class="text-xs text-muted">Lv.' + (c.local ? (c.local.empireLevel || 1) : 1) + ' · ' + esc(localDate) + '</div></div>';
-    h += '<div class="auth-conflict-card halftone-panel"><div class="font-mono text-cyan text-xs">CLOUD</div><div class="text-xs text-muted">Lv.' + (c.cloud && c.cloud.save_json ? (c.cloud.save_json.empireLevel || 1) : 1) + ' · ' + esc(cloudDate) + '</div></div>';
+    h += '<div class="auth-conflict-card halftone-panel"><div class="font-mono text-green text-xs">LOCAL</div><div class="text-xs text-muted">' + esc(saveProgressLabel(c.local)) + '</div><div class="text-xs text-muted">' + esc(localDate) + '</div></div>';
+    h += '<div class="auth-conflict-card halftone-panel"><div class="font-mono text-cyan text-xs">CLOUD</div><div class="text-xs text-muted">' + esc(saveProgressLabel(c.cloud && c.cloud.save_json)) + '</div><div class="text-xs text-muted">' + esc(cloudDate) + '</div></div>';
     h += '</div>';
     h += '<div class="flex-col gap-2">';
     h += '<button type="button" class="game-btn w-full" data-cloud-action="conflict" data-id="local">KEEP LOCAL</button>';
     h += '<button type="button" class="game-btn w-full" data-cloud-action="conflict" data-id="cloud">KEEP CLOUD</button>';
-    h += '<button type="button" class="game-btn game-btn-green w-full" data-cloud-action="conflict" data-id="newest">MERGE NEWEST</button>';
+    h += '<button type="button" class="game-btn game-btn-green w-full" data-cloud-action="conflict" data-id="best">KEEP BEST PROGRESS</button>';
     h += '</div>';
     h += '<p class="text-muted text-xs text-center mt-3">' + (conflictIdx + 1) + ' / ' + conflicts.length + ' profiles</p>';
     showGate(authShell(h));
@@ -217,23 +275,21 @@
     var pick = null;
     if (choice === 'local') pick = local;
     else if (choice === 'cloud') pick = cloudData;
-    else {
-      var lt = localTs(local);
-      var ct = cloudTs(c.cloud);
-      pick = ct > lt ? cloudData : local;
-    }
+    else pick = pickBetterSave(local, cloudData, c.cloud).pick;
     if (pick) writeLocalSave(c.playerId, pick);
     conflictIdx++;
     if (conflictIdx < conflicts.length) renderConflictStep();
     else {
       hideGate();
       finishBoot();
+      flushPendingCloudPushes().then(function () { notifyAuthComplete(); });
     }
   }
 
   function detectConflicts(rows) {
     conflicts = [];
     conflictIdx = 0;
+    pendingCloudPushes = [];
     var byPlayer = {};
     (rows || []).forEach(function (row) { byPlayer[row.player_id] = row; });
     PLAYER_IDS.forEach(function (pid) {
@@ -241,15 +297,37 @@
       var cloud = byPlayer[pid] || null;
       var cloudData = cloud && cloud.save_json;
       if (!local && !cloudData) return;
+
       if (!local && cloudData) {
-        writeLocalSave(pid, cloudData);
+        if (!isTrivialSave(cloudData)) writeLocalSave(pid, cloudData);
         return;
       }
-      if (local && !cloudData) return;
-      var lt = localTs(local);
-      var ct = cloudTs(cloud);
-      if (Math.abs(lt - ct) < 3000 && JSON.stringify(local) === JSON.stringify(cloudData)) return;
-      conflicts.push({ playerId: pid, local: local, cloud: cloud });
+
+      if (local && !cloudData) {
+        pendingCloudPushes.push({ playerId: pid, saveJson: local });
+        return;
+      }
+
+      if (local && cloudData) {
+        var lt = localTs(local);
+        var ct = cloudTs(cloud);
+        if (Math.abs(lt - ct) < 3000 && JSON.stringify(local) === JSON.stringify(cloudData)) return;
+
+        var ls = saveProgressScore(local);
+        var cs = saveProgressScore(cloudData);
+
+        if (ls > cs + 80 && isTrivialSave(cloudData)) {
+          writeLocalSave(pid, local);
+          pendingCloudPushes.push({ playerId: pid, saveJson: local });
+          return;
+        }
+        if (cs > ls + 80 && isTrivialSave(local)) {
+          writeLocalSave(pid, cloudData);
+          return;
+        }
+
+        conflicts.push({ playerId: pid, local: local, cloud: cloud });
+      }
     });
   }
 
@@ -307,13 +385,23 @@
     setSyncState('synced');
     return pullCloudSaves().then(function (rows) {
       detectConflicts(rows);
+      var afterMerge = function () {
+        return flushPendingCloudPushes().then(function () {
+          notifyAuthComplete();
+        });
+      };
       if (conflicts.length) renderConflictStep();
-      else { hideGate(); finishBoot(); }
+      else {
+        hideGate();
+        finishBoot();
+        return afterMerge();
+      }
     }).catch(function (err) {
       setAuthMsg('Cloud pull failed: ' + (err.message || 'unknown'), false);
       setSyncState('error');
       hideGate();
       finishBoot();
+      notifyAuthComplete();
     });
   }
 
@@ -475,17 +563,21 @@
         var cloud = byPlayer[pid] || null;
         var cloudData = cloud && cloud.save_json;
         if (!local && cloudData) {
-          writeLocalSave(pid, cloudData);
-          updated.push(pid);
+          if (!isTrivialSave(cloudData)) {
+            writeLocalSave(pid, cloudData);
+            updated.push(pid);
+          }
           return;
         }
-        if (!local || !cloudData) return;
-        var lt = localTs(local);
-        var ct = cloudTs(cloud);
-        if (ct > lt + 1500) {
+        if (!local || !cloudData) {
+          if (local && !cloudData) pushes.push(pushCloudSave(pid, local));
+          return;
+        }
+        var better = pickBetterSave(local, cloudData, cloud);
+        if (better.pick === cloudData && better.pick !== local) {
           writeLocalSave(pid, cloudData);
           updated.push(pid);
-        } else if (lt > ct + 1500) {
+        } else if (better.pick === local && better.pick !== cloudData) {
           pushes.push(pushCloudSave(pid, local));
         }
       });
@@ -515,6 +607,27 @@
     switchToAccount: function () { showGate(renderAuthForm('signin')); },
     getSyncStatus: getSyncStatus,
     onSyncChange: onSyncChange,
+    onAuthComplete: function (fn) {
+      if (typeof fn === 'function') authCompleteListeners.push(fn);
+    },
+    saveProgressScore: saveProgressScore,
+    recoverLocalSave: function (pid) {
+      var key = saveKey(pid);
+      var current = readLocalSave(pid);
+      var backup = null;
+      try {
+        var raw = localStorage.getItem(key + '_backup');
+        if (raw) backup = JSON.parse(raw);
+      } catch (e) { backup = null; }
+      if (!backup) return { recovered: false, reason: 'no-backup' };
+      var cs = saveProgressScore(current);
+      var bs = saveProgressScore(backup);
+      if (bs > cs + 50) {
+        writeLocalSave(pid, backup);
+        return { recovered: true, reason: 'backup', score: bs };
+      }
+      return { recovered: false, reason: 'backup-not-better', score: bs, currentScore: cs };
+    },
     syncFamilySaves: syncFamilySaves,
   };
 })();
