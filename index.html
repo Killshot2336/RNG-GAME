@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="index.css?v=10" />
+  <link rel="stylesheet" href="index.css?v=11" />
 </head>
 <body>
   <div id="voidline-app">
@@ -22,13 +22,14 @@
           <div class="brand-sub">Voidline</div>
           <div class="brand-title chromatic-text">GALAXY FARM</div>
         </div>
-        <div class="plant-header" title="Your top strain speaks">
-          <div id="plant-mascot"><span class="farm-icon farm-icon-bud farm-icon-img" aria-hidden="true"></span></div>
-          <div style="min-width:0">
-            <div class="font-mono text-green" style="font-size:0.45rem;letter-spacing:0.12em">TOP STRAIN</div>
-            <div id="plant-label">No strain</div>
+        <button type="button" class="hud-battle-pass" data-action="open-battle-pass" aria-label="Battle Pass">
+          <div id="hud-bp-icon" class="hud-bp-icon-wrap"><span class="farm-icon farm-icon-mega farm-icon-img" aria-hidden="true"></span></div>
+          <div style="min-width:0;text-align:left">
+            <div class="font-mono text-green" style="font-size:0.45rem;letter-spacing:0.12em">BATTLE PASS</div>
+            <div id="hud-bp-label">TIER 0</div>
           </div>
-        </div>
+          <span id="hud-bp-ping" class="hud-bp-ping" hidden aria-hidden="true"></span>
+        </button>
         <button type="button" id="btn-open-profile" class="profile-ribbon" data-action="open-profile" aria-label="Open profile">
           <div class="avatar-wrap">
             <div class="avatar-ring"></div>
@@ -77,7 +78,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-auth.js?v=3"></script>
   <script src="catalog.js?v=35"></script>
-  <script src="clan-system.js?v=1"></script>
-  <script src="game.js?v=50"></script>
+  <script src="game.js?v=51"></script>
 </body>
 </html>

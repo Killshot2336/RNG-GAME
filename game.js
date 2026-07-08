@@ -149,10 +149,10 @@
     { packType: 'omega', name: 'Void Overlord Vaults', icon: 'vault', tagline: 'Bloom+ mythic siege vault', accent: '#F472B6' },
   ];
   var STORE = [
-    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 1200, icon: 'nutrient', desc: 'Boosts passive revenue +0.5/sec each.', revPerSec: 0.5 },
-    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 3500, icon: 'nutrient', desc: 'Premium nutrients — +0.5/sec passive each.', revPerSec: 0.5 },
-    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 8000, icon: 'pipe', desc: 'Smooths portal flow — +1.2/sec passive each.', revPerSec: 1.2 },
-    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 18000, icon: 'pipe', desc: 'Hypercharged conduit — +2.5/sec passive each.', revPerSec: 2.5 },
+    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 4000, icon: 'nutrient', desc: 'Galactic fertilizer — +4/sec passive revenue per unit.', revPerSec: 4 },
+    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 14000, icon: 'nutrient', desc: 'Void-grade bloom booster — +6/sec passive per unit.', revPerSec: 6 },
+    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 28000, icon: 'pipe', desc: 'Quantum-smoothed flow — +10/sec passive per unit.', revPerSec: 10 },
+    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 65000, icon: 'pipe', desc: 'Hypercharged revenue conduit — +20/sec passive per unit.', revPerSec: 20 },
   ];
   var AVATARS = [
     '/public/art/portraits/aden.svg', '/public/art/portraits/dad.svg', '/public/art/portraits/jamie.svg',
@@ -233,7 +233,7 @@
     'voidEssence', 'prestigeVault', 'totalCashEarned',
     'storefrontSlotCount', 'planetLeases', 'leaseOffers',
     'indexSearch', 'indexSort', 'ownedPlanets', 'scanPending', 'breedSlotA', 'breedSlotB', 'pendingRewards',
-    'mutationEssence', 'mutationItems', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
+    'mutationEssence', 'mutationItems', 'mutationPool', 'dailyShowcaseDay', 'dailyShowcasePurchased', 'dailyShowcaseCache',
     'mutationPackLuck', 'mutationGuaranteeCharges', 'strainMutationMap', 'raidEquipIds',
     'campaignNode', 'campaignNodeClears',
     'dailyLoginStreak', 'dailyLoginLastDay', 'dailyLoginClaimedDay',
@@ -500,7 +500,7 @@
       plantSay('tab_map', true);
       scheduleSave();
       render();
-    }, 1400);
+    }, 1800);
   }
 
   function keepScannedPlanet() {
@@ -591,6 +591,8 @@
       planet.upgraderMult++;
     } else return false;
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
+    popLabel('PLANET UP!', { mega: true });
+    showBattleToast(kind.toUpperCase() + ' upgraded on ' + planetDisplayName(planet), true);
     return true;
   }
 
@@ -643,7 +645,7 @@
     opts = opts || {};
     var a = strainById(idA), b = strainById(idB);
     if (!a || !b || idA === idB) return null;
-    var seed = ((a.seed || 0) ^ (b.seed || 0)) + Date.now();
+    var seed = ((a.seed || 0) ^ (b.seed || 0)) + (opts.preview ? 1337 : Date.now());
     var rng = rngSeed(seed);
     var tierIdx = Math.max(rarityIndex(a.rarity), rarityIndex(b.rarity));
     var bump = rng() > 0.65 ? 1 : 0;
@@ -656,12 +658,16 @@
     child.thcPercent = parseFloat(((a.thcPercent + b.thcPercent) / 2 + rng() * 4).toFixed(1));
     child.yield = Math.round((a.yield + b.yield) / 2 * (0.9 + rng() * 0.25));
     child.parentIds = [a.id, b.id];
-    var ab = {};
-    (a.abilities || []).concat(b.abilities || []).forEach(function (aid) { ab[aid] = true; });
-    child.abilities = Object.keys(ab);
-    if (rng() > 0.5 && child.abilities.length < 5) {
-      var pool = ABILITIES.filter(function (x) { return child.abilities.indexOf(x.id) < 0; });
-      if (pool.length) child.abilities.push(pool[Math.floor(rng() * pool.length)].id);
+    if (opts.selectedAbilities && opts.selectedAbilities.length) {
+      child.abilities = opts.selectedAbilities.slice();
+    } else {
+      var ab = {};
+      (a.abilities || []).concat(b.abilities || []).forEach(function (aid) { ab[aid] = true; });
+      child.abilities = Object.keys(ab);
+      if (rng() > 0.5 && child.abilities.length < 5) {
+        var pool = ABILITIES.filter(function (x) { return child.abilities.indexOf(x.id) < 0; });
+        if (pool.length) child.abilities.push(pool[Math.floor(rng() * pool.length)].id);
+      }
     }
     if (opts.guaranteeAbility) {
       var minAb = Math.max(3, child.abilities.length + 1);
@@ -669,6 +675,129 @@
     }
     child.abilityBoosts = {};
     return child;
+  }
+
+  function fuseParentAbilities() {
+    var a = strainById(G.breedSlotA), b = strainById(G.breedSlotB);
+    if (!a || !b) return [];
+    var seen = {}, out = [];
+    (a.abilities || []).concat(b.abilities || []).forEach(function (aid) {
+      if (!seen[aid]) { seen[aid] = true; out.push(aid); }
+    });
+    return out;
+  }
+
+  function getSelectedFuseAbilities() {
+    var pool = fuseParentAbilities();
+    var pick = UI.fuseAbilityPick || {};
+    if (!Object.keys(pick).length) return pool;
+    return pool.filter(function (aid) { return pick[aid] !== false; });
+  }
+
+  function fusePreviewChild() {
+    if (!G.breedSlotA || !G.breedSlotB) return null;
+    return breedStrains(G.breedSlotA, G.breedSlotB, { preview: true, selectedAbilities: getSelectedFuseAbilities() });
+  }
+
+  function ensureMutationPool() {
+    if (!G.mutationPool) G.mutationPool = [];
+  }
+
+  function addAbilitiesToMutationPool(abilities, sourceName) {
+    ensureMutationPool();
+    (abilities || []).forEach(function (aid) {
+      var def = abilityDef(aid);
+      G.mutationPool.push({
+        poolId: 'mp_' + aid + '_' + Date.now() + '_' + Math.floor(Math.random() * 9999),
+        id: aid,
+        name: def.name,
+        desc: def.desc,
+        source: sourceName || 'Unknown',
+        rarity: def.minRarity || 0,
+      });
+    });
+  }
+
+  function applyPoolMutation(strainId, poolId) {
+    var s = strainById(strainId);
+    if (!s) return false;
+    ensureMutationPool();
+    var entry = G.mutationPool.find(function (m) { return m.poolId === poolId; });
+    if (!entry) return false;
+    if (!s.abilities) s.abilities = [];
+    if (s.abilities.indexOf(entry.id) >= 0) {
+      showBattleToast('Strain already has ' + entry.name, false);
+      return false;
+    }
+    s.abilities = s.abilities.concat([entry.id]);
+    G.mutationPool = G.mutationPool.filter(function (m) { return m.poolId !== poolId; });
+    popLabel('MUTATION APPLIED', { mega: true });
+    showBattleToast(entry.name + ' → ' + s.name, true);
+    scheduleSave();
+    return true;
+  }
+
+  function mapScanProgressPct() {
+    var sectorMax = G.sectorUpgrades.reduce(function (a, s) { return a + s.maxLevel; }, 0);
+    var sectorLv = G.sectorUpgrades.reduce(function (a, s) { return a + s.level; }, 0);
+    var planetPct = Math.min(55, (G.ownedPlanets || []).length * 6);
+    var sectorPct = sectorMax ? (sectorLv / sectorMax) * 45 : 0;
+    var pending = G.scanPending ? 5 : 0;
+    return Math.min(100, Math.floor(sectorPct + planetPct + pending));
+  }
+
+  function starMapNodes() {
+    var pid = (activePlayerId || 'aden').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0);
+    var rng = rngSeed(pid * 9973 + (G.ownedPlanets || []).length * 31);
+    var nodes = [];
+    var scanPct = mapScanProgressPct();
+    var scannedCount = Math.floor(scanPct / 100 * 28);
+    for (var i = 0; i < 28; i++) {
+      var x = rng() * 86 + 7;
+      var y = rng() * 72 + 10;
+      var z = 0.3 + rng() * 0.7;
+      var planet = (G.ownedPlanets || [])[i] || null;
+      nodes.push({
+        id: 'star-' + i,
+        x: x,
+        y: y,
+        z: z,
+        scanned: i < scannedCount || !!planet,
+        planet: planet,
+        pulse: rng() > 0.7,
+      });
+    }
+    return nodes;
+  }
+
+  function battlePassHasClaimable() {
+    ensureBattlePass();
+    for (var t = 1; t <= G.battlePassTier; t++) {
+      if (G.battlePassClaimed.free.indexOf(t) < 0) return true;
+      if (G.battlePassPremium && G.battlePassClaimed.premium.indexOf(t) < 0) return true;
+    }
+    return false;
+  }
+
+  function profileBadgesHtml() {
+    var ids = G.badgeIds || [];
+    var h = '';
+    for (var i = 0; i < 3; i++) {
+      var bid = ids[i];
+      if (!bid) continue;
+      var b = BADGES.find(function (x) { return x.id === bid; });
+      if (b) h += '<span class="profile-badge-chip" title="' + esc(b.label) + '">' + farmIcon(b.icon, { sm: true }) + '</span>';
+    }
+    return h;
+  }
+
+  function modVisualCard(title, value, pct, iconKind, sources) {
+    pct = pct == null ? 72 : Math.min(100, Math.max(8, pct));
+    var src = (sources || []).slice(0, 4).map(function (s) {
+      return '<div class="mod-source-line">· ' + s + '</div>';
+    }).join('');
+    if ((sources || []).length > 4) src += '<div class="mod-source-line text-muted">· +' + ((sources || []).length - 4) + ' more</div>';
+    return '<div class="mod-visual-card ' + SKIN_PANEL + '"><div class="mod-visual-head"><span class="mod-visual-icon">' + farmIcon(iconKind || 'mega', { lg: true }) + '</span><div class="mod-visual-meta"><div class="mod-visual-title">' + esc(title) + '</div><div class="mod-visual-value">' + esc(value) + '</div></div></div><div class="mod-visual-bar"><div class="mod-visual-fill" style="width:' + pct + '%"></div></div>' + src + '</div>';
   }
 
   function mergeLabError() {
@@ -684,7 +813,7 @@
     if (UI.mergeLab && UI.mergeLab.phase === 'fusing') return false;
     G.sp -= MERGE_SP_COST;
     var useGuarantee = UI.fuseGuarantee && (G.mutationGuaranteeCharges || 0) > 0;
-    var child = breedStrains(G.breedSlotA, G.breedSlotB, { guaranteeAbility: useGuarantee });
+    var child = breedStrains(G.breedSlotA, G.breedSlotB, { guaranteeAbility: useGuarantee, selectedAbilities: getSelectedFuseAbilities() });
     if (!child) { G.sp += MERGE_SP_COST; UI.mergeLab.error = 'Fusion failed — try different parents.'; return false; }
     if (useGuarantee) {
       consumeMutationGuarantee();
@@ -696,6 +825,8 @@
     setTimeout(function () {
       if (!UI.mergeLab || UI.mergeLab.phase !== 'fusing') return;
       UI.mergeLab.phase = 'reveal';
+      popLabel('HYBRID CREATED!', { mega: true });
+      showBattleToast('Fusion complete — ' + (UI.mergeLab.child ? UI.mergeLab.child.name : 'new hybrid'), true);
       renderMergeLab();
     }, dur);
     renderMergeLab();
@@ -781,7 +912,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, packGuarantee: false, fuseGuarantee: false, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, clanCreateOpen: false, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -836,8 +967,9 @@
     DOM.screenRoot = document.getElementById('screen-root');
     DOM.arcadePopLayer = document.getElementById('arcade-pop-layer');
     DOM.battleToastLayer = document.getElementById('battle-toast-layer');
-    DOM.plantMascot = document.getElementById('plant-mascot');
-    DOM.plantLabel = document.getElementById('plant-label');
+    DOM.plantMascot = document.getElementById('hud-bp-icon');
+    DOM.plantLabel = document.getElementById('hud-bp-label');
+    DOM.hudBpPing = document.getElementById('hud-bp-ping');
     DOM.cloudSyncStrip = document.getElementById('hud-cloud-sync');
   }
 
@@ -938,7 +1070,7 @@
       voidEssence: 0, prestigeVault: [], totalCashEarned: 0,
       indexSearch: '', indexSort: 'recent',
       ownedPlanets: [], scanPending: null, breedSlotA: null, breedSlotB: null, pendingRewards: [],
-      mutationEssence: 0, mutationItems: [], dailyShowcaseDay: 0,
+      mutationEssence: 0, mutationItems: [], mutationPool: [], dailyShowcaseDay: 0,
       dailyShowcasePurchased: [false, false, false], dailyShowcaseCache: null,
       mutationPackLuck: 0, mutationGuaranteeCharges: 0, strainMutationMap: {}, raidEquipIds: [],
       campaignNode: 1, campaignNodeClears: [],
@@ -1271,6 +1403,7 @@
     healArr('equippedBattleIds', []);
     healArr('pendingRewards', []);
     healArr('mutationItems', []);
+    healArr('mutationPool', []);
     healArr('raidEquipIds', []);
     healArr('campaignNodeClears', []);
     if (G.campaignNode == null || isNaN(G.campaignNode) || G.campaignNode < 1) { G.campaignNode = 1; fixes++; }
@@ -1321,6 +1454,7 @@
     if (G.sp == null || isNaN(G.sp)) G.sp = 100;
     if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.mutationItems) G.mutationItems = [];
+    if (!G.mutationPool) G.mutationPool = [];
     if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
     if (G.mutationPackLuck == null || isNaN(G.mutationPackLuck)) G.mutationPackLuck = 0;
     if (G.mutationGuaranteeCharges == null || isNaN(G.mutationGuaranteeCharges)) G.mutationGuaranteeCharges = 0;
@@ -2154,7 +2288,7 @@
     }
     addTrophyPoints(mega ? 15 : 8);
     addBattlePassXp(mega ? 35 : 18);
-    if (window.VoidlineClan && window.VoidlineClan.addTrophies) window.VoidlineClan.addTrophies(mega ? 5 : 2);
+    if (window.VoidlineClan && window.VoidlineClan.addTrophies) { /* clan removed */ }
     checkAchievements();
     scheduleSave();
   }
@@ -2388,7 +2522,7 @@
     G.inventory.forEach(function (i) {
       if (!i.owned) return;
       var def = STORE.find(function (x) { return x.id === i.id; });
-      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 0.5 : i.type === 'pipe' ? 1.2 : 0);
+      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 4 : i.type === 'pipe' ? 10 : 0);
       t += i.owned * bonus;
     });
     return (t / 1000) * voidEssenceMult();
@@ -2399,7 +2533,7 @@
     G.inventory.forEach(function (i) {
       if (!i.owned) return;
       var def = STORE.find(function (x) { return x.id === i.id; });
-      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 0.5 : i.type === 'pipe' ? 1.2 : 0);
+      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 4 : i.type === 'pipe' ? 10 : 0);
       t += i.owned * bonus;
     });
     return t;
@@ -2532,6 +2666,14 @@
     if (!it || G.cash < it.price) return false;
     G.cash -= it.price;
     G.inventory = G.inventory.map(function (i) { return i.id === id ? Object.assign({}, i, { owned: i.owned + 1 }) : i; });
+    var def = STORE.find(function (x) { return x.id === id; }) || it;
+    var rev = def.revPerSec || 0;
+    popLabel('+' + rev + '/sec UPGRADE!', { mega: true });
+    showBattleToast(it.name + ' acquired · +' + rev + '/sec', true);
+    UI._storeBuyFlash = id;
+    setTimeout(function () { UI._storeBuyFlash = null; if (UI.activeTab === 'shop') render(); }, 600);
+    markWalletDirty();
+    scheduleSave();
     return true;
   }
   function upSector(id) {
@@ -3020,12 +3162,26 @@
     syncXpDom(true);
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
     syncHudShell(true);
-    var s = topStrain(), mascot = DOM.plantMascot || document.getElementById('plant-mascot'), label = DOM.plantLabel || document.getElementById('plant-label');
-    if (mascot) {
-      if (s) mascot.innerHTML = budImg(s, '1.5rem');
-      else { mascot.innerHTML = farmIcon('bud', { img: true, size: '1.5rem' }); }
+    ensureBattlePass();
+    var bpLabel = DOM.plantLabel || document.getElementById('hud-bp-label');
+    var bpIcon = DOM.plantMascot || document.getElementById('hud-bp-icon');
+    var bpPing = DOM.hudBpPing || document.getElementById('hud-bp-ping');
+    if (bpLabel) bpLabel.textContent = 'TIER ' + G.battlePassTier;
+    if (bpIcon) {
+      bpIcon.classList.toggle('hud-bp-ready', battlePassHasClaimable());
+      bpIcon.classList.toggle('hud-bp-updated', G.battlePassTier > 0);
     }
-    if (label) label.textContent = s ? s.name : 'No strain';
+    if (bpPing) bpPing.hidden = !battlePassHasClaimable();
+    var nameElWrap = DOM.hudName || document.getElementById('hud-name');
+    if (nameElWrap && nameElWrap.parentElement) {
+      var badgeRow = nameElWrap.parentElement.querySelector('.hud-badge-row');
+      if (!badgeRow) {
+        badgeRow = document.createElement('span');
+        badgeRow.className = 'hud-badge-row';
+        nameElWrap.parentElement.appendChild(badgeRow);
+      }
+      badgeRow.innerHTML = profileBadgesHtml();
+    }
     syncCloudHud(true);
     UI.dirty.hud = false;
     UI.dirty.shell = false;
@@ -3323,6 +3479,7 @@
     }
     var power = Math.floor((1 + rarityIndex(s.rarity)) * (1 + blitzMod('mutationEssence')));
     G.mutationEssence = (G.mutationEssence || 0) + power;
+    addAbilitiesToMutationPool(s.abilities || [], s.name);
     G.mutationItems = (G.mutationItems || []).concat([{
       id: 'mut_' + Date.now() + '_' + Math.floor(Math.random() * 9999),
       name: s.name.split(' ')[0] + ' Shard',
@@ -3331,7 +3488,8 @@
       burnedAt: Date.now(),
     }]);
     popLabel('+' + power + ' MUTATION', { mega: true });
-    showBattleToast('Burned ' + s.name + ' → +' + power + ' mutation', true);
+    popLabel('POOL +' + ((s.abilities || []).length), { mega: true, delay: 120 });
+    showBattleToast('Burned ' + s.name + ' → pool +' + ((s.abilities || []).length) + ' traits', true);
     scheduleSave();
     return true;
   }
@@ -4054,9 +4212,7 @@
     var h = '<div class="screen-section shop-screen">';
     h += '<div class="shop-hero ' + SKIN_PANEL + ' text-center mb-2">';
     h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">NEBULA REVENUE GRID</h2>';
-    h += '<p class="font-mono text-muted" style="font-size:0.6rem;margin:0.35rem 0 0">Balance ' + fmtCash(G.cash) + ' · ' + fmtSp(G.sp || 0) + '</p>';
-    ensureBattlePass();
-    h += '<div class="shop-hero-actions mt-2"><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="open-battle-pass">BATTLE PASS · T' + G.battlePassTier + '</button></div></div>';
+    h += '<p class="font-mono text-muted" style="font-size:0.6rem;margin:0.35rem 0 0">Balance ' + fmtCash(G.cash) + ' · ' + fmtSp(G.sp || 0) + '</p></div>';
     syncShopFlashWeek();
     var flash = shopFlashBundle();
     var flashPrice = Math.floor(35000 * (flash.priceMult || 1));
@@ -4101,10 +4257,15 @@
       h += '<div class="flex-between shop-blitz-row ' + SKIN_PANEL + (u.purchased ? ' purchased' : '') + (u.endGame ? ' shop-blitz-endgame' : '') + '"><div style="flex:1;margin-right:0.5rem"><div style="font-size:0.75rem;font-weight:600">' + esc(u.name) + (u.endGame ? ' <span class="shop-blitz-eg-tag">ENDGAME</span>' : '') + '</div><div class="text-muted" style="font-size:0.55rem">' + esc(u.description) + (u.minEmpireLevel ? ' · LV.' + u.minEmpireLevel + '+' : '') + '</div></div><button type="button" class="game-btn game-btn-sm' + (u.purchased ? '' : ' game-btn-green') + '" data-action="buy-blitz" data-id="' + u.id + '"' + (u.purchased || G.cash < u.price ? ' disabled' : '') + '>' + (u.purchased ? 'PURCHASED' : fmtCash(u.price)) + '</button></div>';
     });
     h += '</div><div class="section-label mb-2" style="text-align:left">GENERAL STORE</div>';
+    var storeRevTotal = inventoryRevPerSec();
+    h += '<div class="store-rev-summary ' + SKIN_PANEL + ' p-2 mb-2"><div class="flex-between"><span class="font-mono text-xs text-muted">PASSIVE REVENUE</span><span class="font-mono text-green text-xs">+' + storeRevTotal.toFixed(1) + '/sec</span></div></div>';
     G.inventory.forEach(function (it) {
       var def = STORE.find(function (x) { return x.id === it.id; }) || it;
-      var revBonus = def.revPerSec || (it.type === 'nutrient' ? 0.5 : it.type === 'pipe' ? 1.2 : 0);
-      h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="flex-row"><div>' + farmIcon((def.icon || it.icon || 'pack'), { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + '</div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
+      var revBonus = def.revPerSec || (it.type === 'nutrient' ? 4 : it.type === 'pipe' ? 10 : 0);
+      var maxOwn = 30;
+      var tierPct = Math.min(100, Math.round((it.owned / maxOwn) * 100));
+      var tierLabel = it.owned >= 20 ? 'MAXED' : (it.owned >= 10 ? 'TIER III' : (it.owned >= 5 ? 'TIER II' : (it.owned >= 1 ? 'TIER I' : 'LOCKED')));
+      h += '<div class="store-item-card ' + SKIN_PANEL + ' p-3 mb-2' + (it.owned > 0 ? ' store-item-owned' : '') + (UI._storeBuyFlash === it.id ? ' store-item-flash' : '') + '"><div class="flex-row"><div class="store-item-icon">' + farmIcon((def.icon || it.icon || 'pack'), { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + ' <span class="store-tier-tag">' + tierLabel + '</span></div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="store-progress-bar mt-1"><div class="store-progress-fill" style="width:' + tierPct + '%"></div></div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm store-buy-btn" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
     });
     h += '</div>';
     return h;
@@ -4173,38 +4334,40 @@
     h += '<div class="mutation-mode-tabs mb-3">';
     h += '<button type="button" class="mutation-mode-tab' + (mode === 'destroy' ? ' active' : '') + '" data-action="mutation-mode" data-id="destroy">DESTROY</button>';
     h += '<button type="button" class="mutation-mode-tab' + (mode === 'create' ? ' active' : '') + '" data-action="mutation-mode" data-id="create">CREATE</button></div>';
-    h += '<div class="font-mono text-xs text-green mb-2">Mutation Essence: ' + (G.mutationEssence || 0) + ' · Items: ' + ((G.mutationItems || []).length) + ' · Pack Luck +' + ((G.mutationPackLuck || 0) * 100).toFixed(0) + '% · Guarantees: ' + (G.mutationGuaranteeCharges || 0) + '</div>';
+    h += '<div class="font-mono text-xs text-green mb-2">Mutation Essence: ' + (G.mutationEssence || 0) + ' · Pool: ' + ((G.mutationPool || []).length) + ' · Guarantees: ' + (G.mutationGuaranteeCharges || 0) + '</div>';
     h += '<div class="flex-row gap-2 mb-2"><button type="button" class="game-btn game-btn-sm game-btn-green" style="flex:1" data-action="mutation-buy-luck"' + ((G.mutationEssence || 0) < 15 ? ' disabled' : '') + '>LUCK · 15 ESS</button>';
     h += '<button type="button" class="game-btn game-btn-sm game-btn-green" style="flex:1" data-action="mutation-buy-guarantee"' + ((G.mutationEssence || 0) < 25 ? ' disabled' : '') + '>GUARANTEE · 25 ESS</button></div>';
-    h += '<button type="button" class="game-btn game-btn-sm w-full mb-3' + (UI.packGuarantee ? ' game-btn-green' : '') + '" data-action="toggle-pack-guarantee">PACK GUARANTEE: ' + (UI.packGuarantee ? 'ON' : 'OFF') + ' (' + (G.mutationGuaranteeCharges || 0) + ' charges)</button>';
     if (mode === 'destroy') {
-      h += '<p class="text-muted text-xs mb-2">Burn strains into permanent mutation shards. Higher rarity = more essence.</p>';
-      h += '<div class="binder-grid mutation-burn-grid mb-2" style="max-height:42vh;overflow-y:auto">';
+      h += '<p class="text-muted text-xs mb-2">Burn strains — all traits transfer to your mutation pool for custom builds.</p>';
+      h += '<div class="binder-grid mutation-burn-grid mb-2" style="max-height:36vh;overflow-y:auto">';
       G.strains.filter(function (s) { return !s.planetExclusive || (s.quantity || 1) > 1; }).forEach(function (s) {
         var gain = Math.floor((1 + rarityIndex(s.rarity)) * (1 + blitzMod('mutationEssence')));
         h += '<button type="button" class="mutation-burn-card" data-action="destroy-strain" data-id="' + esc(s.id) + '">';
-        h += crCardHtml(s, { noFocus: true }) + '<div class="mutation-burn-tag">+' + gain + ' ESS</div></button>';
+        h += crCardHtml(s, { noFocus: true }) + '<div class="mutation-burn-tag">+' + gain + ' ESS · ' + ((s.abilities || []).length) + ' traits</div></button>';
       });
       h += '</div>';
-      if (!(G.mutationItems || []).length) h += '<div class="text-muted text-xs text-center">No mutation items yet — destroy cards to forge shards.</div>';
+      ensureMutationPool();
+      if (!(G.mutationPool || []).length) h += '<div class="text-muted text-xs text-center">Pool empty — destroy strains to collect traits.</div>';
       else {
-        h += '<div class="section-label mb-2 mt-2">EQUIP SHARDS ON STRAINS</div><div class="mutation-item-list mb-2">';
-        (G.mutationItems || []).slice(-8).reverse().forEach(function (m) {
-          h += '<div class="mutation-item-chip mutation-equip-chip" data-action="equip-mutation-pick" data-id="' + esc(m.id) + '" style="--chip-color:' + rarityColor(m.tier) + '"><span class="font-mono text-xs">' + esc(m.name) + '</span><span class="text-muted text-xs">+' + m.power + ' PWR</span></div>';
+        h += '<div class="section-label mb-2 mt-2">MUTATION POOL</div><div class="mutation-pool-grid mb-2">';
+        (G.mutationPool || []).slice().reverse().forEach(function (m) {
+          var sel = UI.mutationPoolPick === m.poolId;
+          h += '<button type="button" class="mutation-pool-chip' + (sel ? ' selected' : '') + '" data-action="pool-pick-mutation" data-id="' + esc(m.poolId) + '" style="--chip-color:' + rarityColor(RARITIES[Math.min(m.rarity || 0, RARITIES.length - 1)].id) + '">';
+          h += abilityIcon(m.id) + '<div class="mutation-pool-meta"><span class="font-mono text-xs">' + esc(m.name) + '</span><span class="text-muted text-xs">from ' + esc(m.source) + '</span></div></button>';
         });
         h += '</div>';
-        if (UI.mutationEquipPick) {
-          h += '<p class="text-xs text-green mb-2">Tap a strain to equip selected shard:</p><div class="binder-grid mutation-pick-grid mb-2" style="max-height:24vh;overflow-y:auto">';
+        if (UI.mutationPoolPick) {
+          h += '<p class="text-xs text-green mb-2">Tap a strain to apply selected trait:</p><div class="binder-grid mutation-pick-grid mb-2" style="max-height:24vh;overflow-y:auto">';
           G.strains.forEach(function (s) {
-            var eq = mutationItemForStrain(s.id);
-            h += '<button type="button" class="merge-pick-card' + (eq ? ' selected' : '') + '" data-action="equip-mutation" data-id="' + esc(UI.mutationEquipPick) + ':' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + (eq ? '<div class="mutation-burn-tag">' + esc(eq.name) + '</div>' : '') + '</button>';
+            h += '<button type="button" class="merge-pick-card" data-action="apply-pool-mutation" data-id="' + esc(UI.mutationPoolPick) + ':' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</button>';
           });
           h += '</div>';
         }
       }
     } else {
       var err = mergeLabError();
-      h += '<p class="text-muted text-xs mb-2">Fortnite-style splice — fuse two parents with a glowing core.</p>';
+      var preview = fusePreviewChild();
+      h += '<p class="text-muted text-xs mb-2">Fuse two parents — pick inherited traits, preview stats, then commit.</p>';
       h += '<div class="mutation-fuse-rail flex-row mb-3" style="justify-content:center;align-items:center;gap:0.5rem">';
       [G.breedSlotA, G.breedSlotB].forEach(function (sid, si) {
         var bs = sid ? strainById(sid) : null;
@@ -4212,7 +4375,22 @@
         if (si === 0) h += '<div class="mutation-fuse-plus">+</div>';
       });
       h += '</div>';
-      h += '<div class="binder-grid mutation-pick-grid mb-2" style="max-height:32vh;overflow-y:auto">';
+      var parentAbs = fuseParentAbilities();
+      if (parentAbs.length) {
+        h += '<div class="section-label mb-2">INHERIT TRAITS</div><div class="mutation-inherit-grid mb-2">';
+        parentAbs.forEach(function (aid) {
+          var def = abilityDef(aid);
+          var on = UI.fuseAbilityPick[aid] !== false;
+          h += '<button type="button" class="mutation-inherit-chip' + (on ? ' selected' : '') + '" data-action="toggle-fuse-ability" data-id="' + esc(aid) + '">' + abilityIcon(aid) + '<span>' + esc(def.name) + '</span></button>';
+        });
+        h += '</div>';
+      }
+      if (preview) {
+        h += '<div class="mutation-preview-panel ' + SKIN_PANEL + ' p-2 mb-2"><div class="section-label section-label-green mb-1">HYBRID PREVIEW</div>';
+        h += '<div class="flex-row gap-2" style="align-items:center"><div style="flex:1;min-width:0">' + crCardHtml(preview, { noFocus: true }) + '</div>';
+        h += '<div class="mutation-preview-stats text-xs"><div class="text-green">THC ' + preview.thcPercent + '%</div><div>Yield ' + preview.yield + '</div><div>DPS ' + strainBattleDpsBase(preview).toFixed(1) + '</div><div class="text-muted">' + (preview.abilities || []).length + ' traits</div></div></div></div>';
+      }
+      h += '<div class="binder-grid mutation-pick-grid mb-2" style="max-height:28vh;overflow-y:auto">';
       G.strains.filter(function (s) { return !s.planetExclusive || s.quantity > 1; }).forEach(function (s) {
         var onA = G.breedSlotA === s.id, onB = G.breedSlotB === s.id;
         h += '<button type="button" class="merge-pick-card' + (onA || onB ? ' selected' : '') + '" data-action="merge-pick" data-id="' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true, selected: onA || onB }) + '</button>';
@@ -4261,11 +4439,27 @@
 
   function renderMap() {
     var owned = G.ownedPlanets || [];
-    var h = '<div class="screen-section map-screen"><div class="flex-between mb-2"><div><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">UNIVERSE MAP</h2><p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + owned.length + ' worlds</p></div>';
+    var scanPct = mapScanProgressPct();
+    var stars = starMapNodes();
+    var h = '<div class="screen-section map-screen"><div class="flex-between mb-2"><div><h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">GALAXY MAP</h2><p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + owned.length + ' worlds · ' + scanPct + '% charted</p></div>';
     h += '<button type="button" class="game-btn game-btn-sm" data-action="map-billings">' + farmIcon('bill') + ' BILLINGS</button></div>';
+    h += '<div class="star-map-wrap ' + SKIN_PANEL + (UI.scanAnimating ? ' star-map-scanning' : '') + '">';
+    h += '<div class="star-map-nebula"></div><div class="star-map-particles"></div>';
+    stars.forEach(function (node) {
+      var cls = 'star-map-node';
+      if (!node.scanned) cls += ' unscanned';
+      if (node.planet) cls += ' claimed';
+      if (node.pulse) cls += ' pulse';
+      if (UI.focusedPlanetId && node.planet && node.planet.id === UI.focusedPlanetId) cls += ' focused';
+      var col = node.planet ? rarityColor(node.planet.rarity) : 'rgba(6,182,212,0.85)';
+      h += '<button type="button" class="' + cls + '" data-action="star-map-focus" data-id="' + esc(node.planet ? node.planet.id : node.id) + '" style="left:' + node.x + '%;top:' + node.y + '%;--star-z:' + node.z + ';--star-color:' + col + '" title="' + (node.planet ? esc(planetDisplayName(node.planet)) : 'Uncharted sector') + '"><span class="star-map-core"></span></button>';
+    });
+    if (UI.scanAnimating) h += '<div class="star-map-scan-sweep"></div>';
+    h += '</div>';
+    h += '<div class="map-scan-progress mb-2"><div class="map-scan-progress-label flex-between"><span class="font-mono text-xs text-muted">SCAN PROGRESS</span><span class="font-mono text-xs text-cyan">' + scanPct + '%</span></div><div class="map-scan-progress-bar"><div class="map-scan-progress-fill" style="width:' + scanPct + '%"></div></div></div>';
     h += '<div class="map-scan-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line"></div><div class="map-scan-beam"></div>';
-    h += '<button type="button" class="map-scan-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">SCAN</span></button></div>';
-    if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Scanning hyperspace lanes…</div>';
+    h += '<button type="button" class="map-scan-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">SCAN SECTOR</span></button></div>';
+    if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Probing hyperspace lanes…</div>';
     if (G.scanPending) {
       var p = G.scanPending;
       var exStrain = genExclusivePlanetStrain(p);
@@ -4293,9 +4487,11 @@
         if (strain) h += '<div class="text-green text-xs text-center mb-2">' + esc(strain.name) + ' · stored ' + Math.floor(fpl.storedYield || 0) + '</div>';
         h += '<input type="text" class="input-field mb-2" placeholder="Rename planet" data-action="planet-rename" data-id="' + esc(fpl.id) + '" value="' + esc(fpl.customName || '') + '">';
         var hc = 5000 * (fpl.harvesterLv + 1), cc = 4000 * (fpl.conveyorLv + 1), uc = 25 * (fpl.upgraderMult || 1);
-        h += '<div class="grid-3 gap-2 mb-2"><button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-planet" data-id="' + esc(fpl.id) + ':harvester"' + (G.cash < hc || fpl.harvesterLv >= 20 ? ' disabled' : '') + '>HARV Lv.' + fpl.harvesterLv + '</button>';
-        h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="up-planet" data-id="' + esc(fpl.id) + ':conveyor"' + (G.cash < cc || fpl.conveyorLv >= 20 ? ' disabled' : '') + '>CONV Lv.' + fpl.conveyorLv + '</button>';
-        h += '<button type="button" class="game-btn game-btn-sm" data-action="up-planet" data-id="' + esc(fpl.id) + ':upgrader"' + (G.sp < uc || (fpl.upgraderMult || 1) >= 8 ? ' disabled' : '') + '>x' + (fpl.upgraderMult || 1) + ' · ' + uc + ' SP</button></div>';
+        h += '<div class="planet-upgrade-grid mb-2">';
+        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">HARVESTER Lv.' + fpl.harvesterLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill" style="width:' + Math.min(100, fpl.harvesterLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':harvester"' + (G.cash < hc || fpl.harvesterLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(hc) + '</button></div>';
+        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">CONVEYOR Lv.' + fpl.conveyorLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill conveyor" style="width:' + Math.min(100, fpl.conveyorLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':conveyor"' + (G.cash < cc || fpl.conveyorLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(cc) + '</button></div>';
+        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">OUTPUT x' + (fpl.upgraderMult || 1) + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill sp" style="width:' + Math.min(100, ((fpl.upgraderMult || 1) / 8) * 100) + '%"></div></div><button type="button" class="game-btn game-btn-sm w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':upgrader"' + (G.sp < uc || (fpl.upgraderMult || 1) >= 8 ? ' disabled' : '') + '>MULT · ' + uc + ' SP</button></div>';
+        h += '</div>';
         h += '<button type="button" class="game-btn game-btn-green w-full game-btn-sm" data-action="harvest-planet" data-id="' + esc(fpl.id) + '"' + ((fpl.storedYield || 0) < 1 ? ' disabled' : '') + '>HARVEST EXCLUSIVE STRAIN</button></div>';
       }
       h += '<div class="section-label mb-2 mt-2">OTHER CLAIMED WORLDS</div>';
@@ -4368,134 +4564,65 @@
   function renderCoop() {
     ensureStorefrontSlots();
     var view = UI.coopView || 'hub';
-    var clan = window.VoidlineClan ? window.VoidlineClan.getState() : { inClan: false };
-    var h = '<div class="screen-section coop-screen clan-screen">';
-    h += '<div class="clan-hero ' + SKIN_PANEL + ' text-center mb-2">';
-    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">VOID CLAN HQ</h2>';
-    if (clan.inClan) {
-      h += '<p class="font-mono text-green text-xs mt-1">[' + esc(clan.tag) + '] ' + esc(clan.name) + ' · ' + clan.memberCount + '/' + (window.VoidlineClan ? window.VoidlineClan.MAX_MEMBERS : 50) + '</p>';
-      h += '<p class="text-muted text-xs">🏆 ' + (clan.trophies || 0) + ' · ⚔️ ' + (clan.territories || []).length + ' zones</p>';
-    } else {
-      h += '<p class="text-muted text-xs mt-1">Join or create a clan · trade · war · chat</p>';
-    }
+    var h = '<div class="screen-section coop-screen market-screen">';
+    h += '<div class="market-hero ' + SKIN_PANEL + ' text-center mb-2">';
+    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">FAMILY MARKET</h2>';
+    h += '<p class="text-muted text-xs mt-1">Roadside shops · buy &amp; sell between family members</p>';
     h += '</div>';
 
-    if (view !== 'myshop' && view.indexOf('shop:') !== 0) {
-      h += '<div class="clan-nav-row mb-2">';
-      [['hub', 'HUB'], ['clan-chat', 'CHAT'], ['clan-war', 'WAR'], ['clan-trade', 'TRADE'], ['market', 'MARKET']].forEach(function (pair) {
-        h += '<button type="button" class="clan-nav-btn' + (view === pair[0] ? ' active' : '') + '" data-action="clan-view" data-id="' + pair[0] + '">' + pair[1] + '</button>';
-      });
+    if (view === 'myshop') {
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← MARKET</button>';
+      h += '<div class="section-label section-label-green mb-2">MY ROADSIDE SHOP · ' + G.storefrontSlotCount + '/' + STOREFRONT_MAX + ' SLOTS</div>';
+      h += '<div class="roadside-grid mb-3">';
+      for (var si = 0; si < STOREFRONT_MAX; si++) h += renderStorefrontSlot(si, true);
       h += '</div>';
-    }
-
-    if (view === 'clan-chat') {
-      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
-      h += '<div class="clan-chat-panel ' + SKIN_PANEL + '"><div class="clan-chat-scroll" id="clan-chat-scroll">';
-      (clan.messages || []).forEach(function (m) {
-        h += '<div class="clan-chat-line"><span class="clan-chat-user">' + esc(m.user) + '</span> ';
-        if (m.emote) h += '<span class="clan-chat-emote">' + esc(m.emote) + '</span> ';
-        h += '<span class="clan-chat-body">' + esc(m.body) + '</span></div>';
-      });
-      h += '</div><div class="clan-emote-row">';
-      (clan.emotes || []).forEach(function (em) {
-        h += '<button type="button" class="clan-emote-btn" data-action="clan-emote" data-id="' + esc(em) + '">' + em + '</button>';
-      });
-      h += '</div><input type="text" class="input-field mb-2" id="clan-chat-input" placeholder="Message clan..." maxlength="500">';
-      h += '<button type="button" class="game-btn game-btn-green w-full" data-action="clan-send-chat">SEND</button></div>';
-    } else if (view === 'clan-war') {
-      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
-      h += '<div class="clan-war-map ' + SKIN_PANEL + ' p-3 mb-2"><div class="section-label mb-2">TERRITORY CONTROL</div><div class="clan-war-grid">';
-      (clan.warZones || []).forEach(function (z) {
-        var owned = z.ownerTag === clan.tag;
-        h += '<button type="button" class="clan-war-zone' + (owned ? ' owned' : '') + '" data-action="clan-war-attack" data-id="' + esc(z.id) + '"' + (!clan.inClan ? ' disabled' : '') + '>';
-        h += '<div class="clan-war-zone-label">' + esc(z.label) + '</div>';
-        h += '<div class="clan-war-zone-owner">' + (z.ownerTag ? '[' + esc(z.ownerTag) + ']' : 'CONTESTED') + '</div></button>';
-      });
-      h += '</div><div class="text-muted text-xs text-center mt-2">War points: ' + (clan.warPoints || 0) + '/100 per capture</div></div>';
-      var lb = window.VoidlineClan ? window.VoidlineClan.getLeaderboard() : [];
-      h += '<div class="section-label mb-2">CLAN LEADERBOARD</div>';
-      lb.forEach(function (row, i) {
-        h += '<div class="clan-lb-row ' + SKIN_PANEL + ' p-2 mb-1"><span class="font-mono text-cyan">#' + (i + 1) + '</span> [' + esc(row.tag) + '] ' + esc(row.name) + ' · ' + row.trophies + ' 🏆</div>';
-      });
-    } else if (view === 'clan-trade') {
-      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
-      h += '<div class="' + SKIN_PANEL + ' p-3 text-center text-muted text-sm mb-2">Gift strains to clanmates from Index → lift card → GIFT. Cloud trade ledger ships in next patch.</div>';
-      if (G.strains.length) {
-        h += '<div class="binder-grid">';
-        G.strains.slice(0, 6).forEach(function (s) {
-          h += '<div class="liftable-wrap" data-lift="index-' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</div>';
-        });
-        h += '</div>';
-      }
-    } else if (view === 'market' || view === 'myshop') {
-      if (view === 'market') h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="clan-view" data-id="hub">← HUB</button>';
-      if (view === 'myshop') {
-        h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
-        h += '<div class="section-label section-label-green mb-2">MY ROADSIDE SHOP · ' + G.storefrontSlotCount + '/' + STOREFRONT_MAX + ' SLOTS</div>';
-        h += '<div class="roadside-grid mb-3">';
-        for (var si = 0; si < STOREFRONT_MAX; si++) h += renderStorefrontSlot(si, true);
-        h += '</div>';
-        if (G.storefrontSlotCount < STOREFRONT_MAX) {
-          var sc = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
-          h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="sf-buy-slot"' + (G.cash < sc ? ' disabled' : '') + '>UNLOCK SLOT · ' + fmtCash(sc) + '</button>';
-        }
-      } else {
-        h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
-        h += '<div class="flex-between align-center mb-2">';
-        h += '<div class="section-label" style="margin:0">FAMILY MARKET</div>';
-        h += '<button type="button" class="game-btn game-btn-sm" data-action="coop-refresh"' + (UI.coopSyncing ? ' disabled' : '') + '>' + (UI.coopSyncing ? 'SYNCING…' : 'SYNC FAMILY') + '</button>';
-        h += '</div>';
-        if (UI.coopSyncing) {
-          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Pulling Aden, Dad &amp; Jamie saves from cloud…</p>';
-        } else if (window.VoidlineCloud && window.VoidlineCloud.isLoggedIn()) {
-          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Cloud family account · tap SYNC FAMILY after someone else plays</p>';
-        } else {
-          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Local device only — sign in with cloud to sync Dad/Jamie across phones</p>';
-        }
-        PLAYERS.forEach(function (pl) {
-          var save = readPlayerSaveForCoop(pl.id);
-          var dps = save ? playerBattleDps(save).toFixed(1) : '—';
-          var lvl = save ? (save.empireLevel || 1) : '—';
-          var cashStr = save ? fmtCash(save.cash || 0) : '—';
-          var node = save ? (save.campaignNode || 1) : '—';
-          var strainCount = save ? (save.strains || []).length : 0;
-          h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-3 mb-2' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
-          h += '<div class="flex-row gap-2"><div>' + avatarHtml(migrateAvatar((save && save.avatar) || pl.portrait), '2rem') + '</div>';
-          h += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:0.8rem">' + esc((save && save.name) || pl.label) + (pl.id === activePlayerId ? ' · YOU' : '') + '</div>';
-          if (!save) {
-            h += '<div class="font-mono text-xs text-muted">No save yet — switch profile &amp; play as ' + esc(pl.label) + '</div>';
-          } else {
-            h += '<div class="font-mono text-xs text-green">DPS ' + dps + ' · Lv.' + lvl + ' · ' + cashStr + '</div>';
-            h += '<div class="font-mono text-xs text-muted">Node ' + node + ' · ' + strainCount + ' strains</div>';
-          }
-          h += '</div>';
-          if (pl.id !== activePlayerId && save) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
-          h += '</div></div>';
-        });
+      if (G.storefrontSlotCount < STOREFRONT_MAX) {
+        var sc = STOREFRONT_SLOT_COST * G.storefrontSlotCount;
+        h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="sf-buy-slot"' + (G.cash < sc ? ' disabled' : '') + '>UNLOCK SLOT · ' + fmtCash(sc) + '</button>';
       }
     } else if (view.indexOf('shop:') === 0) {
       var pid = view.slice(5);
       var pl = playerDef(pid);
       var save = readPlayerSaveForCoop(pid);
-      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
+      h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← MARKET</button>';
       h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div>' + avatarHtml(migrateAvatar((save && save.avatar) || pl.portrait), '2.5rem') + '</div><div style="font-weight:700">' + esc((save && save.name) || pl.label) + '</div>';
       if (save) h += '<div class="font-mono text-xs text-green mt-1">DPS ' + playerBattleDps(save).toFixed(1) + ' · Lv.' + (save.empireLevel || 1) + '</div>';
       h += '</div>';
       h += renderPlayerShopGrid(pid);
     } else {
-      if (!clan.inClan) {
-        h += '<div class="clan-join-panel ' + SKIN_PANEL + ' p-3 mb-3">';
-        h += '<div class="section-label mb-2">JOIN OR CREATE</div>';
-        h += '<input type="text" class="input-field mb-2" id="clan-join-tag" placeholder="Clan tag (e.g. VOID)" maxlength="5">';
-        h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="clan-join">JOIN CLAN</button>';
-        h += '<input type="text" class="input-field mb-2" id="clan-create-name" placeholder="New clan name" maxlength="24">';
-        h += '<input type="text" class="input-field mb-2" id="clan-create-tag" placeholder="New clan tag" maxlength="5">';
-        h += '<button type="button" class="game-btn w-full" data-action="clan-create">CREATE CLAN</button></div>';
+      h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
+      h += '<div class="flex-between align-center mb-2">';
+      h += '<div class="section-label" style="margin:0">FAMILY STOREFRONTS</div>';
+      h += '<button type="button" class="game-btn game-btn-sm" data-action="coop-refresh"' + (UI.coopSyncing ? ' disabled' : '') + '>' + (UI.coopSyncing ? 'SYNCING…' : 'SYNC FAMILY') + '</button>';
+      h += '</div>';
+      if (UI.coopSyncing) {
+        h += '<p class="text-muted text-xs mb-2 coop-sync-status">Pulling Aden, Dad &amp; Jamie saves from cloud…</p>';
+      } else if (window.VoidlineCloud && window.VoidlineCloud.isLoggedIn()) {
+        h += '<p class="text-muted text-xs mb-2 coop-sync-status">Cloud family account · tap SYNC FAMILY after someone else plays</p>';
       } else {
-        h += '<button type="button" class="game-btn game-btn-sm w-full mb-2" data-action="clan-leave">LEAVE CLAN</button>';
+        h += '<p class="text-muted text-xs mb-2 coop-sync-status">Local device only — sign in with cloud to sync Dad/Jamie across phones</p>';
       }
-      h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="clan-view" data-id="market">' + farmIcon('shop') + ' FAMILY MARKET</button>';
-      h += '<button type="button" class="game-btn w-full mb-2" data-action="open-battle-pass">' + farmIcon('mega') + ' BATTLE PASS</button>';
+      PLAYERS.forEach(function (pl) {
+        var save = readPlayerSaveForCoop(pl.id);
+        var dps = save ? playerBattleDps(save).toFixed(1) : '—';
+        var lvl = save ? (save.empireLevel || 1) : '—';
+        var cashStr = save ? fmtCash(save.cash || 0) : '—';
+        var node = save ? (save.campaignNode || 1) : '—';
+        var strainCount = save ? (save.strains || []).length : 0;
+        var listed = save && save.storefrontSlots ? save.storefrontSlots.filter(function (sl) { return sl && sl.strainId; }).length : 0;
+        h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-3 mb-2' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
+        h += '<div class="flex-row gap-2"><div>' + avatarHtml(migrateAvatar((save && save.avatar) || pl.portrait), '2rem') + '</div>';
+        h += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:0.8rem">' + esc((save && save.name) || pl.label) + (pl.id === activePlayerId ? ' · YOU' : '') + '</div>';
+        if (!save) {
+          h += '<div class="font-mono text-xs text-muted">No save yet — switch profile &amp; play as ' + esc(pl.label) + '</div>';
+        } else {
+          h += '<div class="font-mono text-xs text-green">DPS ' + dps + ' · Lv.' + lvl + ' · ' + cashStr + '</div>';
+          h += '<div class="font-mono text-xs text-muted">Node ' + node + ' · ' + strainCount + ' strains · ' + listed + ' listed</div>';
+        }
+        h += '</div>';
+        if (pl.id !== activePlayerId && save) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
+        h += '</div></div>';
+      });
     }
 
     if ((G.leaseOffers || []).length && view === 'hub') {
@@ -4580,7 +4707,7 @@
     if (blitzRushMult() > 1) dpsSources.push('Blitz Rush total: ×' + blitzRushMult().toFixed(2) + ' on all blitz mods');
     if ((G.voidEssence || 0) > 0) dpsSources.push('Void Essence: ×' + voidEssenceMult().toFixed(2) + ' (' + G.voidEssence + ' essence)');
     h += '<div class="section-label section-label-green mb-2">BATTLE DPS</div>';
-    h += modSectionCard('Total DPS', totalBattleDps().toFixed(1) + '/s', dpsSources.length ? dpsSources : ['Equip strains on the Fight tab']);
+    h += modVisualCard('Total DPS', totalBattleDps().toFixed(1) + '/s', Math.min(100, totalBattleDps() * 1.5), 'equip', dpsSources.length ? dpsSources : ['Equip strains on the Fight tab']);
 
     var revSources = [];
     var invRev = inventoryRevPerSec();
@@ -4599,7 +4726,7 @@
     if ((G.voidEssence || 0) > 0) revSources.push('Void Essence: ×' + voidEssenceMult().toFixed(2));
     if (G.empireLevel > 1) revSources.push('Empire Level ' + G.empireLevel + ': milestone packs on level-up');
     h += '<div class="section-label mb-2 mt-2">PASSIVE REVENUE</div>';
-    h += modSectionCard('Total Passive', fmtRev(revSecTotal()), revSources.length ? revSources : ['Equip strains on portal floors']);
+    h += modVisualCard('Total Passive', fmtRev(revSecTotal()), Math.min(100, revSecTotal() * 3), 'nutrient', revSources.length ? revSources : ['Equip strains on portal floors']);
 
     var planetSources = [];
     (G.ownedPlanets || []).forEach(function (p) {
@@ -4608,7 +4735,7 @@
     });
     if (blitzMod('planet') > 0) planetSources.push('Blitz Planet: +' + modPct(blitzMod('planet')));
     h += '<div class="section-label mb-2 mt-2">PLANET OUTPUT</div>';
-    h += modSectionCard('Worlds', String((G.ownedPlanets || []).length) + ' claimed', planetSources.length ? planetSources : ['Scan the Map tab to claim worlds']);
+    h += modVisualCard('Worlds', String((G.ownedPlanets || []).length) + ' claimed', Math.min(100, (G.ownedPlanets || []).length * 12), 'planet', planetSources.length ? planetSources : ['Scan the Map tab to claim worlds']);
 
     var scanSources = [];
     G.sectorUpgrades.forEach(function (x) {
@@ -4620,7 +4747,7 @@
     });
     if (blitzRushMult() > 1 && scanMult() > 0) scanSources.push('Blitz Rush multiplier applied to scan total');
     h += '<div class="section-label mb-2 mt-2">SCAN RATE</div>';
-    h += modSectionCard('Scan Bonus', modPct(scanMult()), scanSources.length ? scanSources : ['Upgrade sectors on the Map tab']);
+    h += modVisualCard('Scan Bonus', modPct(scanMult()), Math.min(100, scanMult() * 200), 'scan', scanSources.length ? scanSources : ['Upgrade sectors on the Map tab']);
 
     var luckSources = [];
     (G.purchasedBlitzIds || []).forEach(function (bid) {
@@ -4634,7 +4761,7 @@
     if (familyLuck > 0) luckSources.push('Family Co-Op Level Synergy: +' + modPct(familyLuck) + ' (Lv.' + CoOpSynergyManager.getFamilyLevel() + ')');
     if ((G.mutationPackLuck || 0) > 0) luckSources.push('Mutation Lab: +' + modPct(G.mutationPackLuck));
     h += '<div class="section-label mb-2 mt-2">PACK LUCK</div>';
-    h += modSectionCard('Rarity Bonus', modPct(packLuckBonus()), luckSources.length ? luckSources : ['No pack luck modifiers yet']);
+    h += modVisualCard('Rarity Bonus', modPct(packLuckBonus()), Math.min(100, packLuckBonus() * 300), 'gift', luckSources.length ? luckSources : ['No pack luck modifiers yet']);
 
     var cloneSources = [];
     if (blitzMod('clone') > 0) cloneSources.push('Blitz Clone: −' + modPct(blitzMod('clone')) + ' duration');
@@ -4642,7 +4769,7 @@
       if (hasAbility(st, 'clone_echo')) cloneSources.push('Clone Echo (' + esc(st.name) + '): −' + modPct(1 - Math.pow(0.9, abilityBoostMult(st, 'clone_echo'))) + ' per stack');
     });
     h += '<div class="section-label mb-2 mt-2">CLONE SPEED</div>';
-    h += modSectionCard('Clone Time', fmtCd(CLONE_MS * (1 - blitzMod('clone'))), cloneSources.length ? cloneSources : ['Base 60s — blitz & Clone Echo reduce time']);
+    h += modVisualCard('Clone Time', fmtCd(CLONE_MS * (1 - blitzMod('clone'))), Math.min(100, 40 + blitzMod('clone') * 120), 'clone', cloneSources.length ? cloneSources : ['Base 60s — blitz & Clone Echo reduce time']);
 
     var endGameSources = [];
     if (blitzMod('mutationEssence') > 0) endGameSources.push('Mutation Essence: +' + modPct(blitzMod('mutationEssence')) + ' from burns');
@@ -4654,7 +4781,7 @@
     if (blitzMod('raid') > 0) endGameSources.push('Raid DPS: +' + modPct(blitzMod('raid')));
     if (endGameSources.length) {
       h += '<div class="section-label mb-2 mt-2">END-GAME BLITZ</div>';
-      h += modSectionCard('Power Mods', String(endGameSources.length) + ' active', endGameSources);
+      h += modVisualCard('Power Mods', String(endGameSources.length) + ' active', Math.min(100, endGameSources.length * 14), 'blitz', endGameSources);
     }
 
     var blitzSources = [];
@@ -4665,18 +4792,18 @@
     if (!blitzSources.length) blitzSources.push('No permanent blitz purchased yet — visit Shop');
     else if (blitzRushMult() > 1) blitzSources.push('Blitz Rush strains: ×' + blitzRushMult().toFixed(2) + ' on all blitz effects');
     h += '<div class="section-label mb-2 mt-2">BLITZ MODIFIERS</div>';
-    h += modSectionCard('Owned', String((G.purchasedBlitzIds || []).length) + ' / ' + BLITZ_CATALOG.length, blitzSources);
+    h += modVisualCard('Owned', String((G.purchasedBlitzIds || []).length) + ' / ' + BLITZ_CATALOG.length, Math.min(100, ((G.purchasedBlitzIds || []).length / BLITZ_CATALOG.length) * 100), 'mega', blitzSources);
 
     if ((G.voidEssence || 0) > 0) {
       h += '<div class="section-label mb-2 mt-2">VOID ESSENCE</div>';
-      h += modSectionCard('Prestige Mult', '×' + voidEssenceMult().toFixed(2), [
+      h += modVisualCard('Prestige Mult', '×' + voidEssenceMult().toFixed(2), Math.min(100, (G.voidEssence || 0) * 4), 'omega', [
         'Void Essence: ' + (G.voidEssence || 0) + ' (+5% DPS & revenue each)',
         'Earned from prestige resets (1 per $1M cash earned)',
       ]);
     }
     if (hasAutoScanFleet()) {
       h += '<div class="section-label mb-2 mt-2">AUTO-SCAN FLEET</div>';
-      h += modSectionCard('Fleet Status', 'ACTIVE', ['Scans every ' + Math.round(autoScanIntervalMs() / 1000) + 's · auto-keeps ' + rarityName(AUTO_SCAN_MIN_RARITY) + '+ worlds']);
+      h += modVisualCard('Fleet Status', 'ACTIVE', 100, 'scan', ['Scans every ' + Math.round(autoScanIntervalMs() / 1000) + 's · auto-keeps ' + rarityName(AUTO_SCAN_MIN_RARITY) + '+ worlds']);
     }
 
     h += '</div>';
@@ -4719,7 +4846,7 @@
       '<p><span class="text-green">Strains</span> — CR-style cards with THC, yield, potency, and 1–5 abilities from a 500-trait catalog sharing 12 core mechanics. Procedural variants inherit the same mechanic with scaled min-rarity.</p>' +
       '<p><span class="text-green">Abilities</span> — Crit Burst, Yield Surge (+20% floor rev), THC Overdrive, Shield Sap, Poison Cloud, Clone Echo (−10% clone time), Cash Magnet, Portal Sync (+12% floor rev), Blitz Rush, Rift Luck (+5% pack luck), Boss Slayer, Regen Mist. Upgrade any ability infinitely with SP; cost = 10 + lvl×12×1.12^min(lvl,120).</p>' +
       '<p><span class="text-green">Merge Lab</span> — Fuse two parents in the Index for 15 SP → new F1 hybrid inheriting parent traits plus a chance at a new catalog ability.</p>' +
-      '<p><span class="text-green">Shop</span> — Mystery packs (Basic, Guaranteed Rift, Omega), rotating blitz window (10 offers from 500 permanent upgrades), nutrients (+0.5/sec), and pipes (+1.2–2.5/sec).</p>' +
+      '<p><span class="text-green">Shop</span> — Mystery packs (Basic, Guaranteed Rift, Omega), rotating blitz window (10 offers from 500 permanent upgrades), nutrients (+4–20/sec passive), and pipes.</p>' +
       '<p><span class="text-green">Blitz</span> — Cash-purchased permanent modifiers: revenue, yield, scan, clone speed, pack luck, battle DPS, planet output. First purchase starts a 30-min window; timer rolls new shop offers. Blitz Rush strains amplify all owned blitz effects up to ×1.5.</p>' +
       '<p><span class="text-green">Planets</span> — Scan the Map, claim worlds, upgrade harvesters/conveyors, spend SP on output multipliers (up to ×8), harvest exclusive strains. Planet output = base × harvester × conveyor × upgrader × blitz planet.</p>' +
       '<p><span class="text-green">Portal Floors</span> — Rocket hub → equip strains to mine passive cash. Revenue = strain yield × THC × floor level × blitz revenue × blitz yield × ability multipliers.</p>' +
@@ -4784,21 +4911,18 @@
       h += profileStatsHtml();
     } else {
       h += '<div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24">';
-      h += '<div class="font-mono text-muted mb-2" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker">';
+      h += '<div class="font-mono text-muted mb-2 text-center" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker customize-avatar-picker">';
       AVATARS.forEach(function (a) { h += '<button type="button" class="avatar-opt' + (G.avatar === a ? ' selected' : '') + '" data-action="set-avatar" data-av="' + esc(a) + '">' + avatarHtml(a, '2rem') + '</button>'; });
-      h += '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">BADGES</div><div class="grid-3 mb-3">';
+      h += '</div><div class="font-mono text-muted mb-2 text-center" style="font-size:0.5rem">BADGES</div>';
       [0, 1, 2].forEach(function (slot) {
-        h += '<select class="input-field" data-action="set-badge" data-slot="' + slot + '"><option value="">—</option>';
-        BADGES.forEach(function (b) { h += '<option value="' + b.id + '"' + (G.badgeIds[slot] === b.id ? ' selected' : '') + '>' + b.label + '</option>'; });
-        h += '</select>';
+        h += '<div class="badge-slot-row mb-2"><div class="font-mono text-xs text-muted text-center mb-1">SLOT ' + (slot + 1) + '</div><div class="badge-picker-grid">';
+        h += '<button type="button" class="badge-opt' + (!G.badgeIds[slot] ? ' selected' : '') + '" data-action="set-badge" data-slot="' + slot + '" data-id="">—</button>';
+        BADGES.forEach(function (b) {
+          h += '<button type="button" class="badge-opt' + (G.badgeIds[slot] === b.id ? ' selected' : '') + '" data-action="set-badge" data-slot="' + slot + '" data-id="' + b.id + '"><span class="badge-opt-icon">' + farmIcon(b.icon, { lg: true }) + '</span><span class="badge-opt-label">' + esc(b.label) + '</span></button>';
+        });
+        h += '</div></div>';
       });
-      h += '</div><div class="font-mono text-muted mb-2" style="font-size:0.5rem">STOREFRONT (3 SLOTS) — SHARE BOARD</div>';
-      [0, 1, 2].forEach(function (slot) {
-        var sf = G.storefrontSlots[slot];
-        h += '<div class="flex-row mb-2"><select class="input-field" style="flex:1" data-action="sf-strain" data-slot="' + slot + '"><option value="">Empty</option>';
-        G.strains.forEach(function (s) { h += '<option value="' + esc(s.id) + '"' + (sf.strainId === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; });
-        h += '</select><input type="number" class="input-field" style="width:5rem" placeholder="Price" data-action="sf-price" data-slot="' + slot + '" value="' + (sf.price || '') + '"></div>';
-      });
+      h += '<div class="profile-badge-preview text-center mb-2">' + profileBadgesHtml() + '</div>';
     }
     h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn" style="flex:1" data-action="switch-player">' + farmIcon('swap') + ' SWITCH PLAYER</button><button type="button" class="game-btn" style="flex:1" data-action="open-settings">' + farmIcon('settings') + ' SETTINGS</button></div><button type="button" class="game-btn game-btn-green w-full" data-close="profile">RESUME</button></div>';
     document.getElementById('profile-panel').innerHTML = h;
@@ -5380,13 +5504,25 @@
         if (G.breedSlotB === val) G.breedSlotB = null;
       }
       UI.mergeLab = Object.assign({}, UI.mergeLab || {}, { error: '' });
+      UI.fuseAbilityPick = {};
     }
     else if (act==='profile-tab') UI.profileTab = val;
     else if (act==='toggle-help') UI.helpOpen = !UI.helpOpen;
     else if (act==='start-clone') { var sel = document.getElementById('clone-select'); if (sel && sel.value) startClone(sel.value); }
     else if (act==='up-strain') onUpgrade(val);
     else if (act==='set-avatar') G.avatar = val;
-    else if (act==='set-badge') { var p = val.split(':'); G.badgeIds = G.badgeIds.slice(); G.badgeIds[parseInt(p[0], 10)] = p[1] || null; }
+    else if (act==='set-badge') {
+      var p = val.split(':');
+      var slot = parseInt(p[0], 10);
+      G.badgeIds = G.badgeIds.slice();
+      G.badgeIds[slot] = p[1] || null;
+      if (p[1]) {
+        var bdef = BADGES.find(function (b) { return b.id === p[1]; });
+        showBattleToast((bdef ? bdef.label : 'Badge') + ' equipped', true);
+        popLabel('BADGE!', { mega: true });
+      }
+      markHudDirty();
+    }
     else if (act==='sf-strain') { var p2 = val.split(':'); var slot = parseInt(p2[0], 10); G.storefrontSlots = G.storefrontSlots.slice(); G.storefrontSlots[slot] = Object.assign({}, G.storefrontSlots[slot], { strainId: p2[1] || null }); }
     else if (act==='sf-price') { var p3 = val.split(':'); var slot2 = parseInt(p3[0], 10); G.storefrontSlots = G.storefrontSlots.slice(); G.storefrontSlots[slot2] = Object.assign({}, G.storefrontSlots[slot2], { price: parseFloat(p3[1]) || 0 }); }
     else if (act==='toggle-warp') UI.realityWarp = !UI.realityWarp;
@@ -5401,6 +5537,9 @@
     else if (act==='planet-keep') { keepScannedPlanet(); }
     else if (act==='planet-discard') { discardScannedPlanet(); }
     else if (act==='planet-focus') { UI.focusedPlanetId = UI.focusedPlanetId === val ? null : val; }
+    else if (act==='star-map-focus') {
+      if (val.indexOf('star-') !== 0) UI.focusedPlanetId = UI.focusedPlanetId === val ? null : val;
+    }
     else if (act==='up-planet') { var pu = val.split(':'); upPlanetUpgrade(pu[0], pu[1]); }
     else if (act==='harvest-planet') { harvestPlanet(val); }
     else if (act==='breed-run') { startMergeFuse(); return; }
@@ -5505,6 +5644,22 @@
     else if (act==='raid-equip-sort') UI.raidEquipSort = val;
     else if (act==='index-pane') UI.indexPane = val;
     else if (act==='mutation-mode') UI.mutationMode = val;
+    else if (act==='toggle-fuse-ability') {
+      if (!UI.fuseAbilityPick) UI.fuseAbilityPick = {};
+      UI.fuseAbilityPick[val] = UI.fuseAbilityPick[val] === false;
+    }
+    else if (act==='pool-pick-mutation') {
+      UI.mutationPoolPick = UI.mutationPoolPick === val ? null : val;
+    }
+    else if (act==='apply-pool-mutation') {
+      var colon = val.indexOf(':');
+      if (colon > 0) {
+        applyPoolMutation(val.slice(colon + 1), val.slice(0, colon));
+        UI.mutationPoolPick = null;
+      }
+      render();
+      return;
+    }
     else if (act==='destroy-strain') destroyStrain(val);
     else if (act==='buy-showcase') buyDailyShowcase(parseInt(val, 10));
     else if (act==='open-daily-login') { UI.dailyLoginOpen = true; render(); return; }
@@ -5561,79 +5716,6 @@
       render();
       return;
     }
-    else if (act==='clan-view') {
-      UI.coopView = val;
-      if (val === 'market') {
-        syncCoopFamilySaves(function () { render(); });
-        render();
-        return;
-      }
-      render();
-      return;
-    }
-    else if (act==='clan-join') {
-      var cjTag = document.getElementById('clan-join-tag');
-      if (window.VoidlineClan && cjTag) {
-        window.VoidlineClan.joinClan(cjTag.value, G.name).then(function (r) {
-          showBattleToast(r.ok ? 'Joined [' + (r.state && r.state.tag ? r.state.tag : '') + ']' : (r.error || 'Join failed'), r.ok);
-          if (r.ok) UI.coopView = 'clan-chat';
-          render();
-        });
-      }
-      return;
-    }
-    else if (act==='clan-create') {
-      var ccName = document.getElementById('clan-create-name');
-      var ccTag = document.getElementById('clan-create-tag');
-      if (window.VoidlineClan && ccName && ccTag) {
-        window.VoidlineClan.createClan(ccName.value, ccTag.value, G.name).then(function (r) {
-          showBattleToast(r.ok ? 'Clan [' + (r.state && r.state.tag ? r.state.tag : '') + '] founded!' : (r.error || 'Create failed'), r.ok);
-          if (r.ok) UI.coopView = 'clan-chat';
-          render();
-        });
-      }
-      return;
-    }
-    else if (act==='clan-leave') {
-      if (window.VoidlineClan) {
-        window.VoidlineClan.leaveClan().then(function () {
-          showBattleToast('Left clan', true);
-          UI.coopView = 'hub';
-          render();
-        });
-      }
-      return;
-    }
-    else if (act==='clan-send-chat') {
-      var ccInput = document.getElementById('clan-chat-input');
-      if (window.VoidlineClan && ccInput) {
-        window.VoidlineClan.sendMessage(ccInput.value, '', G.name).then(function (r) {
-          if (!r.ok) showBattleToast(r.error || 'Send failed', false);
-          else { ccInput.value = ''; render(); }
-        });
-      }
-      return;
-    }
-    else if (act==='clan-emote') {
-      var ceInput = document.getElementById('clan-chat-input');
-      if (ceInput) ceInput.value = (ceInput.value || '') + val;
-      render();
-      return;
-    }
-    else if (act==='clan-war-attack') {
-      if (window.VoidlineClan) {
-        var warPower = Math.max(5, Math.floor(totalBattleDps()));
-        window.VoidlineClan.contributeWar(val, warPower).then(function (r) {
-          if (!r.ok) showBattleToast(r.error || 'War failed', false);
-          else {
-            showBattleToast(r.captured ? 'Territory captured!' : '+' + warPower + ' war power', true);
-            addBattlePassXp(5);
-            render();
-          }
-        });
-      }
-      return;
-    }
     else if (act==='breed-pick') {
       var bp = val.split(':');
       if (bp[0] === 'a') G.breedSlotA = bp[1] || null;
@@ -5673,7 +5755,7 @@
       e.stopPropagation();
       var a = t.dataset.action, v = t.dataset.id || t.dataset.pack || t.dataset.pid || t.dataset.av;
       if (a === 'equip-floor') runAction(a, t.dataset.id + ':' + (t.value !== undefined ? t.value : ''));
-      else if (a === 'set-badge') runAction(a, t.dataset.slot + ':' + t.value);
+      else if (a === 'set-badge') runAction(a, t.dataset.slot + ':' + (t.dataset.id || ''));
       else if (a === 'sf-strain') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'sf-price') runAction(a, t.dataset.slot + ':' + t.value);
       else if (a === 'set-avatar') runAction(a, t.dataset.av);
@@ -5699,7 +5781,7 @@
     if (t.dataset.action === 'index-search') runAction('index-search', t.value);
     if (t.dataset.action === 'index-sort') runAction('index-sort', t.value);
     if (t.id === 'edit-name') { G.name = t.value.trim() || playerDef(activePlayerId).defaultName; scheduleSave(); }
-    if (t.dataset.action === 'set-badge') runAction('set-badge', t.dataset.slot + ':' + t.value);
+    if (t.dataset.action === 'set-badge') runAction('set-badge', t.dataset.slot + ':' + (t.dataset.id || ''));
     if (t.dataset.action === 'sf-strain') runAction('sf-strain', t.dataset.slot + ':' + t.value);
     if (t.dataset.action === 'sf-price') runAction('sf-price', t.dataset.slot + ':' + t.value);
     if (t.dataset.action === 'breed-pick') runAction('breed-pick', t.dataset.slot + ':' + t.value);
@@ -5729,14 +5811,6 @@
 
   function bootGame() {
     try {
-      if (window.VoidlineClan && typeof window.VoidlineClan.boot === 'function') {
-        window.VoidlineClan.boot();
-        if (window.VoidlineClan.onStateChange) {
-          window.VoidlineClan.onStateChange(function () {
-            if (UI.activeTab === 'coop') render();
-          });
-        }
-      }
       if (window.VoidlineCloud && window.VoidlineCloud.onSyncChange) {
         window.VoidlineCloud.onSyncChange(function () { UI.dirty.cloudSync = true; });
         UI.dirty.cloudSync = true;
