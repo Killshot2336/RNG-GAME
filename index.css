@@ -2506,6 +2506,193 @@
     .star-map-node.planet-rarity-mist .star-map-core { box-shadow: 0 0 18px #a78bfa; }
     .star-map-node.planet-rarity-legend .star-map-core { box-shadow: 0 0 22px #f97316, 0 0 36px rgba(249, 115, 22, 0.35); }
 
+    /* Map idle miners */
+    .map-screen-miners {
+      background: radial-gradient(ellipse at 50% 0%, rgba(251, 146, 60, 0.07), transparent 55%),
+                  radial-gradient(ellipse at 20% 80%, rgba(6, 182, 212, 0.05), transparent 45%);
+    }
+    .mining-ops-title {
+      background: linear-gradient(90deg, #fdba74, #f59e0b, #fde68a);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .mining-ops-btn { border-color: rgba(251, 146, 60, 0.4) !important; color: #fdba74 !important; }
+    .mining-ops-hud {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;
+    }
+    .mining-hud-stat {
+      padding: 0.45rem 0.5rem; border-radius: 0.55rem; text-align: center;
+      background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(251, 146, 60, 0.18);
+    }
+    .mining-hud-label { display: block; font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); letter-spacing: 0.08em; }
+    .mining-hud-val { display: block; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; margin-top: 0.15rem; }
+    .mining-ore-val.mining-ore-ready { color: #fde68a; animation: mining-ore-pulse 1.6s ease-in-out infinite; }
+    .miner-field-wrap {
+      position: relative; height: 12rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.75rem;
+      background: linear-gradient(180deg, rgba(12, 8, 4, 0.95), rgba(4, 6, 12, 0.98));
+      border: 2px solid rgba(251, 146, 60, 0.22);
+      box-shadow: 0 0 28px rgba(251, 146, 60, 0.1), inset 0 1px 0 rgba(251, 146, 60, 0.06);
+      perspective: 600px;
+    }
+    .miner-field-grid {
+      position: absolute; inset: 0; opacity: 0.12; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(251, 146, 60, 0.35) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(251, 146, 60, 0.35) 1px, transparent 1px);
+      background-size: 18px 18px;
+    }
+    .miner-field-nebula {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(circle at 25% 35%, rgba(251, 146, 60, 0.14), transparent 45%),
+                  radial-gradient(circle at 72% 62%, rgba(6, 182, 212, 0.1), transparent 40%);
+    }
+    .miner-field-dust {
+      position: absolute; inset: 0; opacity: 0.3; pointer-events: none;
+      background-image: radial-gradient(1px 1px at 15% 25%, rgba(253, 186, 116, 0.9), transparent),
+                        radial-gradient(1px 1px at 55% 70%, rgba(255, 255, 255, 0.5), transparent),
+                        radial-gradient(2px 2px at 82% 35%, rgba(251, 146, 60, 0.6), transparent);
+    }
+    .miner-field-prospecting { border-color: rgba(6, 182, 212, 0.45); }
+    .miner-prospect-sweep {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(105deg, transparent 38%, rgba(6, 182, 212, 0.22) 50%, transparent 62%);
+      animation: miner-prospect-sweep 1.6s ease-in-out infinite;
+    }
+    @keyframes miner-prospect-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .mining-site-node {
+      position: absolute; width: 1.5rem; height: 1.5rem; padding: 0; border: none; background: none; cursor: pointer;
+      transform: translate(-50%, -50%) scale(calc(0.65 + var(--star-z, 0.5) * 0.55));
+      z-index: calc(var(--star-z, 0.5) * 10);
+    }
+    .mining-site-pad {
+      position: absolute; inset: -0.15rem; border-radius: 0.35rem;
+      background: rgba(30, 20, 10, 0.85); border: 1px solid rgba(251, 146, 60, 0.25);
+      transform: rotate(45deg);
+    }
+    .mining-site-core {
+      display: block; width: 0.55rem; height: 0.55rem; margin: 0.45rem auto 0; border-radius: 50%;
+      background: rgba(120, 120, 140, 0.5); box-shadow: none;
+    }
+    .mining-site-node.unscanned .mining-site-core { opacity: 0.35; }
+    .mining-site-node.prospect .mining-site-core {
+      background: rgba(6, 182, 212, 0.65); animation: star-pulse 2s ease-in-out infinite;
+    }
+    .mining-site-rig {
+      position: absolute; left: 50%; top: 0.1rem; transform: translateX(-50%);
+      font-size: 0.7rem; color: var(--mine-color, #fbbf24); filter: drop-shadow(0 0 4px var(--mine-color));
+    }
+    .mining-site-beam {
+      position: absolute; left: 50%; top: 0.55rem; width: 2px; height: 0.65rem; transform: translateX(-50%);
+      background: linear-gradient(180deg, var(--mine-color, #fbbf24), transparent);
+      opacity: 0; pointer-events: none;
+    }
+    .mining-site-node.mining-active .mining-site-beam { opacity: 0.85; animation: mining-beam-pulse 1.2s ease-in-out infinite; }
+    .mining-site-sparks {
+      position: absolute; left: 50%; bottom: 0.1rem; width: 0.5rem; height: 0.35rem; transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(253, 224, 71, 0.9), transparent 70%);
+      opacity: 0; pointer-events: none;
+    }
+    .mining-site-node.mining-active .mining-site-sparks { opacity: 1; animation: mining-spark-flicker 0.45s ease-in-out infinite alternate; }
+    .mining-site-lvl {
+      position: absolute; bottom: -0.35rem; left: 50%; transform: translateX(-50%);
+      font-family: var(--font-mono); font-size: 0.38rem; color: #fde68a; white-space: nowrap;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+    }
+    .mining-site-node.focused .mining-site-pad { outline: 2px solid #fff; outline-offset: 1px; }
+    .mining-site-node.pulse .mining-site-rig { animation: star-pulse 2.4s ease-in-out infinite; }
+    .mining-site-node.mining-tier-2 .mining-site-rig { font-size: 0.78rem; }
+    .mining-site-node.mining-tier-3 .mining-site-rig { font-size: 0.85rem; }
+    .mining-site-node.mining-tier-4 .mining-site-rig { font-size: 0.92rem; filter: drop-shadow(0 0 6px var(--mine-color)); }
+    .mining-site-node.mining-tier-5 .mining-site-rig { font-size: 1rem; filter: drop-shadow(0 0 8px var(--mine-color)); }
+    .mining-prospect-bar { border: 1px solid rgba(251, 146, 60, 0.22); }
+    .mining-prospect-fill { background: linear-gradient(90deg, #c2410c, #f97316, #fde68a) !important; }
+    .mining-prospect-text { color: #fb923c !important; }
+    .mining-prospect-rail .mining-prospect-line {
+      background: linear-gradient(90deg, transparent, #fb923c, #fbbf24, transparent);
+      box-shadow: 0 0 14px rgba(251, 146, 60, 0.45);
+    }
+    .mining-prospect-bubble {
+      border-color: rgba(251, 146, 60, 0.55) !important;
+      background: radial-gradient(circle at 30% 30%, rgba(251, 146, 60, 0.3), rgba(12, 1, 26, 0.95)) !important;
+      box-shadow: 0 0 22px rgba(251, 146, 60, 0.35), inset 0 0 10px rgba(253, 186, 116, 0.12) !important;
+      color: #fdba74 !important;
+    }
+    .mining-prospect-bubble:hover:not(:disabled) { box-shadow: 0 0 30px rgba(251, 146, 60, 0.55) !important; }
+    .mining-fleet-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.45rem;
+    }
+    .mining-planet-card {
+      display: block; width: 100%; padding: 0.45rem 0.4rem 0.5rem; border-radius: 0.65rem; cursor: pointer; text-align: left;
+      background: rgba(0, 0, 0, 0.4); border: 2px solid rgba(251, 146, 60, 0.2);
+      color: inherit; transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .mining-planet-card:hover { transform: translateY(-2px); }
+    .mining-planet-card.selected { border-color: var(--mine-color, #fbbf24); box-shadow: 0 0 14px color-mix(in srgb, var(--mine-color) 40%, transparent); }
+    .mining-planet-card.mining-glow { animation: mining-discover-glow 1.2s ease-in-out infinite alternate; }
+    .mining-planet-card.mining-active { border-color: color-mix(in srgb, var(--mine-color) 55%, #fbbf24); }
+    .mining-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
+    .mining-card-rarity { font-family: var(--font-mono); font-size: 0.38rem; color: var(--mine-color); text-transform: uppercase; }
+    .mining-card-lv { font-family: var(--font-mono); font-size: 0.38rem; color: #fde68a; }
+    .mining-card-rig { position: relative; height: 2rem; display: flex; align-items: center; justify-content: center; margin-bottom: 0.2rem; }
+    .mining-card-drill { color: var(--mine-color); filter: drop-shadow(0 0 6px var(--mine-color)); }
+    .mining-card-beam {
+      position: absolute; bottom: 0.15rem; left: 50%; width: 3px; height: 0.75rem; transform: translateX(-50%);
+      background: linear-gradient(180deg, var(--mine-color), transparent); opacity: 0;
+    }
+    .mining-planet-card.mining-active .mining-card-beam { opacity: 0.9; animation: mining-beam-pulse 1.1s ease-in-out infinite; }
+    .mining-card-name { font-size: 0.62rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mining-card-stats { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.42rem; margin-top: 0.15rem; }
+    .mining-card-ore { color: #fde68a; animation: mining-ore-pulse 1.6s ease-in-out infinite; }
+    .mining-planet-card.mining-tier-2 { border-color: rgba(251, 146, 60, 0.35); }
+    .mining-planet-card.mining-tier-3 { box-shadow: inset 0 0 12px rgba(251, 146, 60, 0.08); }
+    .mining-planet-card.mining-tier-4 { box-shadow: 0 0 10px color-mix(in srgb, var(--mine-color) 25%, transparent); }
+    .mining-planet-card.mining-tier-5 { box-shadow: 0 0 16px color-mix(in srgb, var(--mine-color) 40%, transparent); }
+    .mining-rig-panel { border-color: rgba(251, 146, 60, 0.25) !important; position: relative; overflow: hidden; }
+    .mining-rig-panel::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.06;
+      background: repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(251, 146, 60, 0.5) 8px, rgba(251, 146, 60, 0.5) 9px);
+    }
+    .mining-rig-visual { position: relative; width: 2.5rem; height: 2rem; flex-shrink: 0; }
+    .mining-rig-drill { font-size: 1.25rem; color: var(--mine-color, #fbbf24); filter: drop-shadow(0 0 8px var(--mine-color)); }
+    .mining-rig-beam {
+      position: absolute; bottom: 0; left: 50%; width: 4px; height: 1rem; transform: translateX(-50%);
+      background: linear-gradient(180deg, var(--mine-color), transparent); opacity: 0;
+    }
+    .mining-rig-panel.mining-active .mining-rig-beam { opacity: 1; animation: mining-beam-pulse 1s ease-in-out infinite; }
+    .mining-rig-ore.mining-ore-ready { color: #fde68a; font-weight: 600; }
+    .mining-upgrade-card { border-color: rgba(251, 146, 60, 0.12); }
+    .mining-drill-fill { background: linear-gradient(90deg, #c2410c, #fb923c) !important; }
+    .mining-conveyor-fill { background: linear-gradient(90deg, #0891b2, #67e8f9) !important; }
+    .mining-yield-fill { background: linear-gradient(90deg, #a855f7, #f0abfc) !important; }
+    .mining-harvest-btn.mining-ore-ready { animation: mining-ore-pulse 1.8s ease-in-out infinite; box-shadow: 0 0 16px rgba(251, 146, 60, 0.35); }
+    .mining-up-btn:active:not(:disabled) { transform: scale(0.97); }
+    .mining-claim-btn:active { transform: scale(0.97); }
+    .mining-discover-panel { border-color: rgba(251, 146, 60, 0.35) !important; }
+    .miner-discover-flash { animation: mining-discover-glow 0.9s ease-out 2; }
+    .mine-flash { animation: mine-flash-pop 0.75s ease-out; }
+    @keyframes mining-beam-pulse {
+      0%, 100% { opacity: 0.5; transform: translateX(-50%) scaleY(0.85); }
+      50% { opacity: 1; transform: translateX(-50%) scaleY(1.1); }
+    }
+    @keyframes mining-spark-flicker {
+      0% { opacity: 0.4; transform: translateX(-50%) scale(0.8); }
+      100% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+    }
+    @keyframes mining-ore-pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.35); }
+    }
+    @keyframes mining-discover-glow {
+      0% { box-shadow: 0 0 0 rgba(251, 146, 60, 0); }
+      50% { box-shadow: 0 0 28px rgba(251, 146, 60, 0.55); }
+      100% { box-shadow: 0 0 8px rgba(251, 146, 60, 0.2); }
+    }
+    @keyframes mine-flash-pop {
+      0% { transform: scale(1); filter: brightness(1); }
+      35% { transform: scale(1.03); filter: brightness(1.4); box-shadow: 0 0 24px rgba(251, 146, 60, 0.5); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
+    .map-progress-flash .mining-prospect-fill { animation: map-progress-pulse 0.9s ease-out; }
+
     /* Shop / crate feedback */
     .shop-chest-pay-row { display: flex; gap: 0.35rem; margin-top: 0.35rem; }
     .shop-chest-pay-row .shop-chest-open-btn { flex: 1; }

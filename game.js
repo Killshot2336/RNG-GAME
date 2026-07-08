@@ -542,8 +542,8 @@
       bumpBattlePassChallenge('bp_scan', 1);
       addBattlePassXp(25, { silent: true });
       shakeScreen();
-      popLabel('SIGNAL FOUND!', { mega: true });
-      popLabel('NEW WORLD', { jackpot: true, delay: 150 });
+      popLabel('VEIN LOCATED!', { mega: true });
+      popLabel('NEW SITE', { jackpot: true, delay: 150 });
       plantSay('tab_map', true);
       scheduleSave();
       render();
@@ -563,9 +563,12 @@
     p.ownerId = activePlayerId;
     G.ownedPlanets = (G.ownedPlanets || []).concat([p]);
     G.scanPending = null;
+    UI._mapDiscoverFlash = Date.now();
+    if (!UI.focusedPlanetId) UI.focusedPlanetId = p.id;
+    flashMapPlanet(p.id, 'claim');
     addXp(30, true);
     popArcadeBurst([
-      { type: 'label', label: 'PLANET CLAIMED!', jackpot: true },
+      { type: 'label', label: 'MINING SITE ONLINE!', jackpot: true },
       { type: 'strain', strain: strain, mega: true, delay: 90 },
       { type: 'xp', amount: 30, big: true, delay: 180 },
     ]);
@@ -638,7 +641,9 @@
       planet.upgraderMult++;
     } else return false;
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
-    popLabel('PLANET UP!', { mega: true });
+    UI._mapProgressFlash = Date.now();
+    flashMapPlanet(pid, 'upgrade');
+    popLabel('MINING UP!', { mega: true });
     showBattleToast(kind.toUpperCase() + ' upgraded on ' + planetDisplayName(planet), true);
     return true;
   }
@@ -656,6 +661,7 @@
       G.strains[i] = Object.assign({}, G.strains[i], { quantity: G.strains[i].quantity + qty });
     }
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
+    flashMapPlanet(pid, 'harvest');
     addXp(qty * 4, true);
     bumpBattlePassChallenge('bp_harvest', 1);
     addBattlePassXp(20, { silent: true });
@@ -1035,6 +1041,88 @@
     markWalletDirty();
     scheduleSave();
     return true;
+  }
+
+  function planetMiningLevel(p) {
+    if (!p) return 0;
+    return (p.harvesterLv || 0) + (p.conveyorLv || 0) + Math.floor((p.upgraderMult || 1) * 2);
+  }
+
+  function planetMiningTier(p) {
+    var lv = planetMiningLevel(p);
+    if (lv >= 25) return 5;
+    if (lv >= 18) return 4;
+    if (lv >= 12) return 3;
+    if (lv >= 6) return 2;
+    return 1;
+  }
+
+  function mapMiningTotals() {
+    var owned = G.ownedPlanets || [];
+    var rev = 0, stored = 0;
+    owned.forEach(function (p) {
+      rev += planetOutputPerSec(p) * 8;
+      stored += p.storedYield || 0;
+    });
+    return { count: owned.length, rev: rev, stored: Math.floor(stored) };
+  }
+
+  function flashMapPlanet(pid, kind) {
+    UI._mapPlanetFlash = (pid || '') + ':' + (kind || 'pulse');
+    setTimeout(function () {
+      if (UI._mapPlanetFlash === (pid || '') + ':' + (kind || 'pulse')) UI._mapPlanetFlash = null;
+      if (UI.activeTab === 'map') render();
+    }, 750);
+  }
+
+  function miningSiteNodeHtml(node, planet) {
+    var col = planet ? rarityColor(planet.rarity) : 'rgba(250, 204, 21, 0.75)';
+    var tier = planet ? planetMiningTier(planet) : 0;
+    var lv = planet ? planetMiningLevel(planet) : 0;
+    var flash = planet && UI._mapPlanetFlash && UI._mapPlanetFlash.indexOf(planet.id) === 0;
+    var mining = planet && (planet.storedYield || 0) > 0;
+    var cls = 'mining-site-node';
+    if (!node.scanned) cls += ' unscanned';
+    else if (!planet) cls += ' prospect';
+    else {
+      cls += ' claimed mining-tier-' + tier + ' planet-rarity-' + planet.rarity;
+      if (mining) cls += ' mining-active';
+      if (flash) cls += ' mine-flash';
+      if (UI.focusedPlanetId === planet.id) cls += ' focused';
+    }
+    if (node.pulse) cls += ' pulse';
+    var inner = '';
+    if (planet) {
+      inner += '<span class="mining-site-pad"></span>';
+      inner += '<span class="mining-site-rig">' + farmIcon('pipe') + '</span>';
+      inner += '<span class="mining-site-beam"></span>';
+      inner += '<span class="mining-site-sparks"></span>';
+      inner += '<span class="mining-site-lvl">Lv' + lv + '</span>';
+    } else {
+      inner += '<span class="mining-site-core"></span>';
+    }
+    return '<button type="button" class="' + cls + '" data-action="star-map-focus" data-id="' + esc(planet ? planet.id : node.id) + '" style="left:' + node.x + '%;top:' + node.y + '%;--star-z:' + node.z + ';--mine-color:' + col + '" title="' + (planet ? esc(planetDisplayName(planet)) + ' · Mining Lv.' + lv : 'Uncharted sector') + '">' + inner + '</button>';
+  }
+
+  function miningPlanetCardHtml(p, opts) {
+    opts = opts || {};
+    var c = rarityColor(p.rarity);
+    var nm = planetDisplayName(p);
+    var tier = planetMiningTier(p);
+    var lv = planetMiningLevel(p);
+    var rev = Math.max(1, Math.floor(planetOutputPerSec(p) * 8));
+    var stored = Math.floor(p.storedYield || 0);
+    var flash = UI._mapPlanetFlash && UI._mapPlanetFlash.indexOf(p.id) === 0;
+    var focusAttr = opts.asAction ? ' data-action="planet-focus" data-id="' + esc(p.id) + '"' : ' data-planet-focus="' + esc(p.id) + '"';
+    var cls = 'mining-planet-card mining-tier-' + tier + (opts.selected ? ' selected' : '') + (opts.glow ? ' mining-glow' : '') + (flash ? ' mine-flash' : '') + (stored > 0 ? ' mining-active' : '');
+    var h = '<button type="button" class="' + cls + '"' + focusAttr + ' style="--mine-color:' + c + '">';
+    h += '<div class="mining-card-top"><span class="mining-card-rarity">' + esc(rarityName(p.rarity)) + '</span><span class="mining-card-lv">MINING Lv.' + lv + '</span></div>';
+    h += '<div class="mining-card-rig"><span class="mining-card-drill">' + farmIcon('nutrient', { lg: true }) + '</span><span class="mining-card-beam"></span></div>';
+    h += '<div class="mining-card-name">' + esc(nm) + '</div>';
+    h += '<div class="mining-card-stats"><span class="text-green">' + fmtRev(rev) + '</span>';
+    if (stored > 0) h += '<span class="mining-card-ore">ORE ' + stored + '</span>';
+    h += '</div></button>';
+    return h;
   }
 
   function planetCardHtml(p, opts) {
@@ -4816,74 +4904,80 @@
     var owned = G.ownedPlanets || [];
     var scanPct = mapScanProgressPct();
     var stars = starMapNodes();
+    var totals = mapMiningTotals();
     var mapFlash = UI.scanAnimating || (UI._mapProgressFlash && Date.now() - UI._mapProgressFlash < 1200);
-    var h = '<div class="screen-section map-screen map-screen-goldy"><div class="map-gold-header flex-between mb-2"><div><h2 class="font-display map-gold-title" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">GALAXY MAP</h2><p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + owned.length + ' worlds · ' + scanPct + '% charted</p></div>';
-    h += '<button type="button" class="game-btn game-btn-sm map-gold-btn" data-action="map-billings">' + farmIcon('bill') + ' BILLINGS</button></div>';
-    h += '<div class="star-map-wrap map-gold-frame ' + SKIN_PANEL + (UI.scanAnimating ? ' star-map-scanning' : '') + '">';
-    h += '<div class="star-map-nebula map-gold-nebula"></div><div class="star-map-particles map-gold-particles"></div>';
-    stars.forEach(function (node) {
-      var cls = 'star-map-node';
-      if (!node.scanned) cls += ' unscanned';
-      if (node.planet) {
-        cls += ' claimed planet-rarity-' + node.planet.rarity;
-      }
-      if (node.pulse) cls += ' pulse';
-      if (UI.focusedPlanetId && node.planet && node.planet.id === UI.focusedPlanetId) cls += ' focused';
-      var col = node.planet ? rarityColor(node.planet.rarity) : 'rgba(250, 204, 21, 0.75)';
-      h += '<button type="button" class="' + cls + '" data-action="star-map-focus" data-id="' + esc(node.planet ? node.planet.id : node.id) + '" style="left:' + node.x + '%;top:' + node.y + '%;--star-z:' + node.z + ';--star-color:' + col + '" title="' + (node.planet ? esc(planetDisplayName(node.planet)) : 'Uncharted sector') + '"><span class="star-map-core"></span></button>';
-    });
-    if (UI.scanAnimating) h += '<div class="star-map-scan-sweep"></div>';
+    var discoverFlash = UI._mapDiscoverFlash && Date.now() - UI._mapDiscoverFlash < 1400;
+    var h = '<div class="screen-section map-screen map-screen-miners">';
+    h += '<div class="mining-ops-header flex-between mb-2"><div><h2 class="font-display mining-ops-title" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">VOID MINERS</h2>';
+    h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + totals.count + ' rigs online · ' + scanPct + '% prospected</p></div>';
+    h += '<button type="button" class="game-btn game-btn-sm mining-ops-btn" data-action="map-billings">' + farmIcon('bill') + ' BILLINGS</button></div>';
+    h += '<div class="mining-ops-hud mb-2"><div class="mining-hud-stat"><span class="mining-hud-label">OUTPUT</span><span class="mining-hud-val text-green">' + fmtRev(totals.rev) + '/s</span></div>';
+    h += '<div class="mining-hud-stat"><span class="mining-hud-label">ORE BANK</span><span class="mining-hud-val mining-ore-val' + (totals.stored > 0 ? ' mining-ore-ready' : '') + '">' + totals.stored + '</span></div>';
+    h += '<div class="mining-hud-stat"><span class="mining-hud-label">ACTIVE RIGS</span><span class="mining-hud-val">' + totals.count + '</span></div></div>';
+    h += '<div class="miner-field-wrap ' + SKIN_PANEL + (UI.scanAnimating ? ' miner-field-prospecting' : '') + (discoverFlash ? ' miner-discover-flash' : '') + '">';
+    h += '<div class="miner-field-grid"></div><div class="miner-field-nebula"></div><div class="miner-field-dust"></div>';
+    stars.forEach(function (node) { h += miningSiteNodeHtml(node, node.planet); });
+    if (UI.scanAnimating) h += '<div class="miner-prospect-sweep"></div>';
     h += '</div>';
-    h += '<div class="map-scan-progress mb-2' + (mapFlash ? ' map-progress-flash' : '') + '"><div class="map-scan-progress-label flex-between"><span class="font-mono text-xs text-muted">SCAN PROGRESS</span><span class="font-mono text-xs map-gold-text">' + scanPct + '%</span></div><div class="map-scan-progress-bar map-gold-bar"><div class="map-scan-progress-fill map-gold-fill" style="width:' + scanPct + '%"></div></div></div>';
-    h += '<div class="map-scan-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line"></div><div class="map-scan-beam"></div>';
-    h += '<button type="button" class="map-scan-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">SCAN SECTOR</span></button></div>';
-    if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Probing hyperspace lanes…</div>';
+    h += '<div class="map-scan-progress mining-prospect-progress mb-2' + (mapFlash ? ' map-progress-flash' : '') + '"><div class="map-scan-progress-label flex-between"><span class="font-mono text-xs text-muted">PROSPECT PROGRESS</span><span class="font-mono text-xs mining-prospect-text">' + scanPct + '%</span></div>';
+    h += '<div class="map-scan-progress-bar mining-prospect-bar"><div class="map-scan-progress-fill mining-prospect-fill" style="width:' + scanPct + '%"></div></div></div>';
+    h += '<div class="map-scan-rail mining-prospect-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line mining-prospect-line"></div><div class="map-scan-beam mining-prospect-beam"></div>';
+    h += '<button type="button" class="map-scan-bubble mining-prospect-bubble" data-action="map-scan"' + (UI.scanAnimating ? ' disabled' : '') + '><span class="map-scan-label">' + farmIcon('pipe') + ' PROSPECT SECTOR</span></button></div>';
+    if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Deploying survey drones…</div>';
     if (G.scanPending) {
       var p = G.scanPending;
       var exStrain = genExclusivePlanetStrain(p);
-      h += '<div class="planet-scan-panel halftone-panel glass-inset mb-3">';
-      h += '<div class="section-label section-label-green planet-scan-label">PLANET DETECTED</div>';
-      h += '<div class="planet-scan-card-wrap liftable-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
-      h += '<div class="planet-scan-strain text-xs text-muted">Exclusive strain: <span class="text-green">' + esc(exStrain.name) + '</span> · ' + esc(rarityName(p.rarity)) + '</div>';
-      h += '<input type="text" class="input-field planet-scan-rename" placeholder="Name your planet (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
-      h += '<div class="flex-row gap-2 planet-scan-actions"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="planet-keep">KEEP</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="planet-discard">DISCARD</button></div>';
+      h += '<div class="planet-scan-panel mining-discover-panel halftone-panel glass-inset mb-3 miner-discover-flash">';
+      h += '<div class="section-label section-label-green planet-scan-label">MINING SITE DETECTED</div>';
+      h += '<div class="planet-scan-card-wrap mining-discover-card liftable-wrap" data-lift="planet-scan">' + miningPlanetCardHtml(p, { glow: true }) + '</div>';
+      h += '<div class="planet-scan-strain mining-discover-strain text-xs text-muted">Exclusive ore vein: <span class="text-green">' + esc(exStrain.name) + '</span> · ' + esc(rarityName(p.rarity)) + '</div>';
+      h += '<input type="text" class="input-field planet-scan-rename" placeholder="Name your mining site (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
+      h += '<div class="flex-row gap-2 planet-scan-actions"><button type="button" class="game-btn game-btn-green game-btn-sm mining-claim-btn" style="flex:1" data-action="planet-keep">' + farmIcon('nutrient') + ' CLAIM SITE</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="planet-discard">PASS</button></div>';
       h += '</div>';
     }
     if (owned.length) {
-      h += '<div class="section-label mb-2">OWNED WORLDS</div>';
-      h += '<div class="binder-grid planet-owned-grid mb-3">';
+      h += '<div class="section-label mb-2">MINING FLEET</div>';
+      h += '<div class="mining-fleet-grid mb-3">';
       owned.forEach(function (pl) {
         var sel = UI.focusedPlanetId === pl.id;
-        h += '<div class="liftable-wrap planet-lift-wrap" data-lift="planet-' + esc(pl.id) + '">' + planetCardHtml(pl, { selected: sel }) + '</div>';
+        h += '<div class="liftable-wrap planet-lift-wrap" data-lift="planet-' + esc(pl.id) + '">' + miningPlanetCardHtml(pl, { selected: sel }) + '</div>';
       });
       h += '</div>';
       var fpl = UI.focusedPlanetId ? owned.find(function (p) { return p.id === UI.focusedPlanetId; }) : owned[0];
       if (fpl) {
         var strain = strainById(fpl.exclusiveStrainId);
-        h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 planet-owned-detail"><div style="font-weight:600;font-size:0.9rem;text-align:center">' + esc(planetDisplayName(fpl)) + '</div>';
-        h += '<div class="text-muted text-xs text-center mb-2">' + fmtRev(planetOutputPerSec(fpl) * 8) + ' · x' + (fpl.upgraderMult || 1) + ' mult</div>';
-        if (strain) h += '<div class="text-green text-xs text-center mb-2">' + esc(strain.name) + ' · stored ' + Math.floor(fpl.storedYield || 0) + '</div>';
-        h += '<input type="text" class="input-field mb-2" placeholder="Rename planet" data-action="planet-rename" data-id="' + esc(fpl.id) + '" value="' + esc(fpl.customName || '') + '">';
-        var hc = 5000 * (fpl.harvesterLv + 1), cc = 4000 * (fpl.conveyorLv + 1), uc = 25 * (fpl.upgraderMult || 1);
-        h += '<div class="planet-upgrade-grid mb-2">';
-        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">HARVESTER Lv.' + fpl.harvesterLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill" style="width:' + Math.min(100, fpl.harvesterLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':harvester"' + (G.cash < hc || fpl.harvesterLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(hc) + '</button></div>';
-        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">CONVEYOR Lv.' + fpl.conveyorLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill conveyor" style="width:' + Math.min(100, fpl.conveyorLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':conveyor"' + (G.cash < cc || fpl.conveyorLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(cc) + '</button></div>';
-        h += '<div class="planet-upgrade-card"><div class="planet-upgrade-label">OUTPUT x' + (fpl.upgraderMult || 1) + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill sp" style="width:' + Math.min(100, ((fpl.upgraderMult || 1) / 8) * 100) + '%"></div></div><button type="button" class="game-btn game-btn-sm w-full" data-action="up-planet" data-id="' + esc(fpl.id) + ':upgrader"' + (G.sp < uc || (fpl.upgraderMult || 1) >= 8 ? ' disabled' : '') + '>MULT · ' + uc + ' SP</button></div>';
+        var tier = planetMiningTier(fpl);
+        var lv = planetMiningLevel(fpl);
+        var stored = Math.floor(fpl.storedYield || 0);
+        var rigFlash = UI._mapPlanetFlash && UI._mapPlanetFlash.indexOf(fpl.id) === 0;
+        h += '<div class="mining-rig-panel ' + SKIN_PANEL + ' p-3 mb-3 mining-tier-' + tier + (rigFlash ? ' mine-flash' : '') + (stored > 0 ? ' mining-active' : '') + '" style="--mine-color:' + rarityColor(fpl.rarity) + '">';
+        h += '<div class="mining-rig-header flex-between mb-2"><div><div class="mining-rig-title" style="font-weight:600;font-size:0.9rem">' + esc(planetDisplayName(fpl)) + '</div>';
+        h += '<div class="text-muted text-xs">Mining Lv.' + lv + ' · Tier ' + tier + ' · x' + (fpl.upgraderMult || 1) + ' output</div></div>';
+        h += '<div class="mining-rig-visual"><span class="mining-rig-drill">' + farmIcon('pipe') + '</span><span class="mining-rig-beam"></span></div></div>';
+        h += '<div class="mining-rig-output flex-between mb-2"><span class="text-green text-xs">' + fmtRev(planetOutputPerSec(fpl) * 8) + '/s</span>';
+        if (strain) h += '<span class="mining-rig-ore text-xs' + (stored > 0 ? ' mining-ore-ready' : '') + '">ORE ' + stored + ' · ' + esc(strain.name) + '</span>';
         h += '</div>';
-        h += '<button type="button" class="game-btn game-btn-green w-full game-btn-sm" data-action="harvest-planet" data-id="' + esc(fpl.id) + '"' + ((fpl.storedYield || 0) < 1 ? ' disabled' : '') + '>HARVEST EXCLUSIVE STRAIN</button></div>';
+        h += '<input type="text" class="input-field mb-2" placeholder="Rename mining site" data-action="planet-rename" data-id="' + esc(fpl.id) + '" value="' + esc(fpl.customName || '') + '">';
+        var hc = 5000 * (fpl.harvesterLv + 1), cc = 4000 * (fpl.conveyorLv + 1), uc = 25 * (fpl.upgraderMult || 1);
+        h += '<div class="planet-upgrade-grid mining-upgrade-grid mb-2">';
+        h += '<div class="planet-upgrade-card mining-upgrade-card"><div class="planet-upgrade-label">DRILL Lv.' + fpl.harvesterLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill mining-drill-fill" style="width:' + Math.min(100, fpl.harvesterLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full mining-up-btn" data-action="up-planet" data-id="' + esc(fpl.id) + ':harvester"' + (G.cash < hc || fpl.harvesterLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(hc) + '</button></div>';
+        h += '<div class="planet-upgrade-card mining-upgrade-card"><div class="planet-upgrade-label">CONVEYOR Lv.' + fpl.conveyorLv + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill conveyor mining-conveyor-fill" style="width:' + Math.min(100, fpl.conveyorLv * 5) + '%"></div></div><button type="button" class="game-btn game-btn-sm game-btn-green w-full mining-up-btn" data-action="up-planet" data-id="' + esc(fpl.id) + ':conveyor"' + (G.cash < cc || fpl.conveyorLv >= 20 ? ' disabled' : '') + '>UPGRADE · ' + fmtCash(cc) + '</button></div>';
+        h += '<div class="planet-upgrade-card mining-upgrade-card"><div class="planet-upgrade-label">YIELD x' + (fpl.upgraderMult || 1) + '</div><div class="planet-upgrade-bar"><div class="planet-upgrade-fill sp mining-yield-fill" style="width:' + Math.min(100, ((fpl.upgraderMult || 1) / 8) * 100) + '%"></div></div><button type="button" class="game-btn game-btn-sm w-full mining-up-btn" data-action="up-planet" data-id="' + esc(fpl.id) + ':upgrader"' + (G.sp < uc || (fpl.upgraderMult || 1) >= 8 ? ' disabled' : '') + '>BOOST · ' + uc + ' SP</button></div>';
+        h += '</div>';
+        h += '<button type="button" class="game-btn game-btn-green w-full game-btn-sm mining-harvest-btn' + (stored > 0 ? ' mining-ore-ready' : '') + '" data-action="harvest-planet" data-id="' + esc(fpl.id) + '"' + (stored < 1 ? ' disabled' : '') + '>' + farmIcon('nutrient') + ' CLAIM ORE (' + stored + ')</button></div>';
       }
-      h += '<div class="section-label mb-2 mt-2">OTHER CLAIMED WORLDS</div>';
+      h += '<div class="section-label mb-2 mt-2">PARTNER MINES</div>';
       PLAYERS.forEach(function (pl) {
         if (pl.id === activePlayerId) return;
         var save = readPlayerSave(pl.id);
         if (!save || !save.ownedPlanets) return;
         save.ownedPlanets.forEach(function (op) {
-          h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="flex-between"><div><div style="font-weight:600;font-size:0.8rem">' + esc(op.customName || op.proceduralName) + '</div><div class="text-xs text-muted">Owner: ' + esc(save.name || pl.label) + ' · ' + esc(rarityName(op.rarity)) + '</div></div>';
-          h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="lease-offer-open" data-id="' + esc(op.id) + ':' + pl.id + '">LEASE</button></div></div>';
+          h += '<div class="' + SKIN_PANEL + ' p-3 mb-2 mining-lease-row"><div class="flex-between"><div><div style="font-weight:600;font-size:0.8rem">' + esc(op.customName || op.proceduralName) + '</div><div class="text-xs text-muted">Operator: ' + esc(save.name || pl.label) + ' · ' + esc(rarityName(op.rarity)) + '</div></div>';
+          h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="lease-offer-open" data-id="' + esc(op.id) + ':' + pl.id + '">LEASE RIG</button></div></div>';
         });
       });
     } else if (!G.scanPending && !UI.scanAnimating) {
-      h += '<div class="' + SKIN_PANEL + ' p-4 text-center text-muted text-sm">No worlds claimed. Tap SCAN on the rail to probe the universe.</div>';
+      h += '<div class="' + SKIN_PANEL + ' p-4 text-center text-muted text-sm">No mining rigs deployed. Tap <span class="text-cyan">PROSPECT SECTOR</span> to find your first site.</div>';
     }
     h += '</div>';
     return h;
