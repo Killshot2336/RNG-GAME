@@ -662,7 +662,8 @@
     return true;
   }
 
-  function harvestPlanet(pid) {
+  function harvestPlanet(pid, opts) {
+    opts = opts || {};
     var planet = planetById(pid);
     if (!planet || planet.storedYield < 1) return false;
     var strain = strainById(planet.exclusiveStrainId);
@@ -675,16 +676,86 @@
       G.strains[i] = Object.assign({}, G.strains[i], { quantity: G.strains[i].quantity + qty });
     }
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
-    flashMapPlanet(pid, 'harvest');
-    addXp(qty * 4, true);
-    bumpBattlePassChallenge('bp_harvest', 1);
-    addBattlePassXp(20, { silent: true });
-    popArcadeBurst([
-      { type: 'label', label: 'HARVEST!', mega: true },
-      { type: 'strain', strain: strain, qty: qty, big: true, delay: 80 },
-      { type: 'xp', amount: qty * 4, big: true, delay: 160 },
-    ]);
-    showBattleToast('Harvested x' + qty + ' ' + strain.name, false);
+    if (!opts.silent) {
+      flashMapPlanet(pid, 'harvest');
+      addXp(qty * 4, true);
+      bumpBattlePassChallenge('bp_harvest', 1);
+      addBattlePassXp(20, { silent: true });
+      popArcadeBurst([
+        { type: 'label', label: 'HARVEST!', mega: true },
+        { type: 'strain', strain: strain, qty: qty, big: true, delay: 80 },
+        { type: 'xp', amount: qty * 4, big: true, delay: 160 },
+      ]);
+      showBattleToast('Harvested x' + qty + ' ' + strain.name, false);
+    }
+    return { ok: true, qty: qty, strain: strain };
+  }
+
+  function fleetCollectableTotals() {
+    var ore = 0, sites = 0;
+    (G.ownedPlanets || []).forEach(function (p) {
+      var q = Math.floor(p.storedYield || 0);
+      if (q >= 1 && p.exclusiveStrainId && strainById(p.exclusiveStrainId)) {
+        ore += q;
+        sites++;
+      }
+    });
+    var cash = Math.floor(UI._planetCashAcc || 0);
+    var sp = Math.floor(UI._planetSpAcc || 0);
+    return { ore: ore, sites: sites, cash: cash, sp: sp, hasAnything: ore > 0 || cash >= 1 || sp >= 1 };
+  }
+
+  function harvestAllPlanets() {
+    var owned = G.ownedPlanets || [];
+    if (!owned.length) return false;
+    var totalOre = 0, totalXp = 0, harvestCount = 0, topStrain = null;
+    owned.forEach(function (p) {
+      if ((p.storedYield || 0) < 1) return;
+      var res = harvestPlanet(p.id, { silent: true });
+      if (!res || !res.ok) return;
+      harvestCount++;
+      totalOre += res.qty;
+      totalXp += res.qty * 4;
+      if (!topStrain) topStrain = res.strain;
+    });
+    var cashPop = UI._planetCashAcc || 0;
+    var spPop = UI._planetSpAcc || 0;
+    if (!harvestCount && cashPop < 1 && spPop < 1) {
+      showBattleToast('Nothing to collect from mining fleet', false);
+      return false;
+    }
+    if (totalXp) addXp(totalXp, true);
+    if (harvestCount) {
+      bumpBattlePassChallenge('bp_harvest', harvestCount);
+      addBattlePassXp(20 * harvestCount, { silent: true });
+      UI._mapProgressFlash = Date.now();
+    }
+    popLabel('COLLECTED ALL!', { mega: true, jackpot: true });
+    var burst = [{ type: 'label', label: 'FLEET COLLECT!', mega: true }];
+    if (cashPop >= 1) {
+      popCash(cashPop, { big: cashPop >= 400, mega: true, delay: 60 });
+      UI._planetCashAcc = 0;
+      UI._lastPlanetPop = Date.now();
+      burst.push({ type: 'cash', amount: cashPop, big: true, delay: 120 });
+    }
+    if (spPop >= 1) {
+      popSp(Math.max(1, Math.floor(spPop)), { big: spPop >= 8, delay: cashPop >= 1 ? 180 : 120 });
+      UI._planetSpAcc = 0;
+      UI._lastPlanetSpPop = Date.now();
+      burst.push({ type: 'sp', amount: Math.max(1, Math.floor(spPop)), delay: cashPop >= 1 ? 220 : 160 });
+    }
+    if (topStrain && totalOre > 0) {
+      burst.push({ type: 'strain', strain: topStrain, qty: totalOre, big: true, delay: 200 });
+    }
+    if (totalXp) burst.push({ type: 'xp', amount: totalXp, big: true, delay: 280 });
+    popArcadeBurst(burst);
+    var msg = [];
+    if (totalOre > 0) msg.push('x' + totalOre + ' ore from ' + harvestCount + ' site' + (harvestCount === 1 ? '' : 's'));
+    if (cashPop >= 1) msg.push(fmtCash(cashPop));
+    if (spPop >= 1) msg.push(Math.max(1, Math.floor(spPop)) + ' SP');
+    showBattleToast('Collected: ' + msg.join(' · '), true);
+    markWalletDirty();
+    scheduleSave();
     return true;
   }
 
@@ -5113,7 +5184,9 @@
       h += '</div>';
     }
     if (owned.length) {
+      var collect = fleetCollectableTotals();
       h += '<div class="section-label mb-2">MINING FLEET</div>';
+      h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mb-2 mining-collect-all-btn' + (collect.hasAnything ? ' mining-ore-ready' : '') + '" data-action="harvest-all-planets"' + (collect.hasAnything ? '' : ' disabled') + '>' + farmIcon('nutrient') + ' COLLECT ALL' + (collect.ore > 0 ? ' · ORE ' + collect.ore : '') + (collect.cash > 0 ? ' · ' + fmtCash(collect.cash) : '') + '</button>';
       h += '<input type="search" class="input-field mb-2" placeholder="Search mining sites..." data-action="fleet-search" value="' + esc(G.fleetSearch || '') + '">';
       h += sortChipsHtml('fleet-sort', G.fleetSort || 'rarity', PLANET_SORT_CHIPS);
       var fleet = filteredFleetPlanets();
@@ -6354,6 +6427,7 @@
     }
     else if (act==='up-planet') { var pu = val.split(':'); upPlanetUpgrade(pu[0], pu[1]); }
     else if (act==='harvest-planet') { harvestPlanet(val); }
+    else if (act==='harvest-all-planets') { harvestAllPlanets(); render(); return; }
     else if (act==='breed-run') { startMergeFuse(); return; }
     else if (act==='void-prestige') { if (confirm('Void Prestige resets cash, SP, and strains (keeps top 3 + all blitz). Continue?')) triggerVoidPrestige(); }
     else if (act==='coop-myshop') { UI.coopView = 'myshop'; }
