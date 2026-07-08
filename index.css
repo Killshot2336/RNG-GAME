@@ -98,6 +98,10 @@
       -webkit-overflow-scrolling: touch;
       padding: 0 1rem 1rem;
       scroll-padding-bottom: 1rem;
+      pointer-events: none;
+    }
+    .cr-screen-panel.cr-screen-panel-active {
+      pointer-events: auto;
     }
     .cr-screen-inner { min-height: 100%; }
     .glass-panel,

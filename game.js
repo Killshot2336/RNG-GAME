@@ -5048,16 +5048,47 @@
     return idx < 0 ? 2 : idx;
   }
 
+  function activeScreenPanel(root) {
+    root = root || DOM.screenRoot || document.getElementById('screen-root');
+    if (!root) return null;
+    var panels = root.querySelectorAll('.cr-screen-panel');
+    return panels[tabCarouselIndex()] || null;
+  }
+
+  function saveTabScroll(tab) {
+    tab = tab || UI.activeTab;
+    if (!tab) return;
+    var root = DOM.screenRoot || document.getElementById('screen-root');
+    if (!root) return;
+    if (!UI.tabScroll) UI.tabScroll = {};
+    var idx = TAB_ORDER.indexOf(tab);
+    if (idx < 0) return;
+    var panels = root.querySelectorAll('.cr-screen-panel');
+    if (panels[idx]) UI.tabScroll[tab] = panels[idx].scrollTop;
+  }
+
+  function scrollElementInPanel(el, panel) {
+    if (!el || !panel) return;
+    try {
+      var elRect = el.getBoundingClientRect();
+      var panelRect = panel.getBoundingClientRect();
+      var offset = elRect.top - panelRect.top + panel.scrollTop - (panel.clientHeight - el.clientHeight) / 2;
+      panel.scrollTop = Math.max(0, offset);
+    } catch (err) { console.error('scrollElementInPanel', err); }
+  }
+
   function renderActiveTabPanel(root, scrollTop) {
     if (!root) return;
     var idx = tabCarouselIndex();
     var activeTab = UI.activeTab;
-    var panels = TAB_ORDER.map(function (tab) {
+    var panels = TAB_ORDER.map(function (tab, i) {
       var inner = tab === activeTab ? screenRenderer(tab)() : '';
-      return '<div class="cr-screen-panel tab-bg-' + tab + '"><div class="cr-screen-inner">' + inner + '</div></div>';
+      var activeCls = i === idx ? ' cr-screen-panel-active' : '';
+      return '<div class="cr-screen-panel tab-bg-' + tab + activeCls + '"><div class="cr-screen-inner">' + inner + '</div></div>';
     }).join('');
     root.innerHTML = '<div class="screen-router-wrapper cr-screen-carousel" style="transform:translate3d(-' + (idx * 20) + '%,0,0)">' + panels + '</div>';
-    root.scrollTop = scrollTop;
+    var activePanel = root.querySelectorAll('.cr-screen-panel')[idx];
+    if (activePanel) activePanel.scrollTop = scrollTop || 0;
     bindCardParallax();
     bindImageFallbacks();
     UI.dirty.activeTab = false;
@@ -5076,7 +5107,9 @@
   function render() {
     if (!G) return;
     var root = DOM.screenRoot || document.getElementById('screen-root');
-    var scrollTop = root ? root.scrollTop : 0;
+    if (root && UI.activeTab) saveTabScroll(UI.activeTab);
+    if (!UI.tabScroll) UI.tabScroll = {};
+    var scrollTop = UI.tabScroll[UI.activeTab] || 0;
     renderHUD();
     renderPlayerSelect();
     if (!UI.playerSelectOpen && root) {
@@ -5096,11 +5129,13 @@
   }
 
   function scrollCampaignTrailToCurrent() {
-    if (!G || UI.activeTab !== 'battle' || UI.farmOpen) return;
+    if (!G || UI.activeTab !== 'battle' || UI.farmOpen || !UI.campaignTrailOpen || !UI._scrollCampaignTrail) return;
+    UI._scrollCampaignTrail = false;
     try {
       setTimeout(function () {
+        var panel = activeScreenPanel();
         var el = document.getElementById('campaign-node-' + currentCampaignNode());
-        if (el) el.scrollIntoView({ block: 'center', behavior: 'auto' });
+        if (el && panel) scrollElementInPanel(el, panel);
       }, 60);
     } catch (err) {
       console.error('scrollCampaignTrailToCurrent', err);
@@ -5245,14 +5280,14 @@
       UI.campaignTrailOpen = true;
       UI.farmOpen = false;
       UI.battleWaveFlash = 'battle-hub-run-flash';
+      UI._scrollCampaignTrail = true;
       render();
       setTimeout(function () {
+        var panel = activeScreenPanel();
         var trail = document.getElementById('home-campaign-trail');
-        if (trail) trail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (trail && panel) scrollElementInPanel(trail, panel);
         var el = document.getElementById('campaign-node-' + currentCampaignNode());
-        if (el) {
-          try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (err) { el.scrollIntoView(true); }
-        }
+        if (el && panel) scrollElementInPanel(el, panel);
         UI.battleWaveFlash = null;
         render();
       }, 120);
@@ -5377,6 +5412,7 @@
     else if (act==='open-chest') { openChestSlot(val); return; }
     else if (act==='toggle-campaign-trail') {
       UI.campaignTrailOpen = !UI.campaignTrailOpen;
+      if (UI.campaignTrailOpen) UI._scrollCampaignTrail = true;
       render(); return;
     }
     // hub-raid / hub-mutation-lab kept for legacy buttons; HOME hub orbs removed — use Index nav.
@@ -5386,10 +5422,12 @@
       var nodeNum = parseInt(val, 10);
       if (!isNaN(nodeNum) && nodeNum <= currentCampaignNode()) {
         try {
+          var panel = activeScreenPanel();
           var trailEl = document.getElementById('campaign-node-' + nodeNum);
-          if (trailEl) trailEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          if (trailEl && panel) scrollElementInPanel(trailEl, panel);
         } catch (err) { console.error('campaign-focus-node', err); }
       }
+      return;
     }
     else if (act==='mutation-buy-luck') spendMutationPackLuck();
     else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
@@ -5534,8 +5572,10 @@
   document.getElementById('voidline-app').addEventListener('click', function (e) {
     var t = e.target.closest('[data-tab],[data-action],[data-close],[data-lift],[data-strain-focus]');
     if (!t) return;
-    if (t.dataset.action === 'pick-player') { runAction('pick-player', t.dataset.pid); return; }
+    if (t.dataset.action === 'pick-player') { e.preventDefault(); runAction('pick-player', t.dataset.pid); return; }
     if (t.dataset.tab) {
+      e.preventDefault();
+      saveTabScroll(UI.activeTab);
       var tab = t.dataset.tab;
       UI.farmOpen = false;
       if (tab !== UI.activeTab) clearArcadePops();
@@ -5552,6 +5592,7 @@
     if (t.dataset.close === 'pack') { closePack(); render(); return; }
     if (t.dataset.close === 'strain-picker') { UI.strainPickerFloorId = null; render(); return; }
     if (t.dataset.action) {
+      e.preventDefault();
       e.stopPropagation();
       var a = t.dataset.action, v = t.dataset.id || t.dataset.pack || t.dataset.pid || t.dataset.av;
       if (a === 'equip-floor') runAction(a, t.dataset.id + ':' + (t.value !== undefined ? t.value : ''));
