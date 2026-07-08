@@ -262,6 +262,13 @@
     { id: 'radar', name: 'Cosmic Radar', level: 0, maxLevel: 10, baseCost: 22000, scanRateBonus: 0.12 },
     { id: 'shield', name: 'Shield Insulation', level: 0, maxLevel: 10, baseCost: 18000, scanRateBonus: 0.06 },
   ];
+  var MAP_UNLOCK_COST = 75000;
+  var IDLE_BUILDING_DEFS = [
+    { id: 'shack', name: 'Grow Shack', baseCost: 250, baseIncome: 1.5, icon: 'tower', tierNames: ['Shack', 'Farm', 'Factory', 'Skyscraper', 'Void Spire'] },
+    { id: 'lab', name: 'Extract Lab', baseCost: 1200, baseIncome: 8, icon: 'pipe', tierNames: ['Lab', 'Refinery', 'Plant', 'Megaplex', 'Nebula Forge'] },
+    { id: 'port', name: 'Trade Port', baseCost: 6500, baseIncome: 38, icon: 'portal', tierNames: ['Dock', 'Hub', 'Terminal', 'Orbital', 'Galactic Port'] },
+    { id: 'vault', name: 'Void Vault', baseCost: 32000, baseIncome: 175, icon: 'bill', tierNames: ['Vault', 'Bank', 'Mint', 'Treasury', 'Infinity Vault'] },
+  ];
   var MINION_NAMES = ['Void Scout', 'Rift Raider', 'Nebula Enforcer', 'Cosmic Champion'];
   var BOSS_PREFIX = ['Void', 'Nebula', 'Rift', 'Cosmic', 'Dark', 'Quantum', 'Stellar', 'Null'];
   var BOSS_SUFFIX = ['Behemoth', 'Leviathan', 'Titan', 'Warden', 'Harbinger', 'Colossus', 'Reaper', 'Overlord'];
@@ -286,6 +293,8 @@
     'battlePassPerks', 'battlePassChallengeDay', 'battlePassChallengeProgress', 'battlePassChallengesClaimed',
     'unlockedBadges',
     'strainMastery', 'shopFlashPurchased',
+    'idleBuildings', 'mapUnlocked', 'junk', 'shipRange', 'shipShield',
+    'galaxyPos', 'galaxyClaims', 'farmPortalUpgrades', 'campaignSpeedruns',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -689,6 +698,19 @@
       showBattleToast('Harvested x' + qty + ' ' + strain.name, false);
     }
     return { ok: true, qty: qty, strain: strain };
+  }
+
+  function sellPlanet(pid) {
+    var planet = planetById(pid);
+    if (!planet) return false;
+    var rev = planetOutputPerSec(planet) * 8;
+    var price = Math.floor(rev * 120 + rMult(planet.rarity) * 5000);
+    G.ownedPlanets = (G.ownedPlanets || []).filter(function (p) { return p.id !== pid; });
+    creditCash(price);
+    popLabel('SOLD ' + fmtCash(price), { mega: true });
+    showBattleToast(planetDisplayName(planet) + ' unclaimed · ' + fmtCash(price), true);
+    scheduleSave();
+    return true;
   }
 
   function fleetCollectableTotals() {
@@ -1221,6 +1243,257 @@
     return { count: owned.length, rev: rev, stored: Math.floor(stored) };
   }
 
+  function ensureIdleBuildings() {
+    if (!Array.isArray(G.idleBuildings)) G.idleBuildings = IDLE_BUILDING_DEFS.map(function (b) { return { id: b.id, level: 0, rebirth: 0 }; });
+    IDLE_BUILDING_DEFS.forEach(function (def) {
+      if (!G.idleBuildings.find(function (b) { return b.id === def.id; })) G.idleBuildings.push({ id: def.id, level: 0, rebirth: 0 });
+    });
+  }
+
+  function idleBuildingDef(id) { return IDLE_BUILDING_DEFS.find(function (b) { return b.id === id; }); }
+  function idleBuildingState(id) { ensureIdleBuildings(); return G.idleBuildings.find(function (b) { return b.id === id; }); }
+  function idleRebirthMult(rebirth) { var r = rebirth || 0; return r < 1 ? 1 : Math.pow(2, r); }
+  function idleGlobalRebirthMult() {
+    ensureIdleBuildings();
+    var total = G.idleBuildings.reduce(function (s, b) { return s + (b.rebirth || 0); }, 0);
+    return 1 + total * 0.35;
+  }
+  function idleBuildingCost(def, st) {
+    return Math.floor(def.baseCost * Math.pow(1.15, st.level || 0) * idleRebirthMult(st.rebirth || 0));
+  }
+  function idleBuildingIncomePerSec(def, st) {
+    if (!st || !st.level) return 0;
+    return def.baseIncome * st.level * idleRebirthMult(st.rebirth || 0) * idleGlobalRebirthMult();
+  }
+  function idleBuildingsIncomePerSec() {
+    ensureIdleBuildings();
+    var t = 0;
+    IDLE_BUILDING_DEFS.forEach(function (def) {
+      var st = idleBuildingState(def.id);
+      t += idleBuildingIncomePerSec(def, st);
+    });
+    return t;
+  }
+  function idleBuildingTierName(def, st) {
+    var idx = Math.min((st.rebirth || 0), (def.tierNames.length - 1));
+    return def.tierNames[idx];
+  }
+  function buyIdleBuilding(id) {
+    var def = idleBuildingDef(id);
+    var st = idleBuildingState(id);
+    if (!def || !st) return false;
+    var cost = idleBuildingCost(def, st);
+    if (G.cash < cost) { showBattleToast('Need ' + fmtCash(cost), false); return false; }
+    G.cash -= cost;
+    st.level = (st.level || 0) + 1;
+    markWalletDirty();
+    scheduleSave();
+    showBattleToast(def.name + ' → Lv.' + st.level, true);
+    return true;
+  }
+  function rebirthIdleBuilding(id) {
+    var def = idleBuildingDef(id);
+    var st = idleBuildingState(id);
+    if (!def || !st || !st.level) { showBattleToast('Level up first', false); return false; }
+    var cost = idleBuildingCost(def, st) * 8;
+    if (G.cash < cost) { showBattleToast('Need ' + fmtCash(cost), false); return false; }
+    G.cash -= cost;
+    st.rebirth = (st.rebirth || 0) + 1;
+    st.level = 0;
+    markWalletDirty();
+    scheduleSave();
+    popLabel('REBIRTH x' + idleRebirthMult(st.rebirth), { mega: true });
+    showBattleToast(def.name + ' reborn · global boost +' + Math.round(idleGlobalRebirthMult() * 100 - 100) + '%', true);
+    return true;
+  }
+
+  function playerRankLabel() {
+    ensureEngagementState();
+    var pts = G.trophyPoints || 0;
+    if (pts >= 500) return 'VOID GOD';
+    if (pts >= 250) return 'NEBULA LORD';
+    if (pts >= 100) return 'RIFT CAPTAIN';
+    if (pts >= 40) return 'SCOUT';
+    return 'ROOKIE';
+  }
+
+  function ensureGalaxyState() {
+    if (!G.galaxyPos || G.galaxyPos.qx == null) G.galaxyPos = { qx: 0, qy: 0 };
+    if (!G.galaxyClaims || typeof G.galaxyClaims !== 'object') G.galaxyClaims = {};
+    if (!G.farmPortalUpgrades) G.farmPortalUpgrades = { dropRate: 1, speed: 1, multiplier: 1 };
+    if (G.junk == null || isNaN(G.junk)) G.junk = 0;
+    if (G.shipRange == null || isNaN(G.shipRange)) G.shipRange = 3;
+    if (G.shipShield == null || isNaN(G.shipShield)) G.shipShield = 1;
+    if (G.mapUnlocked == null) G.mapUnlocked = false;
+    if (!Array.isArray(G.campaignSpeedruns)) G.campaignSpeedruns = [];
+  }
+
+  function galaxyCellKey(qx, qy) { return qx + ',' + qy; }
+  function galaxyDistance(qx, qy) {
+    var p = G.galaxyPos || { qx: 0, qy: 0 };
+    return Math.abs(qx - p.qx) + Math.abs(qy - p.qy);
+  }
+  function galaxyCellSeed(qx, qy) {
+    var pid = G.playerId || activePlayerId || 'x';
+    return ((qx * 73856093) ^ (qy * 19349663) ^ pid.split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0)) >>> 0;
+  }
+  function galaxyCellGenerated(qx, qy) {
+    if (qx === 0 && qy === 0) return { rarity: 'dust', harvestable: false, junk: 0, ownerId: activePlayerId, name: 'Home Nexus' };
+    var rng = rngSeed(galaxyCellSeed(qx, qy));
+    if (rng() < 0.32) return null;
+    var luck = scanMult() * 0.02;
+    var rar = pickRarity(rng, undefined, luck);
+    return { rarity: rar, harvestable: true, junk: Math.floor(15 + rng() * 85 * rMult(rar)), ownerId: null, name: BOSS_PREFIX[Math.floor(rng() * BOSS_PREFIX.length)] + ' ' + (qy + qx) };
+  }
+  function galaxyCellClaim(qx, qy) {
+    ensureGalaxyState();
+    var key = galaxyCellKey(qx, qy);
+    if (G.galaxyClaims[key]) return G.galaxyClaims[key];
+    var gen = galaxyCellGenerated(qx, qy);
+    if (!gen) return null;
+    return gen;
+  }
+  function galaxyCellOwner(qx, qy) {
+    var key = galaxyCellKey(qx, qy);
+    if (G.galaxyClaims[key] && G.galaxyClaims[key].ownerId) return G.galaxyClaims[key].ownerId;
+    PLAYERS.forEach(function (pl) {
+      if (pl.id === activePlayerId) return;
+      var save = readPlayerSave(pl.id);
+      if (!save || !save.galaxyClaims) return;
+      var c = save.galaxyClaims[key];
+      if (c && c.ownerId === pl.id) {
+        if (!G._galaxyForeignCache) G._galaxyForeignCache = {};
+        G._galaxyForeignCache[key] = { ownerId: pl.id, ownerName: save.name || pl.label, rarity: c.rarity, name: c.name };
+      }
+    });
+    return G._galaxyForeignCache && G._galaxyForeignCache[key] ? G._galaxyForeignCache[key].ownerId : null;
+  }
+  function galaxyCellInfo(qx, qy) {
+    ensureGalaxyState();
+    G._galaxyForeignCache = {};
+    var key = galaxyCellKey(qx, qy);
+    var claim = G.galaxyClaims[key];
+    if (claim) return Object.assign({ qx: qx, qy: qy }, claim);
+    var foreignOwner = galaxyCellOwner(qx, qy);
+    if (foreignOwner && foreignOwner !== activePlayerId) {
+      var fc = G._galaxyForeignCache[key];
+      return { qx: qx, qy: qy, rarity: fc.rarity, ownerId: fc.ownerId, ownerName: fc.ownerName, name: fc.name, foreign: true };
+    }
+    var gen = galaxyCellGenerated(qx, qy);
+    if (!gen) return null;
+    return Object.assign({ qx: qx, qy: qy }, gen);
+  }
+  function travelGalaxyCell(qx, qy) {
+    var dist = galaxyDistance(qx, qy);
+    if (dist > (G.shipRange || 3)) { showBattleToast('Out of range — upgrade ship', false); return false; }
+    if (dist < 1) return true;
+    var eventRoll = Math.random();
+    if (eventRoll < 0.12 / (G.shipShield || 1)) {
+      showBattleToast('Cosmic storm! Shield absorbed hit', false);
+    }
+    G.galaxyPos = { qx: qx, qy: qy };
+    scheduleSave();
+    return true;
+  }
+  function scanGalaxyCell(qx, qy) {
+    var info = galaxyCellInfo(qx, qy);
+    if (!info) { showBattleToast('Empty void', false); return; }
+    if (info.foreign && info.ownerId !== activePlayerId) {
+      UI.galaxyFocus = { qx: qx, qy: qy, info: info };
+      render();
+      return;
+    }
+    if (!info.harvestable && qx === 0 && qy === 0) { showBattleToast('Home Nexus — safe zone', true); return; }
+    if (info.junk) {
+      G.junk = (G.junk || 0) + info.junk;
+      showBattleToast('+' + info.junk + ' Junk salvaged', true);
+      scheduleSave();
+    }
+  }
+  function claimGalaxyCell(qx, qy) {
+    var info = galaxyCellInfo(qx, qy);
+    if (!info) return false;
+    if (info.ownerId === activePlayerId) return false;
+    var key = galaxyCellKey(qx, qy);
+    G.galaxyClaims[key] = { rarity: info.rarity, ownerId: activePlayerId, name: info.name || ('Planet ' + key), claimedAt: Date.now() };
+    UI.galaxyFocus = null;
+    showBattleToast('Planet claimed!', true);
+    popLabel('CLAIMED', { mega: true });
+    scheduleSave();
+    return true;
+  }
+  function upgradeShipRange() {
+    var cost = 120 * Math.pow(2, (G.shipRange || 3) - 3);
+    if ((G.junk || 0) < cost) { showBattleToast('Need ' + cost + ' Junk', false); return false; }
+    G.junk -= cost;
+    G.shipRange = (G.shipRange || 3) + 1;
+    showBattleToast('Ship range → ' + G.shipRange, true);
+    scheduleSave();
+    return true;
+  }
+  function upgradeShipShield() {
+    var cost = 80 * Math.pow(2, (G.shipShield || 1) - 1);
+    if ((G.junk || 0) < cost) { showBattleToast('Need ' + cost + ' Junk', false); return false; }
+    G.junk -= cost;
+    G.shipShield = (G.shipShield || 1) + 1;
+    showBattleToast('Shield → Lv.' + G.shipShield, true);
+    scheduleSave();
+    return true;
+  }
+  function unlockMapTab() {
+    if (G.mapUnlocked) { UI.activeTab = 'map'; return true; }
+    if (G.cash < MAP_UNLOCK_COST) { showBattleToast('Need ' + fmtCash(MAP_UNLOCK_COST), false); return false; }
+    G.cash -= MAP_UNLOCK_COST;
+    G.mapUnlocked = true;
+    markWalletDirty();
+    UI.liftedCardId = null;
+    UI.activeTab = 'map';
+    showBattleToast('Planet Mines unlocked!', true);
+    popLabel('MAP ONLINE', { mega: true });
+    scheduleSave();
+    return true;
+  }
+
+  function farmPortalUpgradeCost(kind) {
+    var up = G.farmPortalUpgrades || { dropRate: 1, speed: 1, multiplier: 1 };
+    var lv = up[kind] || 1;
+    return Math.floor(2500 * Math.pow(1.55, lv - 1));
+  }
+  function upgradeFarmPortal(kind) {
+    ensureGalaxyState();
+    var cost = farmPortalUpgradeCost(kind);
+    if (G.cash < cost) { showBattleToast('Need ' + fmtCash(cost), false); return false; }
+    G.cash -= cost;
+    G.farmPortalUpgrades[kind] = (G.farmPortalUpgrades[kind] || 1) + 1;
+    markWalletDirty();
+    scheduleSave();
+    showBattleToast(kind.toUpperCase() + ' → Lv.' + G.farmPortalUpgrades[kind], true);
+    return true;
+  }
+
+  function formatSpeedrun(ms) {
+    if (!ms || ms < 0) return '0m';
+    var sec = Math.floor(ms / 1000);
+    var min = Math.floor(sec / 60);
+    var hr = Math.floor(min / 60);
+    var day = Math.floor(hr / 24);
+    var yr = Math.floor(day / 365);
+    if (yr > 0) return yr + 'y ' + (day % 365) + 'd';
+    if (day > 0) return day + 'd ' + (hr % 24) + 'h';
+    if (hr > 0) return hr + 'h ' + (min % 60) + 'm';
+    if (min > 0) return min + 'm ' + (sec % 60) + 's';
+    return sec + 's';
+  }
+
+  function recordCampaignSpeedrun(node) {
+    ensureGalaxyState();
+    var started = G.bossWaveStartedAt || Date.now();
+    var elapsed = Date.now() - started;
+    var strains = (G.equippedBattleIds || []).map(function (id) { var s = strainById(id); return s ? s.name : id; });
+    G.campaignSpeedruns.unshift({ node: node, ms: elapsed, at: Date.now(), strains: strains, clears: (G.campaignNodeClears || []).length });
+    if (G.campaignSpeedruns.length > 20) G.campaignSpeedruns.length = 20;
+  }
+
   function flashMapPlanet(pid, kind) {
     UI._mapPlanetFlash = (pid || '') + ':' + (kind || 'pulse');
     setTimeout(function () {
@@ -1325,7 +1598,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, idleOpen: false, idleTab: 'buildings', partyOpen: false, mapSubTab: 'scan', coopBattle: null, floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -1374,6 +1647,7 @@
     DOM.hudAvatar = document.getElementById('hud-avatar');
     DOM.hudName = document.getElementById('hud-name');
     DOM.hudLevel = document.getElementById('hud-level');
+    DOM.hudRank = document.getElementById('hud-rank');
     DOM.phoneShell = document.getElementById('phone-shell');
     DOM.voidlineApp = document.getElementById('voidline-app');
     DOM.realityWarp = document.getElementById('overlay-reality-warp');
@@ -1497,6 +1771,11 @@
       battlePassChallengeDay: 0, battlePassChallengeProgress: {}, battlePassChallengesClaimed: [],
       unlockedBadges: [],
       strainMastery: {}, shopFlashPurchased: false,
+      idleBuildings: IDLE_BUILDING_DEFS.map(function (b) { return { id: b.id, level: 0, rebirth: 0 }; }),
+      mapUnlocked: false, junk: 0, shipRange: 3, shipShield: 1,
+      galaxyPos: { qx: 0, qy: 0 }, galaxyClaims: {},
+      farmPortalUpgrades: { dropRate: 1, speed: 1, multiplier: 1 },
+      campaignSpeedruns: [],
     };
   }
 
@@ -1930,6 +2209,9 @@
     if (!G.bossMaxHp || G.bossHp <= 0) spawnBoss();
     if (G.packReveal && G.packReveal.strains === undefined) G.packReveal.strains = null;
     migrateBlitzSave();
+    ensureIdleBuildings();
+    ensureGalaxyState();
+    if (G.mapUnlocked == null) G.mapUnlocked = !!(G.ownedPlanets && G.ownedPlanets.length > 2);
   }
 
   function migrateBlitzSave() {
@@ -2706,6 +2988,7 @@
       if (!Array.isArray(G.campaignNodeClears)) G.campaignNodeClears = [];
       G.campaignNodeClears.push(node);
       bumpQuestProgress('clear_nodes', 1);
+      if (mega) recordCampaignSpeedrun(node);
     }
     bumpBattlePassChallenge('bp_boss', 1);
     if (node < CAMPAIGN_NODE_COUNT) {
@@ -2963,6 +3246,9 @@
       var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 25 : i.type === 'pipe' ? 80 : 0);
       t += i.owned * bonus;
     });
+    t += idleBuildingsIncomePerSec();
+    var fp = G.farmPortalUpgrades || { multiplier: 1 };
+    t *= (fp.multiplier || 1);
     return (t / 1000) * voidEssenceMult() * battlePassPerkMult('rev');
   }
 
@@ -3010,7 +3296,26 @@
     autoScanAcc += d;
     if (autoScanAcc >= autoScanIntervalMs()) { autoScanAcc = 0; processAutoScan(); }
     processLeaseBilling();
+    tickFarmPortal(d);
     G.lastTickAt = now;
+  }
+
+  var farmPortalAcc = 0;
+  function tickFarmPortal(d) {
+    if (!G.mapUnlocked) return;
+    ensureGalaxyState();
+    var up = G.farmPortalUpgrades || { dropRate: 1, speed: 1, multiplier: 1 };
+    farmPortalAcc += d;
+    var interval = Math.max(2000, 9000 / ((up.speed || 1) * (up.dropRate || 1)));
+    if (farmPortalAcc < interval) return;
+    farmPortalAcc = 0;
+    var mult = up.multiplier || 1;
+    var inv = G.inventory.find(function (i) { return i.id === 'nutrient-boost'; }) || G.inventory[0];
+    if (inv) {
+      var idx = G.inventory.findIndex(function (i) { return i.id === inv.id; });
+      G.inventory = G.inventory.slice();
+      G.inventory[idx] = Object.assign({}, G.inventory[idx], { owned: (G.inventory[idx].owned || 0) + mult });
+    }
   }
 
   function completeClone() {
@@ -3657,6 +3962,8 @@
     var levelEl = DOM.hudLevel || document.getElementById('hud-level');
     if (nameEl) nameEl.textContent = G.name;
     if (levelEl) levelEl.textContent = 'LV.' + G.empireLevel;
+    var rankEl = DOM.hudRank || document.getElementById('hud-rank');
+    if (rankEl) rankEl.textContent = playerRankLabel();
     syncWalletDom(true);
     syncXpDom(true);
     if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
@@ -4437,25 +4744,41 @@
     return h;
   }
 
-  function battleHubHeroHtml() {
+  function homeBossStrainHtml() {
     var node = currentCampaignNode();
     var def = campaignNodeDef(node);
     var mega = isBossWave();
-    var bossHue = def.bossHue;
+    var bc = rarityColor(G.bossRarity);
+    var tierCls = 'boss-strain-aura rarity-' + (G.bossRarity || 'dust');
+    var eq = (G.equippedBattleIds || []).map(strainById).filter(Boolean)[0];
+    var h = '<div class="home-boss-strain ' + tierCls + (mega ? ' home-boss-mega' : '') + '" style="--boss-glow:' + bc + '">';
+    h += '<div class="home-boss-aura-ring"></div>';
+    if (eq) {
+      h += '<div class="home-boss-strain-card">' + budImg(eq, '3.5rem') + '</div>';
+    } else {
+      h += '<img src="' + BOSS_ART + '" alt="" class="home-boss-sprite voidline-art campaign-boss-hue-' + (def.bossHue % 12) + '" data-art-kind="boss" onerror="this.onerror=null;this.src=\'' + BOSS_ART_FALLBACK + '\'">';
+    }
+    h += '<div class="home-boss-level">BOSS Lv.' + node + '</div>';
+    h += '<div class="home-boss-node">NODE ' + node + '/' + CAMPAIGN_NODE_COUNT + (mega ? ' · MEGA' : '') + '</div>';
+    h += '<div class="home-boss-rarity" style="color:' + bc + '">' + esc(rarityName(G.bossRarity)) + ' STRAIN</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function battleHubHeroHtml() {
     var dps = totalBattleDps();
-    var h = '<section class="battle-hub-hero' + (mega ? ' battle-hub-hero-mega' : '') + '">';
-    h += '<div class="battle-hub-hero-bg campaign-boss-hue-' + (bossHue % 12) + '">';
-    h += '<div class="battle-hub-hero-nebula boss-stage-nebula campaign-boss-hue-' + (bossHue % 12) + '"></div>';
-    h += '<div class="battle-hub-hero-boss">';
-    h += '<div class="boss-aura-ring campaign-boss-accent-' + (bossHue % 8) + '"></div>';
-    h += '<img src="' + BOSS_ART + '" alt="" class="battle-hub-boss-img voidline-art campaign-boss-hue-' + (bossHue % 12) + '" data-art-kind="boss" onerror="this.onerror=null;this.src=\'' + BOSS_ART_FALLBACK + '\'">';
-    h += '</div><div class="battle-hub-hero-dim"></div></div>';
-    h += '<div class="battle-hub-hero-content">';
-    h += battleHubOrbsHtml();
-    h += '<div class="battle-hub-node-tag">NODE ' + node + '/' + CAMPAIGN_NODE_COUNT + (mega ? ' · MEGA' : '') + '</div>';
-    h += '<button type="button" class="battle-hub-start-btn" data-action="start-run">';
-    h += '<span class="battle-hub-start-icon">' + farmIcon('mega', { lg: true }) + '</span>';
-    h += '<span class="battle-hub-start-label">START RUN</span></button>';
+    var h = '<section class="home-island battle-hub-hero">';
+    h += '<div class="home-island-nebula boss-stage-nebula"></div>';
+    h += '<div class="home-island-stars"></div>';
+    h += '<button type="button" class="home-bubble home-bubble-money' + (UI.idleOpen ? ' active' : '') + '" data-action="toggle-idle-capitalist" title="Idle Empire">';
+    h += '<span class="home-bubble-icon">' + farmIcon('bill') + '</span></button>';
+    h += '<button type="button" class="home-bubble home-bubble-rocket" data-action="open-rocket-lift" title="Planet Mines">';
+    h += '<span class="home-bubble-icon">' + farmIcon('pipe') + '</span></button>';
+    h += '<div class="home-island-center">';
+    h += homeBossStrainHtml();
+    h += '<button type="button" class="battle-hub-start-btn home-start-btn" data-action="start-run">';
+    h += '<span class="battle-hub-start-label">START</span></button>';
+    h += '<button type="button" class="home-party-btn" data-action="toggle-party-popup">' + farmIcon('equip') + ' PARTY</button>';
     h += '<div class="battle-hub-dps battle-hub-power" id="home-dps-display">';
     h += '<span class="battle-hub-dps-label">POWER</span>';
     h += '<span class="battle-hub-dps-value boss-stage-dps">DPS: ' + dps.toFixed(1) + '</span></div>';
@@ -4478,17 +4801,112 @@
     return n;
   }
 
-  function battleHubOrbsHtml() {
-    var h = '<div class="battle-hub-orbs">';
-    h += '<button type="button" class="battle-hub-orb' + (UI.campaignTrailOpen ? ' active' : '') + '" data-action="toggle-campaign-trail" title="Campaign">';
-    h += '<span class="battle-hub-orb-icon">' + farmIcon('mega') + '</span><span class="battle-hub-orb-label">MAP</span></button>';
-    h += '<button type="button" class="battle-hub-orb' + (UI.homeQuestOpen ? ' active' : '') + (homeQuestBadgeCount() ? ' has-badge' : '') + '" data-action="toggle-home-quest" title="Quests">';
-    h += '<span class="battle-hub-orb-icon">' + farmIcon('help') + '</span><span class="battle-hub-orb-label">QUEST</span>';
-    if (homeQuestBadgeCount()) h += '<span class="battle-hub-orb-ping">' + homeQuestBadgeCount() + '</span>';
-    h += '</button>';
-    h += '<button type="button" class="battle-hub-orb' + (UI.farmOpen ? ' active' : '') + '" data-action="open-portal-farm" title="Portal Farm">';
-    h += '<span class="battle-hub-orb-icon">' + farmIcon('portal') + '</span><span class="battle-hub-orb-label">FARM</span></button>';
-    h += '</div>';
+  function idleCapitalistHtml() {
+    ensureIdleBuildings();
+    var tab = UI.idleTab || 'buildings';
+    var globalMult = idleGlobalRebirthMult();
+    var h = '<div class="aux-overlay open idle-capitalist-overlay"><button type="button" class="overlay-backdrop" data-action="toggle-idle-capitalist"></button>';
+    h += '<div class="overlay-panel idle-cap-panel ' + SKIN_PANEL + ' p-3" style="max-height:85vh;overflow-y:auto">';
+    h += '<div class="flex-between mb-2"><h3 class="font-display text-sm">IDLE EMPIRE</h3><button type="button" class="profile-close" data-action="toggle-idle-capitalist" style="position:static;width:2rem;height:2rem">' + farmIcon('close') + '</button></div>';
+    h += '<div class="idle-global-boost mb-2">Global income ×' + globalMult.toFixed(2) + ' · ' + fmtRev(idleBuildingsIncomePerSec()) + '</div>';
+    h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'buildings' ? ' active' : '') + '" data-action="idle-tab" data-id="buildings">BUILDINGS</button>';
+    h += '<button type="button" class="farm-tab' + (tab === 'upgrades' ? ' active' : '') + '" data-action="idle-tab" data-id="upgrades">UPGRADES</button></div>';
+    IDLE_BUILDING_DEFS.forEach(function (def) {
+      var st = idleBuildingState(def.id);
+      var tier = Math.min(st.rebirth || 0, 4);
+      var cost = idleBuildingCost(def, st);
+      var inc = idleBuildingIncomePerSec(def, st);
+      var rebirthCost = cost * 8;
+      h += '<div class="idle-building-card idle-building-tier-' + tier + ' mb-2">';
+      h += '<div class="idle-building-head"><span class="idle-building-icon">' + farmIcon(def.icon, { lg: true }) + '</span>';
+      h += '<div><div class="idle-building-name">' + esc(idleBuildingTierName(def, st)) + '</div>';
+      h += '<div class="text-muted text-xs">' + esc(def.name) + ' · Lv.' + (st.level || 0);
+      if (st.rebirth) h += ' · Rebirth ' + st.rebirth + ' (×' + idleRebirthMult(st.rebirth) + ')';
+      h += '</div></div></div>';
+      h += '<div class="idle-building-income text-green text-xs">' + (inc > 0 ? fmtRev(inc) : 'Buy to earn') + '</div>';
+      if (tab === 'buildings') {
+        h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="buy-idle-building" data-id="' + def.id + '"' + (G.cash < cost ? ' disabled' : '') + '>BUY · ' + fmtCash(cost) + '</button>';
+      } else {
+        h += '<button type="button" class="game-btn game-btn-sm w-full mt-2" data-action="rebirth-idle-building" data-id="' + def.id + '"' + (!st.level || G.cash < rebirthCost ? ' disabled' : '') + '>REBIRTH · ' + fmtCash(rebirthCost) + '</button>';
+      }
+      h += '</div>';
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  function partyPopupHtml() {
+    var h = '<div class="aux-overlay open party-popup-overlay"><button type="button" class="overlay-backdrop" data-action="toggle-party-popup"></button>';
+    h += '<div class="overlay-panel party-popup-panel ' + SKIN_PANEL + ' p-4 text-center" style="max-width:16rem;margin:auto">';
+    h += '<h3 class="font-display text-sm mb-3">PARTY MODES</h3>';
+    h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="party-mode" data-id="dungeon">DUNGEON</button>';
+    h += '<button type="button" class="game-btn w-full mb-2" data-action="party-mode" data-id="campaign">CAMPAIGN</button>';
+    h += '<button type="button" class="game-btn w-full mb-2" data-action="party-mode" data-id="battle">BATTLE</button>';
+    h += '<button type="button" class="game-btn w-full" data-action="toggle-party-popup">CANCEL</button></div></div>';
+    return h;
+  }
+
+  function startCoopBattle(mode, opponentId) {
+    var host = playerDef(activePlayerId);
+    var guest = opponentId ? playerDef(opponentId) : PLAYERS.find(function (p) { return p.id !== activePlayerId; });
+    if (!guest) guest = PLAYERS[0];
+    var enemyHp = 1200 + currentCampaignNode() * 180;
+    UI.coopBattle = {
+      mode: mode || 'dungeon',
+      hostId: activePlayerId,
+      guestId: guest.id,
+      hostName: G.name || host.label,
+      guestName: guest.label,
+      enemyStrains: [
+        { id: 'e1', name: 'Void Mite', hp: enemyHp, maxHp: enemyHp, rarity: 'dust' },
+        { id: 'e2', name: 'Nebula Leech', hp: enemyHp * 0.85, maxHp: enemyHp * 0.85, rarity: 'haze' },
+        { id: 'e3', name: 'Rift Horror', hp: enemyHp * 1.1, maxHp: enemyHp * 1.1, rarity: 'voidgod' },
+      ],
+      burntIds: [],
+      selectedTarget: null,
+      hostHp: {},
+      guestHp: {},
+    };
+    (G.equippedBattleIds || []).forEach(function (sid) { UI.coopBattle.hostHp[sid] = 100; });
+    UI.partyOpen = false;
+    render();
+  }
+
+  function coopBattleArenaHtml() {
+    var cb = UI.coopBattle;
+    if (!cb) return '';
+    var h = '<div class="coop-battle-screen">';
+    h += '<div class="coop-battle-top ' + SKIN_PANEL + ' p-2 mb-2">';
+    h += '<div class="coop-enemy-hud">';
+    cb.enemyStrains.forEach(function (es, i) {
+      var pct = Math.max(0, (es.hp / es.maxHp) * 100);
+      var burnt = es.hp <= 0;
+      h += '<button type="button" class="coop-enemy-target' + (cb.selectedTarget === es.id ? ' selected' : '') + (burnt ? ' burnt-strain' : '') + '" data-action="coop-pick-target" data-id="' + es.id + '">';
+      h += '<div class="coop-enemy-name">' + esc(es.name) + '</div>';
+      h += '<div class="coop-hp-bar"><div class="coop-hp-fill" style="width:' + pct + '%"></div></div>';
+      h += '<div class="coop-hp-text">' + Math.ceil(es.hp) + ' / ' + Math.ceil(es.maxHp) + ' (' + pct.toFixed(0) + '%)</div>';
+      h += '</button>';
+    });
+    h += '</div></div>';
+    h += '<div class="coop-battle-teams">';
+    h += '<div class="coop-team coop-team-red ' + SKIN_PANEL + ' p-2"><div class="coop-team-label team-red">RED · ' + esc(cb.hostName) + '</div><div class="coop-team-strains">';
+    (G.equippedBattleIds || []).slice(0, 4).forEach(function (sid) {
+      var s = strainById(sid);
+      if (!s) return;
+      var hp = cb.hostHp[sid] != null ? cb.hostHp[sid] : 100;
+      var burnt = hp <= 0 || cb.burntIds.indexOf('h:' + sid) >= 0;
+      h += '<div class="coop-strain-slot' + (burnt ? ' burnt-strain' : '') + '" title="' + (burnt ? 'Burnt Strain' : esc(s.name)) + '">' + budImg(s, '2rem') + '</div>';
+    });
+    h += '</div></div>';
+    h += '<div class="coop-team coop-team-blue ' + SKIN_PANEL + ' p-2"><div class="coop-team-label team-blue">BLUE · ' + esc(cb.guestName) + '</div><div class="coop-team-strains coop-team-guest">';
+    h += '<div class="coop-invite-chip team-blue">GUEST</div>';
+    PLAYERS.filter(function (p) { return p.id === cb.guestId; }).forEach(function () {
+      for (var gi = 0; gi < 3; gi++) h += '<div class="coop-strain-slot coop-strain-placeholder">' + farmIcon('empty') + '</div>';
+    });
+    h += '</div></div></div>';
+    h += '<div class="coop-battle-actions flex-row gap-2 mt-2">';
+    h += '<button type="button" class="game-btn game-btn-green" style="flex:1" data-action="coop-attack"' + (cb.selectedTarget ? '' : ' disabled') + '>ATTACK</button>';
+    h += '<button type="button" class="game-btn" style="flex:1" data-action="coop-exit">RETREAT</button></div></div>';
     return h;
   }
 
@@ -4779,11 +5197,21 @@
       h += '</div></button>';
       if (n > 1) h += '<div class="campaign-trail-connector' + (cleared || isCurrent ? ' campaign-trail-connector-live' : '') + '"></div>';
     }
+    ensureGalaxyState();
+    if ((G.campaignSpeedruns || []).length) {
+      h += '<div class="campaign-speedrun-board mt-2 p-2"><div class="section-label section-label-green mb-1">SPEEDRUN BOARD</div>';
+      G.campaignSpeedruns.slice(0, 5).forEach(function (sr) {
+        h += '<div class="campaign-speedrun-row text-xs"><span class="text-cyan">Node ' + sr.node + '</span> · ' + formatSpeedrun(sr.ms);
+        h += ' · <span class="text-muted">' + (sr.strains || []).slice(0, 2).join(', ') + '</span></div>';
+      });
+      h += '</div>';
+    }
     h += '</div></div>';
     return h;
   }
 
   function renderBattle() {
+    if (UI.coopBattle) return '<div class="screen-section battle-hub coop-battle-wrap">' + coopBattleArenaHtml() + '</div>';
     var mega = isBossWave();
     var h = '<div class="screen-section battle-hub' + (mega ? ' battle-hub-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += battleHubHeroHtml();
@@ -5147,67 +5575,150 @@
     return h;
   }
 
-  function renderMap() {
-    var owned = G.ownedPlanets || [];
-    var scanPct = mapScanProgressPct();
-    var totals = mapMiningTotals();
-    var mapFlash = UI.scanAnimating || (UI._mapProgressFlash && Date.now() - UI._mapProgressFlash < 1200);
-    var discoverFlash = UI._mapDiscoverFlash && Date.now() - UI._mapDiscoverFlash < 1400;
+  function renderMapGalaxyScan() {
+    ensureGalaxyState();
     ensureMapPan();
-    var panX = UI._mapPan.x;
-    var panY = UI._mapPan.y;
-    var h = '<div class="screen-section map-screen map-screen-miners">';
-    h += '<div class="mining-ops-header flex-between mb-2"><div><h2 class="font-display mining-ops-title" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">VOID MINERS</h2>';
-    h += '<p class="font-mono text-muted text-xs" style="margin:0.15rem 0 0">' + totals.count + ' rigs online · ' + scanPct + '% prospected</p></div>';
-    h += '<button type="button" class="game-btn game-btn-sm mining-ops-btn" data-action="map-billings">' + farmIcon('bill') + ' BILLINGS</button></div>';
-    h += '<div class="mining-ops-hud mb-2"><div class="mining-hud-stat"><span class="mining-hud-label">OUTPUT</span><span class="mining-hud-val text-green">' + fmtRev(totals.rev) + '/s</span></div>';
-    h += '<div class="mining-hud-stat"><span class="mining-hud-label">ORE BANK</span><span class="mining-hud-val mining-ore-val' + (totals.stored > 0 ? ' mining-ore-ready' : '') + '">' + totals.stored + '</span></div>';
-    h += '<div class="mining-hud-stat"><span class="mining-hud-label">ACTIVE RIGS</span><span class="mining-hud-val">' + totals.count + '</span></div></div>';
-    h += '<div class="miner-field-viewport' + (UI.scanAnimating ? ' miner-field-prospecting' : '') + (discoverFlash ? ' miner-discover-flash' : '') + '" data-map-viewport><div class="miner-field-world" data-map-world style="width:' + MAP_WORLD_W + 'px;height:' + MAP_WORLD_H + 'px;transform:translate3d(' + panX + 'px,' + panY + 'px,0)">';
-    h += '<div class="miner-field-grid"></div><div class="miner-field-nebula"></div><div class="miner-field-dust"></div>';
-    h += '<div class="miner-field-nodes" data-map-nodes>' + mapFieldNodesHtml(320, 280) + '</div>';
+    var pos = G.galaxyPos || { qx: 0, qy: 0 };
+    var viewR = 4;
+    var h = '<div class="galaxy-scan-wrap">';
+    h += '<div class="galaxy-hud flex-between mb-2"><div class="galaxy-hud-stat"><span class="mining-hud-label">JUNK</span><span class="mining-hud-val text-cyan">' + (G.junk || 0) + '</span></div>';
+    h += '<div class="galaxy-hud-stat"><span class="mining-hud-label">RANGE</span><span class="mining-hud-val">' + (G.shipRange || 3) + '</span></div>';
+    h += '<div class="galaxy-hud-stat"><span class="mining-hud-label">SHIELD</span><span class="mining-hud-val">Lv.' + (G.shipShield || 1) + '</span></div></div>';
+    h += '<div class="galaxy-ship-upgrades flex-row gap-2 mb-2">';
+    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-range">RANGE UP</button>';
+    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-shield">SHIELD UP</button></div>';
+    h += '<div class="galaxy-grid-viewport" data-galaxy-viewport><div class="galaxy-grid-world" data-galaxy-world>';
+    for (var dy = -viewR; dy <= viewR; dy++) {
+      for (var dx = -viewR; dx <= viewR; dx++) {
+        var qx = pos.qx + dx;
+        var qy = pos.qy + dy;
+        var info = galaxyCellInfo(qx, qy);
+        var dist = galaxyDistance(qx, qy);
+        var inRange = dist <= (G.shipRange || 3);
+        var isHere = dx === 0 && dy === 0;
+        var cls = 'galaxy-cell';
+        if (!info) cls += ' galaxy-cell-void';
+        else {
+          cls += ' galaxy-cell-planet rarity-glow-' + (info.rarity || 'dust');
+          if (info.foreign || (info.ownerId && info.ownerId !== activePlayerId)) cls += ' galaxy-cell-enemy';
+          if (info.ownerId === activePlayerId) cls += ' galaxy-cell-owned';
+          if (isHere) cls += ' galaxy-cell-here';
+        }
+        if (!inRange && !isHere) cls += ' galaxy-cell-far';
+        var col = info ? rarityColor(info.rarity) : 'transparent';
+        h += '<button type="button" class="' + cls + '" data-action="galaxy-cell" data-id="' + qx + ':' + qy + '" style="--planet-glow:' + col + '">';
+        if (info) {
+          h += '<span class="galaxy-cell-orb"></span><span class="galaxy-cell-dist">' + dist + 'u</span>';
+          if (info.name) h += '<span class="galaxy-cell-name">' + esc(info.name).slice(0, 10) + '</span>';
+        }
+        h += '</button>';
+      }
+    }
     h += '</div></div>';
-    h += '<div class="map-scan-progress mining-prospect-progress mb-2' + (mapFlash ? ' map-progress-flash' : '') + '"><div class="map-scan-progress-label flex-between"><span class="font-mono text-xs text-muted">PROSPECT PROGRESS</span><span class="font-mono text-xs mining-prospect-text">' + scanPct + '%</span></div>';
-    h += '<div class="map-scan-progress-bar mining-prospect-bar"><div class="map-scan-progress-fill mining-prospect-fill" style="width:' + scanPct + '%"></div></div></div>';
-    h += '<div class="map-scan-rail mining-prospect-rail' + (UI.scanAnimating ? ' map-scan-active' : '') + '"><div class="map-scan-line mining-prospect-line"></div><div class="map-scan-beam mining-prospect-beam"></div>';
-    h += '<button type="button" class="map-scan-bubble mining-prospect-bubble" data-action="map-scan"' + (UI.scanAnimating || G.scanPending ? ' disabled' : '') + '><span class="map-scan-label">' + farmIcon('pipe') + ' PROSPECT SECTOR</span></button></div>';
-    if (UI.scanAnimating) h += '<div class="font-mono text-cyan text-xs text-center mb-3 map-pulse">Deploying survey drones…</div>';
-    if (G.scanPending) {
-      var p = G.scanPending;
-      var exStrain = genExclusivePlanetStrain(p);
-      h += '<div class="planet-scan-panel mining-discover-panel halftone-panel glass-inset mb-3 miner-discover-flash">';
-      h += '<div class="section-label section-label-green planet-scan-label">MINING SITE DETECTED</div>';
-      h += '<div class="planet-scan-card-wrap mining-discover-card liftable-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
-      h += '<div class="planet-scan-strain mining-discover-strain text-xs text-muted">Exclusive ore vein: <span class="text-green">' + esc(exStrain.name) + '</span> · ' + esc(rarityName(p.rarity)) + '</div>';
-      h += '<input type="text" class="input-field planet-scan-rename" placeholder="Name your mining site (optional)" data-action="planet-rename-pending" value="' + esc(p.customName || '') + '">';
-      h += '<div class="flex-row gap-2 planet-scan-actions"><button type="button" class="game-btn game-btn-green game-btn-sm mining-claim-btn" style="flex:1" data-action="planet-keep">' + farmIcon('nutrient') + ' CLAIM SITE</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="planet-discard">PASS</button></div>';
+    if (UI.galaxyFocus) {
+      var gf = UI.galaxyFocus;
+      h += '<div class="galaxy-focus-panel ' + SKIN_PANEL + ' p-3 mt-2">';
+      h += '<div class="font-display text-sm">' + esc(gf.info.name || 'Unknown') + '</div>';
+      h += '<div class="text-xs text-muted">' + esc(rarityName(gf.info.rarity)) + ' · Owner: ' + esc(gf.info.ownerName || gf.info.ownerId || 'Unclaimed') + '</div>';
+      if (gf.info.foreign) h += '<button type="button" class="game-btn game-btn-green w-full mt-2" data-action="galaxy-claim" data-id="' + gf.qx + ':' + gf.qy + '">CLAIM PLANET</button>';
+      else h += '<button type="button" class="game-btn w-full mt-2" data-action="galaxy-scan-cell" data-id="' + gf.qx + ':' + gf.qy + '">SCAN FOR JUNK</button>';
       h += '</div>';
     }
-    if (owned.length) {
-      var collect = fleetCollectableTotals();
-      h += '<div class="section-label mb-2">MINING FLEET</div>';
-      h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mb-2 mining-collect-all-btn' + (collect.hasAnything ? ' mining-ore-ready' : '') + '" data-action="harvest-all-planets"' + (collect.hasAnything ? '' : ' disabled') + '>' + farmIcon('nutrient') + ' COLLECT ALL' + (collect.ore > 0 ? ' · ORE ' + collect.ore : '') + (collect.cash > 0 ? ' · ' + fmtCash(collect.cash) : '') + '</button>';
-      h += '<input type="search" class="input-field mb-2" placeholder="Search mining sites..." data-action="fleet-search" value="' + esc(G.fleetSearch || '') + '">';
-      h += sortChipsHtml('fleet-sort', G.fleetSort || 'rarity', PLANET_SORT_CHIPS);
-      var fleet = filteredFleetPlanets();
-      if (!fleet.length) h += '<div class="text-muted text-xs text-center mb-3">No sites match your search.</div>';
-      h += '<div class="binder-grid planet-owned-grid mb-3">';
-      fleet.forEach(function (pl) {
-        h += '<div class="liftable-wrap planet-lift-wrap" data-lift="planet-' + esc(pl.id) + '">' + planetCardHtml(pl) + '</div>';
-      });
-      h += '</div>';
-      h += '<div class="section-label mb-2 mt-2">PARTNER MINES</div>';
-      PLAYERS.forEach(function (pl) {
-        if (pl.id === activePlayerId) return;
-        var save = readPlayerSave(pl.id);
-        if (!save || !save.ownedPlanets) return;
-        save.ownedPlanets.forEach(function (op) {
-          h += '<div class="' + SKIN_PANEL + ' p-3 mb-2 mining-lease-row"><div class="flex-between"><div><div style="font-weight:600;font-size:0.8rem">' + esc(op.customName || op.proceduralName) + '</div><div class="text-xs text-muted">Operator: ' + esc(save.name || pl.label) + ' · ' + esc(rarityName(op.rarity)) + '</div></div>';
-          h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="lease-offer-open" data-id="' + esc(op.id) + ':' + pl.id + '">LEASE RIG</button></div></div>';
+    h += '<div class="miner-field-viewport mt-2' + (UI.scanAnimating ? ' miner-field-prospecting' : '') + '" data-map-viewport><div class="miner-field-world" data-map-world style="width:' + MAP_WORLD_W + 'px;height:' + MAP_WORLD_H + 'px;transform:translate3d(' + UI._mapPan.x + 'px,' + UI._mapPan.y + 'px,0)">';
+    h += '<div class="miner-field-grid"></div><div class="miner-field-nebula"></div><div class="miner-field-nodes" data-map-nodes>' + mapFieldNodesHtml(320, 200) + '</div></div></div>';
+    var scanPct = mapScanProgressPct();
+    h += '<button type="button" class="map-scan-bubble mining-prospect-bubble w-full mt-2" data-action="map-scan"' + (UI.scanAnimating || G.scanPending ? ' disabled' : '') + '>' + farmIcon('pipe') + ' SCAN SECTOR · ' + scanPct + '%</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderMapFarmTab() {
+    ensureGalaxyState();
+    var up = G.farmPortalUpgrades || { dropRate: 1, speed: 1, multiplier: 1 };
+    var h = '<div class="map-farm-portal-wrap">';
+    h += '<div class="portal-rm-scene mb-3"><div class="portal-rm-portal" data-action="upgrade-portal-drop"><div class="portal-rm-swirl"></div><span class="portal-rm-label">DROP ×' + up.dropRate + '</span></div>';
+    h += '<div class="portal-conveyor-lane" data-action="upgrade-portal-speed"><div class="portal-conveyor-belt" style="--conveyor-speed:' + (3 / up.speed).toFixed(2) + 's">';
+  for (var bi = 0; bi < 5; bi++) {
+      h += '<span class="portal-bud-drop" style="--bud-delay:' + (bi * 0.8) + 's">' + budImg({ hue: 120 + bi * 20 }, '1.25rem') + '</span>';
+    }
+    h += '</div><span class="portal-rm-label">SPEED Lv.' + up.speed + '</span></div>';
+    h += '<div class="portal-rm-basket" data-action="upgrade-portal-mult"><span class="portal-rm-label">MULT ×' + up.multiplier + '</span>' + farmIcon('nutrient', { xl: true }) + '</div></div>';
+    h += '<p class="text-muted text-xs text-center mb-2">Tap portal, conveyor, or basket to upgrade. Buds flow to inventory.</p>';
+    h += '<div class="conveyor-belt-wrap mb-2">';
+    h += '<div class="conveyor-belt-track"><div class="conveyor-belt-surface"></div><div class="conveyor-belt-lane">';
+    G.factoryFloors.forEach(function (f, fi) {
+      var eq = f.equippedStrainId ? strainById(f.equippedStrainId) : null;
+      h += '<div class="conveyor-slot' + (eq ? ' has-strain' : '') + '" style="--slot-index:' + fi + '"><div class="conveyor-strain-wrap">' + (eq ? budImg(eq, '1.25rem') : farmIcon('empty')) + '</div></div>';
+    });
+    h += '</div></div></div>';
+    h += '<button type="button" class="game-btn game-btn-green w-full" data-action="buy-portal"' + (G.cash < portalCost() ? ' disabled' : '') + '>+ PORTAL FLOOR · ' + fmtCash(portalCost()) + '</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderMapPlanetIndex() {
+    var owned = filteredFleetPlanets();
+    var h = '<div class="map-planet-index">';
+    h += '<div class="section-label mb-2">PLANET INDEX</div>';
+    if (!owned.length) h += '<div class="text-muted text-xs text-center mb-3">No claimed planets yet. Scan the galaxy or prospect sectors.</div>';
+    h += '<div class="map-index-book">';
+    owned.forEach(function (pl) {
+      var rev = planetOutputPerSec(pl) * 8;
+      var sell = Math.floor(rev * 120 + rMult(pl.rarity) * 5000);
+      h += '<div class="liftable-wrap map-index-planet-wrap" data-lift="planet-' + esc(pl.id) + '">';
+      h += planetCardHtml(pl, { glow: true });
+      h += '<div class="map-index-stats text-xs"><span class="text-green">' + fmtRev(rev) + '</span> · Sell ' + fmtCash(sell) + '</div>';
+      h += '<button type="button" class="game-btn game-btn-sm w-full mt-1" data-action="sell-planet" data-id="' + esc(pl.id) + '">SELL & UNCLAIM</button></div>';
+    });
+    Object.keys(G.galaxyClaims || {}).forEach(function (key) {
+      var c = G.galaxyClaims[key];
+      if (!c || c.ownerId !== activePlayerId) return;
+      var parts = key.split(',');
+      h += '<div class="map-index-galaxy-card planet-glow-' + (c.rarity || 'dust') + ' ' + SKIN_PANEL + ' p-2 mb-2">';
+      h += '<div style="font-weight:600;font-size:0.75rem">' + esc(c.name || key) + '</div>';
+      h += '<div class="text-xs text-muted">' + esc(rarityName(c.rarity)) + ' · Galaxy ' + key + '</div></div>';
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderMap() {
+    if (!G.mapUnlocked) {
+      return '<div class="screen-section map-screen map-locked"><div class="' + SKIN_PANEL + ' p-5 text-center"><div class="mb-2">' + farmIcon('pipe', { xl: true }) + '</div><h2 class="font-display text-sm">PLANET MINES LOCKED</h2><p class="text-muted text-xs mt-2">Return HOME and use the rocket bubble to unlock for ' + fmtCash(MAP_UNLOCK_COST) + '.</p><button type="button" class="game-btn game-btn-green w-full mt-3" data-action="open-rocket-lift">VIEW ROCKET</button></div></div>';
+    }
+    var sub = UI.mapSubTab || 'scan';
+    var h = '<div class="screen-section map-screen map-screen-nms">';
+    h += '<div class="map-nms-header flex-between mb-2"><h2 class="font-display" style="font-size:1rem;letter-spacing:0.15em;margin:0">GALAXY MAP</h2>';
+    h += '<span class="font-mono text-xs text-cyan">' + (G.junk || 0) + ' JUNK</span></div>';
+    h += '<div class="map-sub-tabs farm-tabs mb-3">';
+    [['scan', 'SCAN', 'pipe'], ['farm', 'FARM', 'portal'], ['index', 'INDEX', 'strains']].forEach(function (t) {
+      h += '<button type="button" class="farm-tab map-sub-tab' + (sub === t[0] ? ' active' : '') + '" data-action="map-sub-tab" data-id="' + t[0] + '">' + farmIcon(t[2]) + ' ' + t[1] + '</button>';
+    });
+    h += '</div>';
+    if (sub === 'scan') h += renderMapGalaxyScan();
+    else if (sub === 'farm') h += renderMapFarmTab();
+    else h += renderMapPlanetIndex();
+    if (sub === 'scan' && G.scanPending) {
+      var p = G.scanPending;
+      var exStrain = genExclusivePlanetStrain(p);
+      h += '<div class="planet-scan-panel mining-discover-panel halftone-panel glass-inset mb-3 mt-2">';
+      h += '<div class="section-label section-label-green">MINING SITE DETECTED</div>';
+      h += '<div class="planet-scan-card-wrap liftable-wrap" data-lift="planet-scan">' + planetCardHtml(p, { glow: true }) + '</div>';
+      h += '<div class="text-xs text-muted">Exclusive: <span class="text-green">' + esc(exStrain.name) + '</span></div>';
+      h += '<div class="flex-row gap-2 mt-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="planet-keep">CLAIM</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="planet-discard">PASS</button></div></div>';
+    }
+    if (sub === 'scan') {
+      var owned = G.ownedPlanets || [];
+      if (owned.length) {
+        var collect = fleetCollectableTotals();
+        h += '<div class="section-label mb-2 mt-2">MINING FLEET</div>';
+        h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mb-2' + (collect.hasAnything ? ' mining-ore-ready' : '') + '" data-action="harvest-all-planets"' + (collect.hasAnything ? '' : ' disabled') + '>COLLECT ALL</button>';
+        h += '<div class="binder-grid planet-owned-grid mb-2">';
+        filteredFleetPlanets().slice(0, 6).forEach(function (pl) {
+          h += '<div class="liftable-wrap" data-lift="planet-' + esc(pl.id) + '">' + planetCardHtml(pl) + '</div>';
         });
-      });
-    } else if (!G.scanPending && !UI.scanAnimating) {
-      h += '<div class="' + SKIN_PANEL + ' p-4 text-center text-muted text-sm">No mining rigs deployed. Tap <span class="text-cyan">PROSPECT SECTOR</span> to find your first site.</div>';
+        h += '</div>';
+      }
     }
     h += '</div>';
     return h;
@@ -5758,6 +6269,19 @@
     var el = document.getElementById('overlay-card-lift');
     if (!UI.liftedCardId) { el.innerHTML = ''; return; }
     var id = UI.liftedCardId;
+    if (id === 'rocket-unlock') {
+      var unlocked = G.mapUnlocked;
+      el.innerHTML = '<button type="button" class="card-lift-backdrop" data-action="dismiss-lift"></button>' +
+        '<div class="lift-shell rocket-lift-card ' + SKIN_PANEL + ' p-4 text-center" style="max-width:18rem;margin:auto">' +
+        '<div class="rocket-lift-icon mb-2">' + farmIcon('pipe', { xl: true }) + '</div>' +
+        '<h3 class="font-display text-sm mb-2">VOID ROCKET</h3>' +
+        '<p class="text-muted text-xs mb-3">' + (unlocked ? 'Planet Mines are online. Open the MAP tab to explore the galaxy.' : 'Unlock Planet Mines? Cost: ' + fmtCash(MAP_UNLOCK_COST)) + '</p>' +
+        (unlocked
+          ? '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="goto-map">OPEN MAP</button>'
+          : '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="buy-map-unlock"' + (G.cash < MAP_UNLOCK_COST ? ' disabled' : '') + '>BUY · ' + fmtCash(MAP_UNLOCK_COST) + '</button>') +
+        '<button type="button" class="game-btn w-full" data-action="dismiss-lift">DECLINE</button></div>';
+      return;
+    }
     if (id.indexOf('planet-') === 0) {
       var pid = id.slice(7);
       var pl = (G.ownedPlanets || []).find(function (p) { return p.id === pid; });
@@ -5823,6 +6347,8 @@
       var cd = UI.confirmDialog;
       h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="confirm-no"></button><div class="overlay-panel ' + SKIN_PANEL + ' p-4 text-center" style="max-width:18rem;margin:auto"><p class="text-sm mb-3">' + esc(cd.message) + '</p><div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green" style="flex:1" data-action="confirm-yes">YES</button><button type="button" class="game-btn" style="flex:1" data-action="confirm-no">NO</button></div></div></div>';
     }
+    if (UI.idleOpen) h += idleCapitalistHtml();
+    if (UI.partyOpen) h += partyPopupHtml();
     if (UI.storefrontPickSlot != null) {
       var slotIdx = UI.storefrontPickSlot;
       h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="sf-pick-close"></button><div class="overlay-panel ' + SKIN_PANEL + ' p-4"><h3 class="font-display text-sm mb-2">LIST ON SLOT ' + (slotIdx + 1) + '</h3>';
@@ -6334,8 +6860,90 @@
       UI.campaignTrailOpen = false;
       G.farmSubTab = 'portal';
       plantSay('tab_farm', true);
-      scheduleSave(); render(); return;
+      scheduleSave(); render();       return;
     }
+    if (act==='toggle-idle-capitalist') { UI.idleOpen = !UI.idleOpen; render(); return; }
+    if (act==='idle-tab') { UI.idleTab = val; render(); return; }
+    if (act==='buy-idle-building') { buyIdleBuilding(val); render(); return; }
+    if (act==='rebirth-idle-building') { rebirthIdleBuilding(val); render(); return; }
+    if (act==='toggle-party-popup') { UI.partyOpen = !UI.partyOpen; render(); return; }
+    if (act==='open-rocket-lift') { UI.liftedCardId = 'rocket-unlock'; render(); return; }
+    if (act==='buy-map-unlock') { if (unlockMapTab()) render(); return; }
+    if (act==='goto-map') { UI.liftedCardId = null; UI.activeTab = 'map'; render(); return; }
+    if (act==='map-sub-tab') { UI.mapSubTab = val; render(); return; }
+    if (act==='galaxy-cell') {
+      var gp = val.split(':');
+      var gqx = parseInt(gp[0], 10), gqy = parseInt(gp[1], 10);
+      if (travelGalaxyCell(gqx, gqy)) {
+        var gi = galaxyCellInfo(gqx, gqy);
+        if (gi && (gi.foreign || (gi.ownerId && gi.ownerId !== activePlayerId))) UI.galaxyFocus = { qx: gqx, qy: gqy, info: gi };
+        else if (gi && gi.harvestable !== false) scanGalaxyCell(gqx, gqy);
+        else UI.galaxyFocus = gi ? { qx: gqx, qy: gqy, info: gi } : null;
+        render();
+      }
+      return;
+    }
+    if (act==='galaxy-claim') {
+      var cp = val.split(':');
+      claimGalaxyCell(parseInt(cp[0], 10), parseInt(cp[1], 10));
+      render();
+      return;
+    }
+    if (act==='galaxy-scan-cell') {
+      var sp = val.split(':');
+      scanGalaxyCell(parseInt(sp[0], 10), parseInt(sp[1], 10));
+      render();
+      return;
+    }
+    if (act==='upgrade-ship-range') { upgradeShipRange(); render(); return; }
+    if (act==='upgrade-ship-shield') { upgradeShipShield(); render(); return; }
+    if (act==='upgrade-portal-drop') { upgradeFarmPortal('dropRate'); render(); return; }
+    if (act==='upgrade-portal-speed') { upgradeFarmPortal('speed'); render(); return; }
+    if (act==='upgrade-portal-mult') { upgradeFarmPortal('multiplier'); render(); return; }
+    if (act==='sell-planet') { sellPlanet(val); render(); return; }
+    if (act==='party-mode') {
+      if (val === 'campaign') { UI.partyOpen = false; UI.campaignTrailOpen = true; UI.battleWaveFlash = 'battle-hub-run-flash'; render(); return; }
+      if (val === 'battle') {
+        UI.partyOpen = false;
+        UI.activeTab = 'coop';
+        UI.coopView = 'hub';
+        showBattleToast('Pick a family member to battle', true);
+        render();
+        return;
+      }
+      startCoopBattle(val);
+      return;
+    }
+    if (act==='coop-pick-target') {
+      if (UI.coopBattle) { UI.coopBattle.selectedTarget = val; render(); }
+      return;
+    }
+    if (act==='coop-attack') {
+      if (!UI.coopBattle || !UI.coopBattle.selectedTarget) return;
+      var cb = UI.coopBattle;
+      var tgt = cb.enemyStrains.find(function (e) { return e.id === cb.selectedTarget; });
+      if (!tgt || tgt.hp <= 0) return;
+      var dmg = totalBattleDps() * (0.8 + Math.random() * 0.4);
+      tgt.hp = Math.max(0, tgt.hp - dmg);
+      if (tgt.hp <= 0) showBattleToast(tgt.name + ' burnt!', true);
+      var retaliate = cb.enemyStrains.find(function (e) { return e.hp > 0; });
+      if (retaliate) {
+        var sid = (G.equippedBattleIds || [])[0];
+        if (sid) {
+          cb.hostHp[sid] = Math.max(0, (cb.hostHp[sid] != null ? cb.hostHp[sid] : 100) - 12);
+          if (cb.hostHp[sid] <= 0 && cb.burntIds.indexOf('h:' + sid) < 0) cb.burntIds.push('h:' + sid);
+        }
+      }
+      if (cb.enemyStrains.every(function (e) { return e.hp <= 0; })) {
+        showBattleToast('DUNGEON CLEARED!', true);
+        creditCash(2500 + currentCampaignNode() * 400);
+        addBattlePassXp(25, { silent: true });
+        UI.coopBattle = null;
+      }
+      render();
+      return;
+    }
+    if (act==='coop-exit') { UI.coopBattle = null; render(); return; }
     if (act==='start-run') {
       UI.campaignTrailOpen = true;
       UI.farmOpen = false;

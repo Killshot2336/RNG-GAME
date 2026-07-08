@@ -2816,3 +2816,192 @@
       100% { background: transparent; }
     }
     .void-prestige-top { border-color: rgba(168, 85, 247, 0.35) !important; }
+
+    /* === HOME ISLAND HUB === */
+    .home-island {
+      position: relative; min-height: 22rem; border-radius: 1rem; overflow: hidden;
+      border: 2px solid rgba(139, 92, 246, 0.35);
+      background: radial-gradient(ellipse at 50% 120%, #1a0533 0%, #05020a 55%, #000 100%);
+      box-shadow: 0 0 40px rgba(139, 92, 246, 0.15), inset 0 0 60px rgba(56, 189, 248, 0.06);
+    }
+    .home-island-nebula {
+      position: absolute; inset: 0; opacity: 0.7;
+      background: radial-gradient(circle at 30% 40%, rgba(168, 85, 247, 0.35), transparent 55%),
+        radial-gradient(circle at 70% 60%, rgba(56, 189, 248, 0.25), transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(244, 114, 182, 0.15), transparent 45%);
+      animation: boss-nebula-drift 16s ease-in-out infinite alternate;
+    }
+    .home-island-stars {
+      position: absolute; inset: 0; opacity: 0.4;
+      background-image: radial-gradient(1px 1px at 20% 30%, #fff, transparent),
+        radial-gradient(1px 1px at 60% 70%, #fff, transparent),
+        radial-gradient(1.5px 1.5px at 80% 20%, rgba(255,255,255,0.8), transparent);
+      background-size: 100% 100%;
+    }
+    .home-island-center {
+      position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center;
+      padding: 3.5rem 1rem 1.25rem; gap: 0.55rem;
+    }
+    .home-bubble {
+      position: absolute; z-index: 5; width: 2.75rem; height: 2.75rem; border-radius: 50%;
+      border: 2px solid rgba(250, 204, 21, 0.5); background: rgba(31, 0, 51, 0.85);
+      box-shadow: 0 4px 0 var(--ink), 0 0 16px rgba(250, 204, 21, 0.25);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s var(--ease-os);
+    }
+    .home-bubble:hover { transform: translateY(-2px) scale(1.05); }
+    .home-bubble.active { border-color: var(--leaf); box-shadow: 0 0 20px rgba(74, 222, 128, 0.4); }
+    .home-bubble-money { top: 0.65rem; right: 0.65rem; }
+    .home-bubble-rocket { bottom: 0.65rem; right: 0.65rem; }
+    .home-bubble-icon .farm-icon { font-size: 1rem; }
+    .home-boss-strain {
+      position: relative; text-align: center; padding: 0.5rem;
+    }
+    .home-boss-aura-ring {
+      position: absolute; inset: -8px; border-radius: 50%;
+      border: 2px solid var(--boss-glow, rgba(168, 85, 247, 0.6));
+      box-shadow: 0 0 30px var(--boss-glow, rgba(168, 85, 247, 0.4));
+      animation: battle-hub-aura 3s ease-in-out infinite alternate;
+    }
+    .boss-strain-aura.rarity-voidgod .home-boss-aura-ring { box-shadow: 0 0 40px gold, 0 0 80px rgba(255,255,255,0.3); }
+    .boss-strain-aura.rarity-haze .home-boss-aura-ring { border-color: #38bdf8; box-shadow: 0 0 28px #38bdf8; }
+    .boss-strain-aura.rarity-dust .home-boss-aura-ring { border-color: #9ca3af; }
+    .home-boss-sprite { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 0 20px var(--boss-glow)); }
+    .home-boss-level { font-family: var(--font-mono); font-size: 0.55rem; color: var(--gold); letter-spacing: 0.12em; margin-top: 0.35rem; }
+    .home-boss-node { font-family: var(--font-mono); font-size: 0.48rem; color: var(--muted); }
+    .home-boss-rarity { font-family: var(--font-display); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; }
+    .home-start-btn { margin-top: 0.25rem; min-width: 10rem; }
+    .home-party-btn {
+      font-family: var(--font-mono); font-size: 0.55rem; letter-spacing: 0.1em;
+      padding: 0.45rem 1rem; border-radius: 9999px; border: 2px solid rgba(56, 189, 248, 0.45);
+      background: rgba(8, 47, 73, 0.6); color: var(--cyan); cursor: pointer;
+    }
+    .home-party-btn:hover { filter: brightness(1.1); }
+    .hud-rank-badge {
+      font-family: var(--font-mono); font-size: 0.42rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 0.1rem 0.35rem; border-radius: 0.25rem;
+      background: rgba(168, 85, 247, 0.2); color: #c4b5fd; border: 1px solid rgba(168, 85, 247, 0.35);
+    }
+
+    /* Idle Capitalist buildings */
+    .idle-cap-panel { max-width: 22rem; margin: auto; }
+    .idle-global-boost {
+      font-family: var(--font-mono); font-size: 0.55rem; text-align: center;
+      padding: 0.4rem; border-radius: 0.5rem; background: rgba(74, 222, 128, 0.08); color: var(--leaf);
+    }
+    .idle-building-card {
+      padding: 0.65rem; border-radius: 0.65rem; border: 2px solid rgba(255,255,255,0.08);
+      background: linear-gradient(160deg, rgba(30,20,10,0.9), rgba(10,8,6,0.95));
+    }
+    .idle-building-tier-0 { border-color: rgba(156, 163, 175, 0.3); }
+    .idle-building-tier-1 { border-color: rgba(74, 222, 128, 0.35); background: linear-gradient(160deg, #1a2e1a, #0a120a); }
+    .idle-building-tier-2 { border-color: rgba(56, 189, 248, 0.4); background: linear-gradient(160deg, #0c2438, #061018); }
+    .idle-building-tier-3 { border-color: rgba(250, 204, 21, 0.45); background: linear-gradient(160deg, #2a2208, #121008); }
+    .idle-building-tier-4 { border-color: rgba(244, 114, 182, 0.5); box-shadow: 0 0 20px rgba(168, 85, 247, 0.25); }
+    .idle-building-head { display: flex; gap: 0.5rem; align-items: center; }
+    .idle-building-name { font-weight: 700; font-size: 0.72rem; }
+
+    /* Galaxy map NMS */
+    .galaxy-grid-viewport {
+      border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(56, 189, 248, 0.2);
+      background: radial-gradient(circle at center, #0a1628, #020408);
+      padding: 0.5rem;
+    }
+    .galaxy-grid-world {
+      display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.35rem;
+    }
+    .galaxy-cell {
+      aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.4); position: relative; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 2.2rem;
+    }
+    .galaxy-cell-void { opacity: 0.25; cursor: default; }
+    .galaxy-cell-far { opacity: 0.45; }
+    .galaxy-cell-here { border-color: var(--leaf); box-shadow: 0 0 12px rgba(74, 222, 128, 0.5); }
+    .galaxy-cell-planet .galaxy-cell-orb {
+      width: 60%; height: 60%; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, var(--planet-glow), transparent 70%);
+      box-shadow: 0 0 12px var(--planet-glow);
+    }
+    .rarity-glow-dust .galaxy-cell-orb { box-shadow: 0 0 8px #9ca3af; }
+    .rarity-glow-haze .galaxy-cell-orb { box-shadow: 0 0 14px #38bdf8; }
+    .rarity-glow-voidgod .galaxy-cell-orb { box-shadow: 0 0 20px gold, 0 0 40px rgba(255,255,255,0.4); }
+    .galaxy-cell-enemy { border-color: #ef4444 !important; box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) !important; animation: galaxy-enemy-pulse 1.5s ease-in-out infinite; }
+    @keyframes galaxy-enemy-pulse { 0%, 100% { box-shadow: 0 0 12px rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 24px rgba(239,68,68,0.85); } }
+    .galaxy-cell-owned { border-color: rgba(74, 222, 128, 0.4); }
+    .galaxy-cell-dist { font-size: 0.35rem; color: var(--muted); font-family: var(--font-mono); }
+    .galaxy-cell-name { font-size: 0.32rem; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .map-locked { display: flex; align-items: center; justify-content: center; min-height: 50vh; }
+
+    /* Portal farm Rick & Morty lane */
+    .portal-rm-scene {
+      display: grid; grid-template-columns: 1fr 2fr 0.8fr; gap: 0.35rem; align-items: end;
+      padding: 0.75rem; border-radius: 0.75rem;
+      background: linear-gradient(180deg, #1a0a2e, #0a0612);
+      border: 2px solid rgba(74, 222, 128, 0.25);
+    }
+    .portal-rm-portal, .portal-conveyor-lane, .portal-rm-basket {
+      text-align: center; cursor: pointer; padding: 0.35rem; border-radius: 0.5rem;
+    }
+    .portal-rm-portal:hover, .portal-conveyor-lane:hover, .portal-rm-basket:hover { background: rgba(255,255,255,0.04); }
+    .portal-rm-swirl {
+      width: 3rem; height: 3rem; margin: 0 auto 0.25rem; border-radius: 50%;
+      background: conic-gradient(from 0deg, #39ff14, #00ffff, #bf00ff, #39ff14);
+      animation: portal-swirl 2s linear infinite;
+      box-shadow: 0 0 20px rgba(57, 255, 20, 0.5);
+    }
+    @keyframes portal-swirl { to { transform: rotate(360deg); } }
+    .portal-conveyor-belt {
+      height: 2.5rem; background: repeating-linear-gradient(90deg, #333 0, #333 8px, #222 8px, #222 16px);
+      border-radius: 0.25rem; position: relative; overflow: hidden;
+      animation: conveyor-move var(--conveyor-speed, 3s) linear infinite;
+    }
+    @keyframes conveyor-move { from { background-position: 0 0; } to { background-position: 32px 0; } }
+    .portal-bud-drop {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      animation: bud-convey 4s linear infinite;
+      animation-delay: var(--bud-delay, 0s);
+    }
+    @keyframes bud-convey { 0% { left: -10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { left: 110%; opacity: 0; } }
+    .portal-rm-label { font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); display: block; }
+    .map-index-planet-wrap { margin-bottom: 0.75rem; }
+    .map-index-stats { text-align: center; margin-top: 0.25rem; }
+
+    /* Co-op battle + burnt strain */
+    .coop-battle-screen { padding-bottom: 1rem; }
+    .coop-enemy-hud { display: flex; flex-direction: column; gap: 0.35rem; }
+    .coop-enemy-target {
+      text-align: left; padding: 0.4rem 0.5rem; border-radius: 0.5rem;
+      border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); cursor: pointer; width: 100%;
+    }
+    .coop-enemy-target.selected { border-color: var(--gold); box-shadow: 0 0 12px rgba(250, 204, 21, 0.35); }
+    .coop-hp-bar { height: 0.35rem; background: rgba(0,0,0,0.5); border-radius: 9999px; overflow: hidden; margin: 0.2rem 0; }
+    .coop-hp-fill { height: 100%; background: linear-gradient(90deg, #ef4444, #f97316); transition: width 0.3s; }
+    .coop-hp-text { font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); }
+    .coop-battle-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem; }
+    .coop-team-label { font-family: var(--font-mono); font-size: 0.48rem; font-weight: 700; margin-bottom: 0.35rem; }
+    .team-red { color: #f87171; }
+    .team-blue { color: #60a5fa; }
+    .coop-team-strains { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+    .coop-strain-slot { position: relative; padding: 0.2rem; border-radius: 0.35rem; border: 1px solid rgba(255,255,255,0.12); }
+    .burnt-strain {
+      filter: grayscale(1) brightness(0.45) contrast(0.85) !important;
+      opacity: 0.75; border-color: #4b5563 !important;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.6) !important;
+    }
+    .burnt-strain::after {
+      content: ''; position: absolute; inset: 0; border-radius: inherit;
+      background: repeating-linear-gradient(-45deg, transparent, transparent 4px, rgba(0,0,0,0.15) 4px, rgba(0,0,0,0.15) 8px);
+      pointer-events: none;
+    }
+    .coop-invite-chip {
+      font-size: 0.45rem; padding: 0.15rem 0.35rem; border-radius: 0.25rem;
+      border: 1px solid rgba(96, 165, 250, 0.4); margin-bottom: 0.25rem;
+    }
+    .campaign-speedrun-board {
+      border-top: 1px solid rgba(74, 222, 128, 0.2); margin-top: 0.5rem;
+    }
+    .campaign-speedrun-row { padding: 0.2rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .rocket-lift-card .rocket-lift-icon { filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.5)); }
+    .party-popup-panel .game-btn { letter-spacing: 0.08em; }
