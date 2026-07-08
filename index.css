@@ -2526,8 +2526,21 @@
     .mining-hud-label { display: block; font-family: var(--font-mono); font-size: 0.42rem; color: var(--muted); letter-spacing: 0.08em; }
     .mining-hud-val { display: block; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; margin-top: 0.15rem; }
     .mining-ore-val.mining-ore-ready { color: #fde68a; animation: mining-ore-pulse 1.6s ease-in-out infinite; }
+    .miner-field-viewport {
+      position: relative; height: min(42vh, 22rem); min-height: 16rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.75rem;
+      background: linear-gradient(180deg, rgba(12, 8, 4, 0.95), rgba(4, 6, 12, 0.98));
+      border: 2px solid rgba(251, 146, 60, 0.22);
+      box-shadow: 0 0 28px rgba(251, 146, 60, 0.1), inset 0 1px 0 rgba(251, 146, 60, 0.06);
+      touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+    }
+    .miner-field-viewport.map-panning { cursor: grabbing; }
+    .miner-field-world {
+      position: absolute; left: 0; top: 0; will-change: transform;
+    }
+    .miner-field-nodes { position: absolute; inset: 0; pointer-events: none; }
+    .miner-field-nodes .mining-site-node { pointer-events: auto; }
     .miner-field-wrap {
-      position: relative; height: 12rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.75rem;
+      position: relative; height: 11rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.75rem;
       background: linear-gradient(180deg, rgba(12, 8, 4, 0.95), rgba(4, 6, 12, 0.98));
       border: 2px solid rgba(251, 146, 60, 0.22);
       box-shadow: 0 0 28px rgba(251, 146, 60, 0.1), inset 0 1px 0 rgba(251, 146, 60, 0.06);
@@ -2617,9 +2630,13 @@
       color: #fdba74 !important;
     }
     .mining-prospect-bubble:hover:not(:disabled) { box-shadow: 0 0 30px rgba(251, 146, 60, 0.55) !important; }
-    .mining-fleet-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.45rem;
+    .lift-shell.lifted-card .lift-hero .planet-card.cr-card-lg .cr-card-frame,
+    .lift-shell.lifted-card .lift-hero .cr-card-lg.planet-card .cr-card-frame {
+      max-width: 8.25rem; margin: 0 auto;
     }
+    .planet-owned-grid .cr-card { width: 100%; }
+    .planet-owned-grid .liftable-wrap { display: flex; justify-content: center; }
+
     .mining-planet-card {
       display: block; width: 100%; padding: 0.45rem 0.4rem 0.5rem; border-radius: 0.65rem; cursor: pointer; text-align: left;
       background: rgba(0, 0, 0, 0.4); border: 2px solid rgba(251, 146, 60, 0.2);
