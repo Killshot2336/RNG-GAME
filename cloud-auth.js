@@ -459,6 +459,46 @@
     });
   }
 
+  function syncFamilySaves() {
+    var c = ensureClient();
+    if (!c || !session || mode !== 'user') {
+      return Promise.resolve({ ok: false, reason: 'offline', updated: [] });
+    }
+    setSyncState('syncing');
+    return pullCloudSaves().then(function (rows) {
+      var updated = [];
+      var byPlayer = {};
+      (rows || []).forEach(function (row) { byPlayer[row.player_id] = row; });
+      var pushes = [];
+      PLAYER_IDS.forEach(function (pid) {
+        var local = readLocalSave(pid);
+        var cloud = byPlayer[pid] || null;
+        var cloudData = cloud && cloud.save_json;
+        if (!local && cloudData) {
+          writeLocalSave(pid, cloudData);
+          updated.push(pid);
+          return;
+        }
+        if (!local || !cloudData) return;
+        var lt = localTs(local);
+        var ct = cloudTs(cloud);
+        if (ct > lt + 1500) {
+          writeLocalSave(pid, cloudData);
+          updated.push(pid);
+        } else if (lt > ct + 1500) {
+          pushes.push(pushCloudSave(pid, local));
+        }
+      });
+      return Promise.all(pushes).then(function () {
+        setSyncState('synced');
+        return { ok: true, updated: updated };
+      });
+    }).catch(function (err) {
+      setSyncState('error');
+      return { ok: false, error: err.message || 'sync failed', updated: [] };
+    });
+  }
+
   window.VoidlineCloud = {
     boot: boot,
     isReady: function () { return ready; },
@@ -475,5 +515,6 @@
     switchToAccount: function () { showGate(renderAuthForm('signin')); },
     getSyncStatus: getSyncStatus,
     onSyncChange: onSyncChange,
+    syncFamilySaves: syncFamilySaves,
   };
 })();

@@ -1010,6 +1010,37 @@
     return Object.assign(freshState(pid), d, { playerId: pid });
   }
 
+  function playerSaveSnapshot(pid) {
+    if (pid === activePlayerId && G) {
+      var p = { playerId: pid, saveVersion: SAVE_VERSION, lastTickAt: Date.now() };
+      PERSIST.forEach(function (k) { p[k] = G[k]; });
+      return p;
+    }
+    return readPlayerSave(pid);
+  }
+
+  function readPlayerSaveForCoop(pid) {
+    var d = playerSaveSnapshot(pid);
+    if (!d) return null;
+    return Object.assign(freshState(pid), d, { playerId: pid });
+  }
+
+  function syncCoopFamilySaves(done) {
+    if (!window.VoidlineCloud || !window.VoidlineCloud.syncFamilySaves || !window.VoidlineCloud.isLoggedIn()) {
+      UI.coopSyncing = false;
+      if (typeof done === 'function') done({ ok: false, reason: 'local-only' });
+      return;
+    }
+    UI.coopSyncing = true;
+    UI.dirty.cloudSync = true;
+    window.VoidlineCloud.syncFamilySaves().then(function (res) {
+      UI.coopSyncing = false;
+      UI.coopLastSync = Date.now();
+      UI.dirty.cloudSync = true;
+      if (typeof done === 'function') done(res || { ok: false });
+    });
+  }
+
   function mutateOtherPlayerSave(pid, fn) {
     var data = readPlayerSaveMutable(pid);
     if (!data) return false;
@@ -1401,7 +1432,7 @@
     var offers = [];
     PLAYERS.forEach(function (pl) {
       if (pl.id === activePlayerId) return;
-      var save = readPlayerSave(pl.id);
+      var save = readPlayerSaveForCoop(pl.id);
       if (!save || !save.storefrontSlots) return;
       save.storefrontSlots.forEach(function (slot, si) {
         if (!slot.strainId || !slot.price) return;
@@ -2311,7 +2342,7 @@
   }
 
   function selectPlayer(pid) {
-    if (activePlayerId && G) saveGame();
+    if (activePlayerId && G) flushSave();
     activePlayerId = pid;
     try {
       sessionStorage.setItem(SESSION_KEY, pid);
@@ -4309,8 +4340,8 @@
   }
 
   function renderPlayerShopGrid(sellerId) {
-    var save = readPlayerSaveMutable(sellerId);
-    if (!save) return '<div class="text-muted text-sm">No save found.</div>';
+    var save = readPlayerSaveForCoop(sellerId);
+    if (!save) return '<div class="text-muted text-sm">No save found — ' + esc(playerDef(sellerId).label) + ' has not played on this device yet. Cloud sync pulls family saves when logged in.</div>';
     var slots = save.storefrontSlots || [];
     var count = save.storefrontSlotCount || STOREFRONT_START;
     var h = '<div class="roadside-grid">';
@@ -4410,24 +4441,46 @@
         }
       } else {
         h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="coop-myshop">' + farmIcon('shop') + ' MY ROADSIDE SHOP</button>';
-        h += '<div class="section-label mb-2">FAMILY MARKET</div>';
+        h += '<div class="flex-between align-center mb-2">';
+        h += '<div class="section-label" style="margin:0">FAMILY MARKET</div>';
+        h += '<button type="button" class="game-btn game-btn-sm" data-action="coop-refresh"' + (UI.coopSyncing ? ' disabled' : '') + '>' + (UI.coopSyncing ? 'SYNCING…' : 'SYNC FAMILY') + '</button>';
+        h += '</div>';
+        if (UI.coopSyncing) {
+          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Pulling Aden, Dad &amp; Jamie saves from cloud…</p>';
+        } else if (window.VoidlineCloud && window.VoidlineCloud.isLoggedIn()) {
+          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Cloud family account · tap SYNC FAMILY after someone else plays</p>';
+        } else {
+          h += '<p class="text-muted text-xs mb-2 coop-sync-status">Local device only — sign in with cloud to sync Dad/Jamie across phones</p>';
+        }
         PLAYERS.forEach(function (pl) {
-          var save = readPlayerSave(pl.id) || {};
-          var dps = playerBattleDps(save).toFixed(1);
+          var save = readPlayerSaveForCoop(pl.id);
+          var dps = save ? playerBattleDps(save).toFixed(1) : '—';
+          var lvl = save ? (save.empireLevel || 1) : '—';
+          var cashStr = save ? fmtCash(save.cash || 0) : '—';
+          var node = save ? (save.campaignNode || 1) : '—';
+          var strainCount = save ? (save.strains || []).length : 0;
           h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-3 mb-2' + (pl.id === activePlayerId ? ' neon-card-green' : '') + '">';
-          h += '<div class="flex-row gap-2"><div>' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2rem') + '</div>';
-          h += '<div style="flex:1"><div style="font-weight:700;font-size:0.8rem">' + esc(save.name || pl.label) + '</div>';
-          h += '<div class="font-mono text-xs text-green">DPS ' + dps + '</div></div>';
-          if (pl.id !== activePlayerId) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
+          h += '<div class="flex-row gap-2"><div>' + avatarHtml(migrateAvatar((save && save.avatar) || pl.portrait), '2rem') + '</div>';
+          h += '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:0.8rem">' + esc((save && save.name) || pl.label) + (pl.id === activePlayerId ? ' · YOU' : '') + '</div>';
+          if (!save) {
+            h += '<div class="font-mono text-xs text-muted">No save yet — switch profile &amp; play as ' + esc(pl.label) + '</div>';
+          } else {
+            h += '<div class="font-mono text-xs text-green">DPS ' + dps + ' · Lv.' + lvl + ' · ' + cashStr + '</div>';
+            h += '<div class="font-mono text-xs text-muted">Node ' + node + ' · ' + strainCount + ' strains</div>';
+          }
+          h += '</div>';
+          if (pl.id !== activePlayerId && save) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="coop-visit-shop" data-id="' + pl.id + '">SHOP</button>';
           h += '</div></div>';
         });
       }
     } else if (view.indexOf('shop:') === 0) {
       var pid = view.slice(5);
       var pl = playerDef(pid);
-      var save = readPlayerSave(pid) || {};
+      var save = readPlayerSaveForCoop(pid);
       h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← HUB</button>';
-      h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div>' + avatarHtml(migrateAvatar(save.avatar || pl.portrait), '2.5rem') + '</div><div style="font-weight:700">' + esc(save.name || pl.label) + '</div></div>';
+      h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div>' + avatarHtml(migrateAvatar((save && save.avatar) || pl.portrait), '2.5rem') + '</div><div style="font-weight:700">' + esc((save && save.name) || pl.label) + '</div>';
+      if (save) h += '<div class="font-mono text-xs text-green mt-1">DPS ' + playerBattleDps(save).toFixed(1) + ' · Lv.' + (save.empireLevel || 1) + '</div>';
+      h += '</div>';
       h += renderPlayerShopGrid(pid);
     } else {
       if (!clan.inClan) {
@@ -5354,6 +5407,20 @@
     else if (act==='void-prestige') { if (confirm('Void Prestige resets cash, SP, and strains (keeps top 3 + all blitz). Continue?')) triggerVoidPrestige(); }
     else if (act==='coop-myshop') { UI.coopView = 'myshop'; }
     else if (act==='coop-back') { UI.coopView = 'hub'; UI.coopShopPlayer = null; }
+    else if (act==='coop-refresh') {
+      syncCoopFamilySaves(function (res) {
+        if (res && res.ok && res.updated && res.updated.length) {
+          showBattleToast('Synced: ' + res.updated.join(', '), true);
+        } else if (res && res.ok) {
+          showBattleToast('Family saves up to date', true);
+        } else if (res && res.reason === 'local-only') {
+          showBattleToast('Cloud sign-in required for cross-device sync', false);
+        }
+        render();
+      });
+      render();
+      return;
+    }
     else if (act==='coop-visit-shop') { UI.coopView = 'shop:' + val; UI.coopShopPlayer = val; }
     else if (act==='sf-buy-slot') buyStorefrontSlot();
     else if (act==='sf-pick-open') { UI.storefrontPickSlot = parseInt(val, 10); }
@@ -5494,7 +5561,16 @@
       render();
       return;
     }
-    else if (act==='clan-view') { UI.coopView = val; render(); return; }
+    else if (act==='clan-view') {
+      UI.coopView = val;
+      if (val === 'market') {
+        syncCoopFamilySaves(function () { render(); });
+        render();
+        return;
+      }
+      render();
+      return;
+    }
     else if (act==='clan-join') {
       var cjTag = document.getElementById('clan-join-tag');
       if (window.VoidlineClan && cjTag) {
@@ -5585,6 +5661,7 @@
       if (tab === 'map' && !UI.focusedPlanetId && G.ownedPlanets && G.ownedPlanets.length) UI.focusedPlanetId = G.ownedPlanets[0].id;
       if (tab === 'coop') UI.coopView = UI.coopView || 'hub';
       render();
+      if (tab === 'coop') syncCoopFamilySaves(function () { render(); });
       return;
     }
     if (t.dataset.close === 'profile') { UI.profileOpen = false; render(); return; }
