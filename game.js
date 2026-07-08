@@ -149,10 +149,10 @@
     { packType: 'omega', name: 'Void Overlord Vaults', icon: 'vault', tagline: 'Bloom+ mythic siege vault', accent: '#F472B6' },
   ];
   var STORE = [
-    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 4000, icon: 'nutrient', desc: 'Galactic fertilizer — +4/sec passive revenue per unit.', revPerSec: 4 },
-    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 14000, icon: 'nutrient', desc: 'Void-grade bloom booster — +6/sec passive per unit.', revPerSec: 6 },
-    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 28000, icon: 'pipe', desc: 'Quantum-smoothed flow — +10/sec passive per unit.', revPerSec: 10 },
-    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 65000, icon: 'pipe', desc: 'Hypercharged revenue conduit — +20/sec passive per unit.', revPerSec: 20 },
+    { id: 'nutrient-a', name: 'Nebula Nutrients', type: 'nutrient', price: 12000, icon: 'nutrient', desc: 'Galactic fertilizer — +25/sec passive revenue per unit.', revPerSec: 25 },
+    { id: 'nutrient-b', name: 'Void Bloom Mix', type: 'nutrient', price: 45000, icon: 'nutrient', desc: 'Void-grade bloom booster — +50/sec passive per unit.', revPerSec: 50 },
+    { id: 'pipe-a', name: 'Quantum Pipe Mk.I', type: 'pipe', price: 95000, icon: 'pipe', desc: 'Quantum-smoothed flow — +80/sec passive per unit.', revPerSec: 80 },
+    { id: 'pipe-b', name: 'Hyperflow Conduit', type: 'pipe', price: 220000, icon: 'pipe', desc: 'Hypercharged revenue conduit — +150/sec passive per unit.', revPerSec: 150 },
   ];
   var AVATARS = [
     '/public/art/portraits/aden.svg', '/public/art/portraits/dad.svg', '/public/art/portraits/jamie.svg',
@@ -163,6 +163,8 @@
     { id: 'harvester', icon: 'harvest', label: 'Harvester' }, { id: 'rift', icon: 'rift', label: 'Rift Walker' },
     { id: 'omega', icon: 'omega', label: 'Omega Tier' }, { id: 'cloner', icon: 'clone', label: 'Clone Master' },
     { id: 'trader', icon: 'trader', label: 'Void Trader' }, { id: 'blitz', icon: 'blitz', label: 'Blitz King' },
+    { id: 'bp_scout', icon: 'mega', label: 'Season Scout' }, { id: 'bp_veteran', icon: 'rift', label: 'Season Veteran' },
+    { id: 'bp_legend', icon: 'omega', label: 'Season Legend' },
   ];
   var ACHIEVEMENTS = [
     { id: 'first_strain', name: 'Green Thumb', desc: 'Collect your first strain', reward: { cash: 5000 }, trophy: 10,
@@ -195,21 +197,61 @@
   var WEEKLY_QUEST_DEFS = [
     { id: 'earn_cash', name: 'Earn $500K', icon: 'bill', target: 500000 },
   ];
-  var BATTLE_PASS_SEASON = 1;
-  var BATTLE_PASS_MAX_TIER = 50;
-  var BATTLE_PASS_XP_PER_TIER = 120;
-  var BATTLE_PASS_REWARDS = (function () {
+  var BATTLE_PASS_SEASON = 2;
+  var BATTLE_PASS_MAX_TIER = 100;
+  var BATTLE_PASS_XP_BASE = 75;
+  var BATTLE_PASS_EXCLUSIVE_STRAINS = [
+    { tier: 10, track: 'free', name: 'Nebula Crown', rarity: 'pulse' },
+    { tier: 25, track: 'free', name: 'Void Regent', rarity: 'bloom' },
+    { tier: 50, track: 'free', name: 'Galaxy Sovereign', rarity: 'surge' },
+    { tier: 75, track: 'premium', name: 'Cosmic Monarch', rarity: 'mist' },
+    { tier: 100, track: 'premium', name: 'Voidline Paragon', rarity: 'legend' },
+  ];
+  var BATTLE_PASS_CHALLENGES = [
+    { id: 'bp_boss', name: 'Clear 5 Boss Waves', icon: 'mega', target: 5, xp: 120 },
+    { id: 'bp_packs', name: 'Open 8 Packs', icon: 'pack', target: 8, xp: 90 },
+    { id: 'bp_scan', name: 'Scan 3 Sectors', icon: 'scan', target: 3, xp: 75 },
+    { id: 'bp_harvest', name: 'Harvest 2 Planets', icon: 'planet', target: 2, xp: 60 },
+    { id: 'bp_fuse', name: 'Fuse 2 Hybrids', icon: 'mutation', target: 2, xp: 100 },
+    { id: 'bp_earn', name: 'Earn $250K Cash', icon: 'bill', target: 250000, xp: 110 },
+  ];
+  function battlePassXpForTier(tier) {
+    tier = tier || 0;
+    return BATTLE_PASS_XP_BASE + Math.floor(tier * 9) + Math.floor(tier * tier * 0.06);
+  }
+  function buildBattlePassRewards() {
     var out = [];
+    var exMap = {};
+    BATTLE_PASS_EXCLUSIVE_STRAINS.forEach(function (ex) {
+      exMap[ex.tier + ':' + ex.track] = ex;
+    });
     for (var t = 1; t <= BATTLE_PASS_MAX_TIER; t++) {
-      var prem = t % 5 === 0;
-      out.push({
-        tier: t,
-        free: t % 3 === 0 ? { sp: 5 + Math.floor(t / 3) } : { cash: 3000 + t * 800 },
-        premium: prem ? { cash: 15000 + t * 2000, sp: 10 } : { cash: 8000 + t * 1200 },
-      });
+      var free = {}, premium = {};
+      if (t % 5 === 0) free.sp = 10 + Math.floor(t / 5) * 3;
+      else free.cash = 6000 + t * 1500;
+      premium.cash = 15000 + t * 2800;
+      if (t % 10 === 0) premium.sp = 20 + Math.floor(t / 2);
+      if (t === 15) free.cosmetic = { badge: 'bp_scout', label: 'Season Scout Badge' };
+      if (t === 30) premium.cosmetic = { avatar: '/public/art/cards/bud-tier-5.svg', label: 'Champion Avatar' };
+      if (t === 40) free.cosmetic = { badge: 'bp_veteran', label: 'Season Veteran Badge' };
+      if (t === 60) premium.cosmetic = { avatar: '/public/art/rocket.svg', label: 'Rocket Avatar' };
+      if (t === 80) free.cosmetic = { badge: 'bp_legend', label: 'Season Legend Badge' };
+      if (t === 20) free.perk = { id: 'bp_rev_5', revMult: 0.05, label: '+5% Passive Revenue' };
+      if (t === 35) premium.perk = { id: 'bp_battle_8', battleMult: 0.08, label: '+8% Battle DPS' };
+      if (t === 55) free.perk = { id: 'bp_rev_12', revMult: 0.12, label: '+12% Passive Revenue' };
+      if (t === 70) premium.perk = { id: 'bp_scan_15', scanMult: 0.15, label: '+15% Scan Rate' };
+      if (t === 90) free.perk = { id: 'bp_luck_10', packLuck: 0.10, label: '+10% Pack Luck' };
+      var exFree = exMap[t + ':free'];
+      var exPrem = exMap[t + ':premium'];
+      if (exFree) free.strain = { name: exFree.name, rarity: exFree.rarity };
+      if (exPrem) premium.strain = { name: exPrem.name, rarity: exPrem.rarity };
+      if (t % 25 === 0 && !free.strain) free.cash = Math.max(free.cash || 0, 50000 + t * 2000);
+      if (t % 25 === 0 && !premium.strain) { premium.cash = Math.max(premium.cash || 0, 100000 + t * 5000); premium.sp = (premium.sp || 0) + 25; }
+      out.push({ tier: t, free: free, premium: premium });
     }
     return out;
-  })();
+  }
+  var BATTLE_PASS_REWARDS = buildBattlePassRewards();
   var SHOP_FLASH_BUNDLES = [
     { id: 'rift_starter', name: 'Rift Starter Bundle', packs: 3, packType: 'guaranteed', priceMult: 0.85, icon: 'gift' },
     { id: 'omega_vault', name: 'Omega Vault Deal', packs: 1, packType: 'omega', priceMult: 0.9, icon: 'vault' },
@@ -241,6 +283,8 @@
     'cardOfDaySeed', 'cardOfDayPurchased',
     'dailyQuestDay', 'dailyQuestProgress', 'weeklyQuestWeek', 'weeklyQuestProgress',
     'battlePassSeason', 'battlePassXp', 'battlePassTier', 'battlePassPremium', 'battlePassClaimed',
+    'battlePassPerks', 'battlePassChallengeDay', 'battlePassChallengeProgress', 'battlePassChallengesClaimed',
+    'unlockedBadges',
     'strainMastery', 'shopFlashPurchased',
   ];
 
@@ -494,6 +538,8 @@
     setTimeout(function () {
       G.scanPending = rollScanPlanet();
       UI.scanAnimating = false;
+      bumpBattlePassChallenge('bp_scan', 1);
+      addBattlePassXp(25, { silent: true });
       shakeScreen();
       popLabel('SIGNAL FOUND!', { mega: true });
       popLabel('NEW WORLD', { jackpot: true, delay: 150 });
@@ -610,6 +656,8 @@
     }
     G.ownedPlanets = G.ownedPlanets.map(function (p) { return p.id === pid ? planet : p; });
     addXp(qty * 4, true);
+    bumpBattlePassChallenge('bp_harvest', 1);
+    addBattlePassXp(20, { silent: true });
     popArcadeBurst([
       { type: 'label', label: 'HARVEST!', mega: true },
       { type: 'strain', strain: strain, qty: qty, big: true, delay: 80 },
@@ -776,7 +824,115 @@
       if (G.battlePassClaimed.free.indexOf(t) < 0) return true;
       if (G.battlePassPremium && G.battlePassClaimed.premium.indexOf(t) < 0) return true;
     }
+    ensureBattlePassChallenges();
+    for (var i = 0; i < BATTLE_PASS_CHALLENGES.length; i++) {
+      var c = BATTLE_PASS_CHALLENGES[i];
+      if (bpChallengeProgress(c) >= c.target && G.battlePassChallengesClaimed.indexOf(c.id) < 0) return true;
+    }
     return false;
+  }
+
+  function battlePassPerkMult(kind) {
+    var perks = G.battlePassPerks || {};
+    var sum = 0;
+    Object.keys(perks).forEach(function (k) {
+      var p = perks[k];
+      if (kind === 'rev' && p.revMult) sum += p.revMult;
+      if (kind === 'battle' && p.battleMult) sum += p.battleMult;
+      if (kind === 'scan' && p.scanMult) sum += p.scanMult;
+      if (kind === 'luck' && p.packLuck) sum += p.packLuck;
+    });
+    return 1 + sum;
+  }
+
+  function ensureBattlePassChallenges() {
+    var day = engagementDaySeed();
+    if (G.battlePassChallengeDay !== day) {
+      G.battlePassChallengeDay = day;
+      G.battlePassChallengeProgress = {};
+      G.battlePassChallengesClaimed = [];
+    }
+    if (!G.battlePassChallengeProgress) G.battlePassChallengeProgress = {};
+    if (!G.battlePassChallengesClaimed) G.battlePassChallengesClaimed = [];
+  }
+
+  function bpChallengeProgress(def) {
+    ensureBattlePassChallenges();
+    var id = typeof def === 'string' ? def : def.id;
+    return G.battlePassChallengeProgress[id] || 0;
+  }
+
+  function bumpBattlePassChallenge(id, amt) {
+    ensureBattlePassChallenges();
+    var def = BATTLE_PASS_CHALLENGES.find(function (c) { return c.id === id; });
+    if (!def || G.battlePassChallengesClaimed.indexOf(id) >= 0) return;
+    var cur = G.battlePassChallengeProgress[id] || 0;
+    if (cur >= def.target) return;
+    G.battlePassChallengeProgress[id] = Math.min(def.target, cur + (amt || 1));
+  }
+
+  function claimBattlePassChallenge(id) {
+    ensureBattlePassChallenges();
+    var def = BATTLE_PASS_CHALLENGES.find(function (c) { return c.id === id; });
+    if (!def) return false;
+    if (bpChallengeProgress(def) < def.target) {
+      showBattleToast('Challenge not complete', false);
+      return false;
+    }
+    if (G.battlePassChallengesClaimed.indexOf(id) >= 0) {
+      showBattleToast('Already claimed', false);
+      return false;
+    }
+    G.battlePassChallengesClaimed = G.battlePassChallengesClaimed.concat([id]);
+    addBattlePassXp(def.xp, { challenge: def.name });
+    popLabel('+' + def.xp + ' BP XP', { mega: true });
+    showBattleToast('Challenge complete · +' + def.xp + ' BP XP', true);
+    scheduleSave();
+    return true;
+  }
+
+  function genBattlePassStrain(def) {
+    var seed = (def.name || 'bp').split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0) + BATTLE_PASS_SEASON * 997;
+    var s = genStrain(seed, def.rarity || 'pulse', 0.12);
+    s.name = def.name;
+    s.bpExclusive = true;
+    ensureStrainAbility(s, Math.min(4, 2 + Math.floor(rarityIndex(def.rarity) / 4)));
+    return s;
+  }
+
+  function grantBattlePassReward(reward) {
+    if (!reward) return;
+    if (reward.cash || reward.sp) grantEngagementReward(reward);
+    if (reward.strain) {
+      var s = genBattlePassStrain(reward.strain);
+      G.strains = mergeStrains(G.strains, s);
+      if (!G.focusedStrainId) G.focusedStrainId = s.id;
+      popStrain(s, { mega: true, jackpot: true });
+      showBattleToast('Exclusive strain: ' + s.name, true);
+    }
+    if (reward.cosmetic) {
+      if (reward.cosmetic.badge) {
+        if (!G.unlockedBadges) G.unlockedBadges = [];
+        if (G.unlockedBadges.indexOf(reward.cosmetic.badge) < 0) G.unlockedBadges.push(reward.cosmetic.badge);
+        if (!G.badgeIds) G.badgeIds = [null, null, null];
+        for (var bi = 0; bi < 3; bi++) {
+          if (!G.badgeIds[bi]) { G.badgeIds[bi] = reward.cosmetic.badge; break; }
+        }
+        popLabel('BADGE UNLOCKED', { mega: true });
+        markHudDirty();
+      }
+      if (reward.cosmetic.avatar) {
+        G.avatar = reward.cosmetic.avatar;
+        popLabel('AVATAR UNLOCKED', { mega: true });
+        markHudDirty();
+      }
+    }
+    if (reward.perk) {
+      if (!G.battlePassPerks) G.battlePassPerks = {};
+      G.battlePassPerks[reward.perk.id] = reward.perk;
+      popLabel(reward.perk.label, { mega: true, jackpot: true });
+      showBattleToast('Permanent perk: ' + reward.perk.label, true);
+    }
   }
 
   function profileBadgesHtml() {
@@ -843,6 +999,8 @@
     addXp(25);
     popStrain(child, { mega: true, delay: 80 });
     popLabel('FUSION COMPLETE!', { mega: true });
+    bumpBattlePassChallenge('bp_fuse', 1);
+    addBattlePassXp(35, { silent: true });
     plantSay('breed', true);
     UI.mergeLab = { open: false, phase: 'idle', child: null, error: '' };
     scheduleSave();
@@ -980,6 +1138,7 @@
     if (amt > 0) {
       G.totalCashEarned = (G.totalCashEarned || 0) + amt;
       bumpQuestProgress('earn_cash', amt, 'weekly');
+      bumpBattlePassChallenge('bp_earn', amt);
     }
     markWalletDirty();
   }
@@ -1079,7 +1238,9 @@
       cardOfDaySeed: 0, cardOfDayPurchased: false,
       dailyQuestDay: 0, dailyQuestProgress: {}, weeklyQuestWeek: 0, weeklyQuestProgress: {},
       battlePassSeason: BATTLE_PASS_SEASON, battlePassXp: 0, battlePassTier: 0, battlePassPremium: false,
-      battlePassClaimed: { free: [], premium: [] },
+      battlePassClaimed: { free: [], premium: [] }, battlePassPerks: {},
+      battlePassChallengeDay: 0, battlePassChallengeProgress: {}, battlePassChallengesClaimed: [],
+      unlockedBadges: [],
       strainMastery: {}, shopFlashPurchased: false,
     };
   }
@@ -1455,6 +1616,10 @@
     if (!G.pendingRewards) G.pendingRewards = [];
     if (!G.mutationItems) G.mutationItems = [];
     if (!G.mutationPool) G.mutationPool = [];
+    if (!G.battlePassPerks) G.battlePassPerks = {};
+    if (!G.battlePassChallengeProgress) G.battlePassChallengeProgress = {};
+    if (!G.battlePassChallengesClaimed) G.battlePassChallengesClaimed = [];
+    if (!G.unlockedBadges) G.unlockedBadges = [];
     if (G.mutationEssence == null || isNaN(G.mutationEssence)) G.mutationEssence = 0;
     if (G.mutationPackLuck == null || isNaN(G.mutationPackLuck)) G.mutationPackLuck = 0;
     if (G.mutationGuaranteeCharges == null || isNaN(G.mutationGuaranteeCharges)) G.mutationGuaranteeCharges = 0;
@@ -1685,6 +1850,7 @@
     G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
     luck += CoOpSynergyManager.getPackLuckBonus();
     luck += G.mutationPackLuck || 0;
+    luck += (battlePassPerkMult('luck') - 1);
     return luck;
   }
 
@@ -2172,6 +2338,7 @@
     var m = mutationItemForStrain(s.id);
     if (m && (m.stat || 'dps') === 'potency') base *= 1 + (m.power || 1) * 0.04;
     base *= mutationDpsMult(s);
+    base *= battlePassPerkMult('battle');
     return base;
   }
 
@@ -2270,6 +2437,7 @@
       G.campaignNodeClears.push(node);
       bumpQuestProgress('clear_nodes', 1);
     }
+    bumpBattlePassChallenge('bp_boss', 1);
     if (node < CAMPAIGN_NODE_COUNT) {
       G.campaignNode = node + 1;
       G.bossRound = G.campaignNode;
@@ -2505,8 +2673,8 @@
     return base * blitzRushMult();
   }
   function scanMult() {
-    if (!G || !Array.isArray(G.sectorUpgrades)) return blitzMod('scan');
-    return G.sectorUpgrades.reduce(function (s, x) { return s + (x.level || 0) * (x.scanRateBonus || 0); }, 0) + blitzMod('scan');
+    if (!G || !Array.isArray(G.sectorUpgrades)) return blitzMod('scan') + (battlePassPerkMult('scan') - 1);
+    return G.sectorUpgrades.reduce(function (s, x) { return s + (x.level || 0) * (x.scanRateBonus || 0); }, 0) + blitzMod('scan') + (battlePassPerkMult('scan') - 1);
   }
   function revMs() {
     var rm = 1 + blitzMod('revenue'), ym = 1 + blitzMod('yield'), t = 0;
@@ -2522,10 +2690,10 @@
     G.inventory.forEach(function (i) {
       if (!i.owned) return;
       var def = STORE.find(function (x) { return x.id === i.id; });
-      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 4 : i.type === 'pipe' ? 10 : 0);
+      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 25 : i.type === 'pipe' ? 80 : 0);
       t += i.owned * bonus;
     });
-    return (t / 1000) * voidEssenceMult();
+    return (t / 1000) * voidEssenceMult() * battlePassPerkMult('rev');
   }
 
   function inventoryRevPerSec() {
@@ -2533,10 +2701,10 @@
     G.inventory.forEach(function (i) {
       if (!i.owned) return;
       var def = STORE.find(function (x) { return x.id === i.id; });
-      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 4 : i.type === 'pipe' ? 10 : 0);
+      var bonus = def && def.revPerSec != null ? def.revPerSec : (i.type === 'nutrient' ? 25 : i.type === 'pipe' ? 80 : 0);
       t += i.owned * bonus;
     });
-    return t;
+    return t * battlePassPerkMult('rev');
   }
   function revSecTotal() { return revMs() * 1000; }
   function blitzRem() { return Math.max(0, G.blitzEndsAt - Date.now()); }
@@ -2644,6 +2812,7 @@
       plantSay('pack', true);
     }
     bumpQuestProgress('open_packs', 1);
+    bumpBattlePassChallenge('bp_packs', 1);
     addBattlePassXp(15);
     if (pr.strain) bumpStrainMastery(pr.strain.rarity);
     if (pr.strains) pr.strains.forEach(function (s) { bumpStrainMastery(s.rarity); });
@@ -2670,6 +2839,7 @@
     var rev = def.revPerSec || 0;
     popLabel('+' + rev + '/sec UPGRADE!', { mega: true });
     showBattleToast(it.name + ' acquired · +' + rev + '/sec', true);
+    addBattlePassXp(12, { silent: true });
     UI._storeBuyFlash = id;
     setTimeout(function () { UI._storeBuyFlash = null; if (UI.activeTab === 'shop') render(); }, 600);
     markWalletDirty();
@@ -2683,6 +2853,8 @@
     if (G.cash < c) return false;
     G.cash -= c;
     G.sectorUpgrades = G.sectorUpgrades.map(function (x) { return x.id === id ? Object.assign({}, x, { level: x.level + 1 }) : x; });
+    popLabel('SECTOR UP!', { mega: true });
+    showBattleToast(s.name + ' → Lv.' + (s.level + 1), true);
     scheduleSave();
     render();
     return true;
@@ -3166,7 +3338,7 @@
     var bpLabel = DOM.plantLabel || document.getElementById('hud-bp-label');
     var bpIcon = DOM.plantMascot || document.getElementById('hud-bp-icon');
     var bpPing = DOM.hudBpPing || document.getElementById('hud-bp-ping');
-    if (bpLabel) bpLabel.textContent = 'TIER ' + G.battlePassTier;
+    if (bpLabel) bpLabel.textContent = 'TIER ' + G.battlePassTier + '/' + BATTLE_PASS_MAX_TIER;
     if (bpIcon) {
       bpIcon.classList.toggle('hud-bp-ready', battlePassHasClaimable());
       bpIcon.classList.toggle('hud-bp-updated', G.battlePassTier > 0);
@@ -3595,29 +3767,49 @@
       G.battlePassXp = 0;
       G.battlePassTier = 0;
       G.battlePassClaimed = { free: [], premium: [] };
+      G.battlePassPerks = {};
+      G.battlePassChallengeProgress = {};
+      G.battlePassChallengesClaimed = [];
     }
     if (!G.battlePassClaimed || typeof G.battlePassClaimed !== 'object') {
       G.battlePassClaimed = { free: [], premium: [] };
     }
     if (!Array.isArray(G.battlePassClaimed.free)) G.battlePassClaimed.free = [];
     if (!Array.isArray(G.battlePassClaimed.premium)) G.battlePassClaimed.premium = [];
-    while (G.battlePassXp >= BATTLE_PASS_XP_PER_TIER && G.battlePassTier < BATTLE_PASS_MAX_TIER) {
-      G.battlePassXp -= BATTLE_PASS_XP_PER_TIER;
+    if (!G.battlePassPerks) G.battlePassPerks = {};
+    ensureBattlePassChallenges();
+    while (G.battlePassTier < BATTLE_PASS_MAX_TIER && G.battlePassXp >= battlePassXpForTier(G.battlePassTier)) {
+      G.battlePassXp -= battlePassXpForTier(G.battlePassTier);
       G.battlePassTier++;
     }
   }
 
-  function addBattlePassXp(amt) {
+  function addBattlePassXp(amt, opts) {
+    opts = opts || {};
     if (!amt) return;
     ensureBattlePass();
+    var prevTier = G.battlePassTier;
     G.battlePassXp = (G.battlePassXp || 0) + amt;
     var leveled = false;
-    while (G.battlePassXp >= BATTLE_PASS_XP_PER_TIER && G.battlePassTier < BATTLE_PASS_MAX_TIER) {
-      G.battlePassXp -= BATTLE_PASS_XP_PER_TIER;
+    while (G.battlePassTier < BATTLE_PASS_MAX_TIER && G.battlePassXp >= battlePassXpForTier(G.battlePassTier)) {
+      G.battlePassXp -= battlePassXpForTier(G.battlePassTier);
       G.battlePassTier++;
       leveled = true;
     }
-    if (leveled) showBattleToast('Battle Pass Tier ' + G.battlePassTier + '!', true);
+    if (!opts.silent) {
+      popLabel('+' + amt + ' BP XP', { mega: leveled, delay: opts.challenge ? 60 : 0 });
+      UI._bpXpFlash = Date.now();
+    }
+    if (leveled) {
+      popLabel('TIER ' + G.battlePassTier + '!', { jackpot: true, delay: 120 });
+      showBattleToast('Battle Pass Tier ' + G.battlePassTier + ' unlocked!', true);
+      UI._bpTierFlash = G.battlePassTier;
+      setTimeout(function () { if (UI._bpTierFlash === G.battlePassTier) UI._bpTierFlash = null; }, 900);
+      markHudDirty();
+    } else if (!opts.silent && amt >= 20) {
+      showBattleToast('+' + amt + ' Battle Pass XP', true);
+    }
+    if (G.battlePassTier !== prevTier) scheduleSave();
   }
 
   function battlePassRewardFor(tier, track) {
@@ -3644,10 +3836,13 @@
     }
     var reward = battlePassRewardFor(tier, track);
     if (!reward) return false;
-    grantEngagementReward(reward);
+    grantBattlePassReward(reward);
     list.push(tier);
     G.battlePassClaimed = { free: G.battlePassClaimed.free.slice(), premium: G.battlePassClaimed.premium.slice() };
-    showBattleToast('Battle Pass reward claimed!', true);
+    UI._bpClaimFlash = tier + ':' + track;
+    setTimeout(function () { if (UI._bpClaimFlash === tier + ':' + track) UI._bpClaimFlash = null; }, 700);
+    popLabel('REWARD CLAIMED', { mega: true });
+    showBattleToast('Battle Pass T' + tier + ' ' + track + ' claimed!', true);
     scheduleSave();
     return true;
   }
@@ -3710,7 +3905,42 @@
     var parts = [];
     if (reward.cash) parts.push(fmtCash(reward.cash));
     if (reward.sp) parts.push(reward.sp + ' SP');
-    return parts.join(' + ') || '—';
+    if (reward.strain) parts.push('★ ' + reward.strain.name);
+    if (reward.cosmetic) parts.push(reward.cosmetic.label || 'Cosmetic');
+    if (reward.perk) parts.push(reward.perk.label);
+    return parts.join(' · ') || '—';
+  }
+
+  function battlePassRewardIcon(reward) {
+    if (!reward) return 'mega';
+    if (reward.strain) return 'strains';
+    if (reward.cosmetic && reward.cosmetic.badge) return 'mega';
+    if (reward.cosmetic && reward.cosmetic.avatar) return 'strains';
+    if (reward.perk) return 'blitz';
+    if (reward.sp) return 'mega';
+    return 'bill';
+  }
+
+  function renderBattlePassChallengesHtml() {
+    ensureBattlePassChallenges();
+    var h = '<div class="section-label section-label-green mb-2">DAILY CHALLENGES</div><div class="bp-challenge-grid mb-3">';
+    BATTLE_PASS_CHALLENGES.forEach(function (c) {
+      var prog = bpChallengeProgress(c);
+      var pct = Math.min(100, (prog / c.target) * 100);
+      var done = prog >= c.target;
+      var claimed = G.battlePassChallengesClaimed.indexOf(c.id) >= 0;
+      h += '<div class="bp-challenge-card ' + SKIN_PANEL + (claimed ? ' claimed' : (done ? ' ready' : '')) + '">';
+      h += '<div class="bp-challenge-head"><span class="bp-challenge-icon">' + farmIcon(c.icon || 'mega') + '</span>';
+      h += '<div class="bp-challenge-meta"><div class="bp-challenge-name">' + esc(c.name) + '</div>';
+      h += '<div class="text-muted text-xs">+' + c.xp + ' BP XP</div></div></div>';
+      h += '<div class="bp-challenge-bar"><div class="bp-challenge-fill" style="width:' + pct + '%"></div></div>';
+      h += '<div class="bp-challenge-prog text-xs font-mono">' + (c.id === 'bp_earn' ? fmtCash(prog) + ' / ' + fmtCash(c.target) : prog + ' / ' + c.target) + '</div>';
+      if (done && !claimed) h += '<button type="button" class="game-btn game-btn-sm game-btn-green w-full mt-1" data-action="claim-bp-challenge" data-id="' + c.id + '">CLAIM</button>';
+      else if (claimed) h += '<div class="text-green text-xs text-center mt-1">✓ CLAIMED</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
   }
 
   function syncCloudHud(force) {
@@ -4261,11 +4491,11 @@
     h += '<div class="store-rev-summary ' + SKIN_PANEL + ' p-2 mb-2"><div class="flex-between"><span class="font-mono text-xs text-muted">PASSIVE REVENUE</span><span class="font-mono text-green text-xs">+' + storeRevTotal.toFixed(1) + '/sec</span></div></div>';
     G.inventory.forEach(function (it) {
       var def = STORE.find(function (x) { return x.id === it.id; }) || it;
-      var revBonus = def.revPerSec || (it.type === 'nutrient' ? 4 : it.type === 'pipe' ? 10 : 0);
-      var maxOwn = 30;
+      var revBonus = def.revPerSec || (it.type === 'nutrient' ? 25 : it.type === 'pipe' ? 80 : 0);
+      var maxOwn = 40;
       var tierPct = Math.min(100, Math.round((it.owned / maxOwn) * 100));
-      var tierLabel = it.owned >= 20 ? 'MAXED' : (it.owned >= 10 ? 'TIER III' : (it.owned >= 5 ? 'TIER II' : (it.owned >= 1 ? 'TIER I' : 'LOCKED')));
-      h += '<div class="store-item-card ' + SKIN_PANEL + ' p-3 mb-2' + (it.owned > 0 ? ' store-item-owned' : '') + (UI._storeBuyFlash === it.id ? ' store-item-flash' : '') + '"><div class="flex-row"><div class="store-item-icon">' + farmIcon((def.icon || it.icon || 'pack'), { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + ' <span class="store-tier-tag">' + tierLabel + '</span></div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="store-progress-bar mt-1"><div class="store-progress-fill" style="width:' + tierPct + '%"></div></div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm store-buy-btn" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
+      var tierLabel = it.owned >= 30 ? 'MAXED' : (it.owned >= 15 ? 'TIER III' : (it.owned >= 8 ? 'TIER II' : (it.owned >= 1 ? 'TIER I' : 'LOCKED')));
+      h += '<div class="store-item-card ' + SKIN_PANEL + ' p-3 mb-2' + (it.owned > 0 ? ' store-item-owned' : '') + (it.owned >= 30 ? ' store-tier-maxed' : '') + (UI._storeBuyFlash === it.id ? ' store-item-flash' : '') + '"><div class="flex-row"><div class="store-item-icon">' + farmIcon((def.icon || it.icon || 'pack'), { lg: true }) + '</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:0.875rem">' + esc(it.name) + ' <span class="store-tier-tag">' + tierLabel + '</span></div><div class="text-muted text-xs">' + esc(def.desc || it.type) + '</div><div class="store-progress-bar mt-1"><div class="store-progress-fill" style="width:' + tierPct + '%"></div></div><div class="font-mono text-green text-xs mt-1">+' + revBonus + '/sec each · Owned: ' + it.owned + '</div></div><button type="button" class="game-btn game-btn-green game-btn-sm store-buy-btn" data-action="buy-item" data-id="' + it.id + '"' + (G.cash < it.price ? ' disabled' : '') + '>' + fmtCash(it.price) + '</button></div></div>';
     });
     h += '</div>';
     return h;
@@ -4918,6 +5148,7 @@
         h += '<div class="badge-slot-row mb-2"><div class="font-mono text-xs text-muted text-center mb-1">SLOT ' + (slot + 1) + '</div><div class="badge-picker-grid">';
         h += '<button type="button" class="badge-opt' + (!G.badgeIds[slot] ? ' selected' : '') + '" data-action="set-badge" data-slot="' + slot + '" data-id="">—</button>';
         BADGES.forEach(function (b) {
+          if (b.id.indexOf('bp_') === 0 && (G.unlockedBadges || []).indexOf(b.id) < 0 && G.badgeIds[slot] !== b.id) return;
           h += '<button type="button" class="badge-opt' + (G.badgeIds[slot] === b.id ? ' selected' : '') + '" data-action="set-badge" data-slot="' + slot + '" data-id="' + b.id + '"><span class="badge-opt-icon">' + farmIcon(b.icon, { lg: true }) + '</span><span class="badge-opt-label">' + esc(b.label) + '</span></button>';
         });
         h += '</div></div>';
@@ -5178,31 +5409,50 @@
     }
     if (UI.battlePassOpen) {
       ensureBattlePass();
-      var bpXpPct = Math.min(100, (G.battlePassXp / BATTLE_PASS_XP_PER_TIER) * 100);
+      var bpNeed = battlePassXpForTier(G.battlePassTier);
+      var bpXpPct = G.battlePassTier >= BATTLE_PASS_MAX_TIER ? 100 : Math.min(100, (G.battlePassXp / bpNeed) * 100);
+      var bpFlash = UI._bpXpFlash && Date.now() - UI._bpXpFlash < 1200;
       h += '<div class="aux-overlay open"><button type="button" class="overlay-backdrop" data-action="close-battle-pass"></button>';
-      h += '<div class="overlay-panel battle-pass-panel ' + SKIN_PANEL + ' p-4" style="max-height:75vh;overflow-y:auto">';
+      h += '<div class="overlay-panel battle-pass-panel ' + SKIN_PANEL + ' p-4' + (bpFlash ? ' bp-xp-flash' : '') + '" style="max-height:80vh;overflow-y:auto">';
       h += '<h3 class="font-display text-sm mb-1">VOID SEASON ' + BATTLE_PASS_SEASON + ' · BATTLE PASS</h3>';
-      h += '<p class="text-muted text-xs mb-2">Tier ' + G.battlePassTier + '/' + BATTLE_PASS_MAX_TIER + ' · ' + Math.floor(G.battlePassXp) + '/' + BATTLE_PASS_XP_PER_TIER + ' XP</p>';
-      h += '<div class="battle-pass-xp-bar mb-2"><div class="battle-pass-xp-fill" style="width:' + bpXpPct + '%"></div></div>';
+      h += '<div class="bp-hero-row mb-2"><div class="bp-tier-ring">T' + G.battlePassTier + '</div>';
+      h += '<div style="flex:1;min-width:0"><div class="font-mono text-xs text-green">TIER ' + G.battlePassTier + ' / ' + BATTLE_PASS_MAX_TIER + '</div>';
+      h += '<div class="text-muted text-xs">' + Math.floor(G.battlePassXp) + ' / ' + bpNeed + ' XP to next tier</div>';
+      h += '<div class="battle-pass-xp-bar mt-1"><div class="battle-pass-xp-fill" style="width:' + bpXpPct + '%"></div></div></div></div>';
+      if (Object.keys(G.battlePassPerks || {}).length) {
+        h += '<div class="bp-perk-strip mb-2">';
+        Object.keys(G.battlePassPerks).forEach(function (pk) {
+          var perk = G.battlePassPerks[pk];
+          h += '<span class="bp-perk-chip">' + esc(perk.label || pk) + '</span>';
+        });
+        h += '</div>';
+      }
       if (!G.battlePassPremium) {
         h += '<button type="button" class="game-btn game-btn-sm game-btn-green w-full mb-3" data-action="unlock-battle-pass-premium">UNLOCK PREMIUM TRACK (DEMO)</button>';
       } else {
         h += '<div class="battle-pass-premium-badge mb-3">PREMIUM ACTIVE</div>';
       }
-      h += '<div class="battle-pass-scroll">';
+      h += renderBattlePassChallengesHtml();
+      h += '<div class="section-label mb-2">REWARD TRACK</div><div class="battle-pass-scroll">';
       for (var bpt = 1; bpt <= BATTLE_PASS_MAX_TIER; bpt++) {
         var bpUnlocked = G.battlePassTier >= bpt;
         var bpFreeClaimed = G.battlePassClaimed.free.indexOf(bpt) >= 0;
         var bpPremClaimed = G.battlePassClaimed.premium.indexOf(bpt) >= 0;
         var bpFreeRw = battlePassRewardFor(bpt, 'free');
         var bpPremRw = battlePassRewardFor(bpt, 'premium');
-        h += '<div class="battle-pass-tier-row' + (bpUnlocked ? ' unlocked' : ' locked') + '">';
+        var milestone = bpt % 10 === 0 || bpFreeRw.strain || bpPremRw.strain;
+        var claimFlash = UI._bpClaimFlash === (bpt + ':free') || UI._bpClaimFlash === (bpt + ':premium');
+        h += '<div class="battle-pass-tier-row' + (bpUnlocked ? ' unlocked' : ' locked') + (milestone ? ' milestone' : ' compact') + (claimFlash ? ' claim-flash' : '') + (UI._bpTierFlash === bpt ? ' tier-unlock-flash' : '') + '" data-bp-tier="' + bpt + '">';
         h += '<div class="battle-pass-tier-num">T' + bpt + '</div>';
-        h += '<div class="battle-pass-track free"><div class="battle-pass-track-label">FREE</div><div class="battle-pass-reward">' + battlePassRewardLabel(bpFreeRw) + '</div>';
+        h += '<div class="battle-pass-track free"><div class="battle-pass-track-label">FREE</div>';
+        h += '<div class="bp-reward-row"><span class="bp-reward-icon">' + farmIcon(battlePassRewardIcon(bpFreeRw)) + '</span>';
+        h += '<div class="battle-pass-reward">' + battlePassRewardLabel(bpFreeRw) + '</div></div>';
         if (bpUnlocked && !bpFreeClaimed) h += '<button type="button" class="game-btn game-btn-sm game-btn-green" data-action="claim-battle-pass" data-id="' + bpt + ':free">CLAIM</button>';
         else if (bpFreeClaimed) h += '<span class="text-green text-xs">✓</span>';
         h += '</div>';
-        h += '<div class="battle-pass-track premium"><div class="battle-pass-track-label">VIP</div><div class="battle-pass-reward">' + battlePassRewardLabel(bpPremRw) + '</div>';
+        h += '<div class="battle-pass-track premium"><div class="battle-pass-track-label">VIP</div>';
+        h += '<div class="bp-reward-row"><span class="bp-reward-icon">' + farmIcon(battlePassRewardIcon(bpPremRw)) + '</span>';
+        h += '<div class="battle-pass-reward">' + battlePassRewardLabel(bpPremRw) + '</div></div>';
         if (bpUnlocked && G.battlePassPremium && !bpPremClaimed) h += '<button type="button" class="game-btn game-btn-sm" data-action="claim-battle-pass" data-id="' + bpt + ':premium">CLAIM</button>';
         else if (bpPremClaimed) h += '<span class="text-green text-xs">✓</span>';
         else if (!G.battlePassPremium) h += '<span class="text-muted text-xs">🔒</span>';
@@ -5303,6 +5553,25 @@
     renderMergeLab();
     renderAuxOverlays();
     scrollCampaignTrailToCurrent();
+    scrollBattlePassToCurrent();
+  }
+
+  function scrollBattlePassToCurrent() {
+    if (!G || !UI.battlePassOpen || !UI._scrollBattlePass) return;
+    UI._scrollBattlePass = false;
+    try {
+      setTimeout(function () {
+        var scroll = document.querySelector('.battle-pass-scroll');
+        var tier = Math.max(1, G.battlePassTier || 1);
+        var el = scroll && scroll.querySelector('[data-bp-tier="' + tier + '"]');
+        if (el && scroll) {
+          var offset = el.offsetTop - scroll.clientHeight / 2 + el.clientHeight / 2;
+          scroll.scrollTop = Math.max(0, offset);
+        }
+      }, 60);
+    } catch (err) {
+      console.error('scrollBattlePassToCurrent', err);
+    }
   }
 
   function scrollCampaignTrailToCurrent() {
@@ -5690,11 +5959,16 @@
       }
       return;
     }
-    else if (act==='open-battle-pass') { UI.battlePassOpen = true; render(); return; }
+    else if (act==='open-battle-pass') { UI.battlePassOpen = true; UI._scrollBattlePass = true; render(); return; }
     else if (act==='close-battle-pass') { UI.battlePassOpen = false; render(); return; }
     else if (act==='claim-battle-pass') {
       var cbt = val.split(':');
       claimBattlePassTier(cbt[0], cbt[1] || 'free');
+      render();
+      return;
+    }
+    else if (act==='claim-bp-challenge') {
+      claimBattlePassChallenge(val);
       render();
       return;
     }
