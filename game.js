@@ -901,15 +901,16 @@
     return s;
   }
 
-  function grantBattlePassReward(reward) {
+  function grantBattlePassReward(reward, opts) {
+    opts = opts || {};
     if (!reward) return;
     if (reward.cash || reward.sp) grantEngagementReward(reward);
     if (reward.strain) {
       var s = genBattlePassStrain(reward.strain);
       G.strains = mergeStrains(G.strains, s);
       if (!G.focusedStrainId) G.focusedStrainId = s.id;
-      popStrain(s, { mega: true, jackpot: true });
-      showBattleToast('Exclusive strain: ' + s.name, true);
+      if (!opts.silent) popStrain(s, { mega: true, jackpot: true });
+      if (!opts.silent) showBattleToast('Exclusive strain: ' + s.name, true);
     }
     if (reward.cosmetic) {
       if (reward.cosmetic.badge) {
@@ -919,20 +920,20 @@
         for (var bi = 0; bi < 3; bi++) {
           if (!G.badgeIds[bi]) { G.badgeIds[bi] = reward.cosmetic.badge; break; }
         }
-        popLabel('BADGE UNLOCKED', { mega: true });
+        if (!opts.silent) popLabel('BADGE UNLOCKED', { mega: true });
         markHudDirty();
       }
       if (reward.cosmetic.avatar) {
         G.avatar = reward.cosmetic.avatar;
-        popLabel('AVATAR UNLOCKED', { mega: true });
+        if (!opts.silent) popLabel('AVATAR UNLOCKED', { mega: true });
         markHudDirty();
       }
     }
     if (reward.perk) {
       if (!G.battlePassPerks) G.battlePassPerks = {};
       G.battlePassPerks[reward.perk.id] = reward.perk;
-      popLabel(reward.perk.label, { mega: true, jackpot: true });
-      showBattleToast('Permanent perk: ' + reward.perk.label, true);
+      if (!opts.silent) popLabel(reward.perk.label, { mega: true, jackpot: true });
+      if (!opts.silent) showBattleToast('Permanent perk: ' + reward.perk.label, true);
     }
   }
 
@@ -2277,12 +2278,20 @@
   function renderBattleToasts() {
     var el = DOM.battleToastLayer || document.getElementById('battle-toast-layer');
     if (!el) return;
-    if (UI.activeTab !== 'battle' || UI.farmOpen) { el.innerHTML = ''; return; }
     var now = Date.now();
     UI.battleToasts = (UI.battleToasts || []).filter(function (t) { return now - t.at < 2800; });
+    if (UI.activeTab !== 'battle' || UI.farmOpen) { el.innerHTML = ''; return; }
     el.innerHTML = UI.battleToasts.map(function (t) {
       return '<div class="battle-toast' + (t.big ? ' battle-toast-big' : '') + '">' + esc(t.msg) + '</div>';
     }).join('');
+  }
+
+  function tickBattleToasts() {
+    if (!G || UI.playerSelectOpen) return;
+    var hasToasts = UI.battleToasts && UI.battleToasts.length > 0;
+    if (!hasToasts && !isToastsDirty()) return;
+    renderBattleToasts();
+    UI.dirty.toasts = false;
   }
 
   function shakeScreen() {
@@ -3606,7 +3615,7 @@
     syncBattleHubTimers();
     syncTabTimers();
     syncCloudHud(false);
-    if (isToastsDirty()) { renderBattleToasts(); UI.dirty.toasts = false; }
+    tickBattleToasts();
   }
 
   function startVisualLoop() {
@@ -3908,7 +3917,7 @@
       if (list.indexOf(t) >= 0) continue;
       var reward = battlePassRewardFor(t, track);
       if (!reward) continue;
-      grantBattlePassReward(reward);
+      grantBattlePassReward(reward, { silent: true });
       list.push(t);
       claimed++;
     }
