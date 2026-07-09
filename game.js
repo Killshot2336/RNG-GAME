@@ -5746,7 +5746,7 @@
     ensureGalaxyState();
     ensureMapPan();
     var pos = G.galaxyPos || { qx: 0, qy: 0 };
-    var viewR = 4;
+    var viewR = 2;
     var h = '<div class="galaxy-scan-wrap">';
     h += '<div class="galaxy-hud flex-between mb-2"><div class="galaxy-hud-stat"><span class="mining-hud-label">JUNK</span><span class="mining-hud-val text-cyan">' + (G.junk || 0) + '</span></div>';
     h += '<div class="galaxy-hud-stat"><span class="mining-hud-label">RANGE</span><span class="mining-hud-val">' + (G.shipRange || 3) + '</span></div>';
@@ -5773,12 +5773,14 @@
         }
         if (!inRange && !isHere) cls += ' galaxy-cell-far';
         var col = info ? rarityColor(info.rarity) : 'transparent';
-        h += '<button type="button" class="' + cls + '" data-action="galaxy-cell" data-id="' + qx + ':' + qy + '" style="--planet-glow:' + col + '">';
-        if (info) {
+        if (!info) {
+          h += '<div class="' + cls + '" aria-hidden="true"></div>';
+        } else {
+          h += '<button type="button" class="' + cls + '" data-action="galaxy-cell" data-id="' + qx + ':' + qy + '" style="--planet-glow:' + col + '">';
           h += '<span class="galaxy-cell-orb"></span><span class="galaxy-cell-dist">' + dist + 'u</span>';
           if (info.name) h += '<span class="galaxy-cell-name">' + esc(info.name).slice(0, 10) + '</span>';
+          h += '</button>';
         }
-        h += '</button>';
       }
     }
     h += '</div></div>';
@@ -6894,11 +6896,7 @@
     renderHUD();
     renderPlayerSelect();
     if (!UI.playerSelectOpen && root) {
-      if (isTabDirty()) {
-        renderActiveTabPanel(root, scrollTop);
-      } else {
-        syncCarouselTransform(root);
-      }
+      renderActiveTabPanel(root, scrollTop);
     }
     document.getElementById('overlay-profile').classList.toggle('open', UI.profileOpen);
     document.getElementById('overlay-settings').classList.toggle('open', UI.settingsOpen);
@@ -7176,7 +7174,7 @@
     if (act==='open-rocket-lift') { UI.liftedCardId = 'rocket-unlock'; render(); return; }
     if (act==='buy-map-unlock') { if (unlockMapTab()) render(); return; }
     if (act==='goto-map') { UI.liftedCardId = null; UI.activeTab = 'map'; render(); return; }
-    if (act==='map-sub-tab') { UI.mapSubTab = val; render(); return; }
+    if (act==='map-sub-tab') { UI.mapSubTab = val; markTabDirty(); render(); return; }
     if (act==='galaxy-cell') {
       var gp = val.split(':');
       var gqx = parseInt(gp[0], 10), gqy = parseInt(gp[1], 10);
@@ -7185,6 +7183,7 @@
         if (gi && (gi.foreign || (gi.ownerId && gi.ownerId !== activePlayerId))) UI.galaxyFocus = { qx: gqx, qy: gqy, info: gi };
         else if (gi && gi.harvestable !== false) scanGalaxyCell(gqx, gqy);
         else UI.galaxyFocus = gi ? { qx: gqx, qy: gqy, info: gi } : null;
+        markTabDirty();
         render();
       }
       return;

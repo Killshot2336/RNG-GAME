@@ -18,6 +18,8 @@
       --font-mono: "Share Tech Mono", monospace;
       --rarity-common: #94a3b8; --rarity-rare: #38bdf8; --rarity-epic: #a855f7;
       --rarity-legendary: #f59e0b; --rarity-mythic: #ffd700; --rarity-divine: #f0f9ff;
+      --card-grid-max: 7.25rem;
+      --card-grid-gap: 0.65rem;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html { height: 100%; height: 100dvh; }
@@ -546,16 +548,26 @@
       content: ""; position: absolute; inset: 0; pointer-events: none;
       background: repeating-linear-gradient(180deg, rgba(57,255,20,0.06) 0 24px, transparent 24px 48px);
     }
-    .binder-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.625rem; }
-    @media (min-width: 420px) { .binder-grid { grid-template-columns: repeat(3, 1fr); gap: 0.75rem; } }
+    .binder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--card-grid-gap); justify-items: center; }
+    @media (min-width: 420px) { .binder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; } }
     /* —— Clash Royale style strain cards —— */
     .cr-card {
       position: relative;
       border: none; background: none; padding: 0; cursor: pointer; text-align: center;
       transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
-      animation: none; width: 100%; perspective: 600px;
+      animation: none; width: 100%; max-width: var(--card-grid-max); margin: 0 auto;
+      perspective: 600px; overflow: visible;
     }
-    .binder-grid .cr-card-frame { max-width: 6.85rem; margin-left: auto; margin-right: auto; }
+    .binder-grid .cr-card-frame,
+    .battle-equip-grid .cr-card-frame,
+    .index-strain-grid .cr-card-frame,
+    .strain-picker-grid .cr-card-frame,
+    .mutation-pick-grid .cr-card-frame,
+    .planet-owned-grid .cr-card-frame,
+    .roadside-slot-card .cr-card-frame,
+    .shop-daily-card .cr-card-frame {
+      width: 100%; max-width: var(--card-grid-max); margin-left: auto; margin-right: auto;
+    }
     .cr-card:hover { transform: translateY(-8px) rotate(-1deg) scale(1.03); filter: brightness(1.06); }
     .cr-card:active { transform: translateY(-2px) scale(0.96); transition-duration: 0.08s; }
     .cr-card.selected .cr-card-frame {
@@ -2529,7 +2541,7 @@
     .mining-hud-val { display: block; font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; margin-top: 0.15rem; }
     .mining-ore-val.mining-ore-ready { color: #fde68a; animation: mining-ore-pulse 1.6s ease-in-out infinite; }
     .miner-field-viewport {
-      position: relative; height: min(42vh, 22rem); min-height: 16rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.75rem;
+      position: relative; height: min(34vh, 17rem); min-height: 13rem; border-radius: 0.85rem; overflow: hidden; margin-bottom: 0.5rem;
       background: linear-gradient(180deg, rgba(12, 8, 4, 0.95), rgba(4, 6, 12, 0.98));
       border: 2px solid rgba(251, 146, 60, 0.22);
       box-shadow: 0 0 28px rgba(251, 146, 60, 0.1), inset 0 1px 0 rgba(251, 146, 60, 0.06);
@@ -2665,10 +2677,22 @@
     }
     .map-screen .planet-owned-grid .cr-card-frame,
     .map-screen .planet-scan-card-wrap .cr-card-frame {
-      overflow: hidden;
+      overflow: visible;
+      max-width: var(--card-grid-max);
       transform: none !important;
       animation: none !important;
     }
+    .map-screen .planet-owned-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      justify-items: center;
+      gap: var(--card-grid-gap);
+    }
+    @media (min-width: 420px) {
+      .map-screen .planet-owned-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    .planet-scan-card-wrap .cr-card { max-width: 9.5rem; margin: 0 auto; }
+    .map-index-book { display: grid; gap: 0.75rem; }
+    .map-index-planet-wrap .cr-card { max-width: 10rem; margin: 0 auto; }
     .map-screen .planet-owned-grid .foil-active .cr-card-frame,
     .map-screen .planet-scan-card-wrap .foil-active .cr-card-frame,
     .map-screen .planet-owned-grid .cr-card-frame.foil-active,
@@ -2905,26 +2929,30 @@
 
     /* Galaxy map NMS */
     .galaxy-grid-viewport {
-      border-radius: 0.75rem; overflow: hidden; border: 1px solid rgba(56, 189, 248, 0.2);
-      background: radial-gradient(circle at center, #0a1628, #020408);
-      padding: 0.5rem;
+      border-radius: 0.85rem; overflow: hidden; border: 1px solid rgba(56, 189, 248, 0.28);
+      background: radial-gradient(circle at center, #0c1a32 0%, #020408 100%);
+      padding: 0.65rem;
+      box-shadow: inset 0 0 40px rgba(6, 182, 212, 0.08);
     }
     .galaxy-grid-world {
-      display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.35rem;
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.45rem;
+      max-width: 22rem; margin: 0 auto;
     }
     .galaxy-cell {
-      aspect-ratio: 1; border-radius: 50%; border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.4); position: relative; cursor: pointer;
+      aspect-ratio: 1; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.45); position: relative;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 2.2rem;
+      min-height: 3rem; padding: 0.15rem; transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
-    .galaxy-cell-void { opacity: 0.25; cursor: default; }
+    button.galaxy-cell { cursor: pointer; font: inherit; color: inherit; }
+    button.galaxy-cell:active { transform: scale(0.94); }
+    .galaxy-cell-void { opacity: 0.2; border-style: dashed; pointer-events: none; }
     .galaxy-cell-far { opacity: 0.45; }
     .galaxy-cell-here { border-color: var(--leaf); box-shadow: 0 0 12px rgba(74, 222, 128, 0.5); }
     .galaxy-cell-planet .galaxy-cell-orb {
-      width: 60%; height: 60%; border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, var(--planet-glow), transparent 70%);
-      box-shadow: 0 0 12px var(--planet-glow);
+      width: 55%; height: 55%; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, var(--planet-glow, #38bdf8), transparent 72%);
+      box-shadow: 0 0 12px var(--planet-glow, #38bdf8);
     }
     .rarity-glow-dust .galaxy-cell-orb { box-shadow: 0 0 8px #9ca3af; }
     .rarity-glow-haze .galaxy-cell-orb { box-shadow: 0 0 14px #38bdf8; }
@@ -2932,8 +2960,10 @@
     .galaxy-cell-enemy { border-color: #ef4444 !important; box-shadow: 0 0 16px rgba(239, 68, 68, 0.6) !important; animation: galaxy-enemy-pulse 1.5s ease-in-out infinite; }
     @keyframes galaxy-enemy-pulse { 0%, 100% { box-shadow: 0 0 12px rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 24px rgba(239,68,68,0.85); } }
     .galaxy-cell-owned { border-color: rgba(74, 222, 128, 0.4); }
-    .galaxy-cell-dist { font-size: 0.35rem; color: var(--muted); font-family: var(--font-mono); }
-    .galaxy-cell-name { font-size: 0.32rem; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .galaxy-cell-dist { font-size: 0.42rem; color: var(--muted); font-family: var(--font-mono); margin-top: 0.1rem; }
+    .galaxy-cell-name { font-size: 0.38rem; max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .galaxy-scan-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+    .galaxy-focus-panel { border: 1px solid rgba(6, 182, 212, 0.25); }
     .map-locked { display: flex; align-items: center; justify-content: center; min-height: 50vh; }
 
     /* Portal farm Rick & Morty lane */
@@ -3022,33 +3052,32 @@
       backface-visibility: hidden;
       transform: translate3d(0,0,0);
     }
-    .cr-screen-panel { contain: layout style paint; }
+    .cr-screen-panel { contain: layout style; }
     .cr-card, .holo-card, .strain-card {
       position: relative;
-      overflow: hidden;
+      overflow: visible;
     }
-    .cr-tier-dust, .cr-tier-street { box-shadow: 0 0 12px rgba(148,163,184,0.25); }
-    .cr-tier-pulse, .cr-tier-haze { box-shadow: 0 0 16px rgba(56,189,248,0.35); animation: rarity-pulse-blue 3s ease-in-out infinite; }
-    .cr-tier-bloom, .cr-tier-spark { box-shadow: 0 0 18px rgba(168,85,247,0.4); animation: rarity-pulse-violet 2.8s ease-in-out infinite; }
-    .cr-tier-legend, .cr-tier-eclipse { box-shadow: 0 0 22px rgba(245,158,11,0.45); animation: rarity-pulse-gold 2.4s ease-in-out infinite; }
-    .cr-tier-mythic, .cr-tier-ascendant { box-shadow: 0 0 28px rgba(255,215,0,0.55); animation: rarity-shimmer-mythic 2s linear infinite; }
-    .cr-tier-voidgod, .cr-tier-transcendent, .cr-tier-godroll {
+    .cr-card-frame.cr-tier-dust, .cr-card-frame.cr-tier-street { box-shadow: 0 0 12px rgba(148,163,184,0.25); }
+    .cr-card-frame.cr-tier-pulse, .cr-card-frame.cr-tier-haze { box-shadow: 0 0 16px rgba(56,189,248,0.35); animation: rarity-pulse-blue 3s ease-in-out infinite; }
+    .cr-card-frame.cr-tier-bloom, .cr-card-frame.cr-tier-spark { box-shadow: 0 0 18px rgba(168,85,247,0.4); animation: rarity-pulse-violet 2.8s ease-in-out infinite; }
+    .cr-card-frame.cr-tier-legend, .cr-card-frame.cr-tier-eclipse { box-shadow: 0 0 22px rgba(245,158,11,0.45); animation: rarity-pulse-gold 2.4s ease-in-out infinite; }
+    .cr-card-frame.cr-tier-mythic, .cr-card-frame.cr-tier-ascendant { box-shadow: 0 0 28px rgba(255,215,0,0.55); animation: rarity-shimmer-mythic 2s linear infinite; }
+    .cr-card-frame.cr-tier-voidgod, .cr-card-frame.cr-tier-transcendent, .cr-card-frame.cr-tier-godroll {
       box-shadow: 0 0 36px rgba(6,182,212,0.5), 0 0 48px rgba(236,72,153,0.35);
       animation: rarity-divine-distort 1.6s ease-in-out infinite;
     }
-    .cr-tier-mythic::after, .cr-tier-voidgod::after, .cr-tier-godroll::after {
+    .cr-card-frame.cr-tier-mythic::after, .cr-card-frame.cr-tier-voidgod::after, .cr-card-frame.cr-tier-godroll::after {
       content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
       background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
       animation: shimmer-slide 2.2s ease-in-out infinite;
     }
     @keyframes rarity-pulse-blue { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.15)} }
     @keyframes rarity-pulse-violet { 0%,100%{box-shadow:0 0 18px rgba(168,85,247,0.35)} 50%{box-shadow:0 0 26px rgba(236,72,153,0.5)} }
-    @keyframes rarity-pulse-gold { 0%,100%{transform:scale(1)} 50%{transform:scale(1.01)} }
+    @keyframes rarity-pulse-gold { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.08)} }
     @keyframes rarity-shimmer-mythic { 0%,100%{filter:hue-rotate(0deg)} 50%{filter:hue-rotate(18deg)} }
     @keyframes rarity-divine-distort {
-      0%,100%{transform:translateZ(0) rotate(0deg); filter:brightness(1.1) saturate(1.2)}
-      33%{transform:translateZ(0) rotate(0.3deg); filter:brightness(1.25) saturate(1.35)}
-      66%{transform:translateZ(0) rotate(-0.3deg); filter:brightness(1.15) saturate(1.25)}
+      0%,100%{filter:brightness(1.1) saturate(1.2)}
+      50%{filter:brightness(1.22) saturate(1.32)}
     }
     .rarity-glow-dust { --planet-glow: var(--rarity-common); }
     .rarity-glow-haze, .rarity-glow-pulse { --planet-glow: var(--rarity-rare); }
