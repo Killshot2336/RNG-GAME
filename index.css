@@ -75,7 +75,7 @@
     .chromatic-text { animation: chromatic-shift 4.5s ease-in-out infinite; }
     .reality-warp-active .chromatic-text { animation: chromatic-shift 4.5s ease-in-out infinite; }
     #hud-header {
-      position: relative; z-index: 30; flex-shrink: 0;
+      position: relative; z-index: 35; flex-shrink: 0;
       display: flex; align-items: center; justify-content: space-between;
       padding: calc(0.75rem + env(safe-area-inset-top, 0)) 1rem 0.75rem;
     }
@@ -102,6 +102,9 @@
       -webkit-overflow-scrolling: touch;
       padding: 0 1rem 1rem;
       scroll-padding-bottom: 1rem;
+      pointer-events: auto;
+    }
+    .cr-screen-panel:not(.cr-screen-panel-active) {
       pointer-events: none;
     }
     .cr-screen-panel.cr-screen-panel-active {
@@ -188,11 +191,20 @@
     .roadside-price { font-family: var(--font-mono); font-size: 0.7rem; color: var(--green); font-weight: 700; }
     .coop-player-av { font-size: 2rem; width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(0,0,0,0.35); }
     .planet-glow-active { box-shadow: 0 0 24px var(--planet-color, var(--leaf)), 0 0 48px color-mix(in srgb, var(--planet-color) 40%, transparent); }
-    #overlay-aux { position: fixed; inset: 0; z-index: 85; pointer-events: none; }
+    #overlay-aux {
+      position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+      z-index: 28; pointer-events: none;
+    }
     #overlay-aux.open { pointer-events: auto; }
-    .aux-overlay { position: fixed; inset: 0; z-index: 86; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .aux-overlay {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; align-items: center; justify-content: center; padding: 1rem;
+    }
+    .aux-overlay .overlay-backdrop { z-index: 0; }
+    .aux-overlay .overlay-panel,
+    .aux-overlay .idle-cap-panel { position: relative; z-index: 1; }
     #bottom-dock {
-      position: relative; z-index: 30; flex-shrink: 0;
+      position: relative; z-index: 45; flex-shrink: 0;
       display: flex; justify-content: space-around; align-items: flex-end;
       padding: 0.55rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0));
       background: linear-gradient(180deg, #5a3d28 0%, #402b1b 35%, #2b1b11 70%, #1f120a 100%);

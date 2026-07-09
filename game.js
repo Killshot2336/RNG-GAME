@@ -3337,7 +3337,7 @@
     UI.activeTab = 'battle';
     UI.farmOpen = false;
     ensureEngagementState();
-    if (canClaimDailyLogin()) UI.dailyLoginOpen = true;
+    if (canClaimDailyLogin()) showBattleToast('Daily reward ready — open from HOME', true);
     checkAchievements();
     markAllVisualDirty();
     plantSay('welcome', true);
@@ -6696,8 +6696,8 @@
         h += '<div class="' + cls + '"><div>D' + dayNum + '</div><div>' + label + '</div></div>';
       });
       h += '</div>';
-      if (canClaimDailyLogin()) h += '<button type="button" class="game-btn game-btn-green w-full" data-action="claim-daily-login">CLAIM TODAY</button>';
-      else h += '<button type="button" class="game-btn w-full" data-action="close-daily-login">CLOSE</button>';
+      if (canClaimDailyLogin()) h += '<button type="button" class="game-btn game-btn-green w-full mb-2" data-action="claim-daily-login">CLAIM TODAY</button>';
+      h += '<button type="button" class="game-btn w-full" data-action="close-daily-login">' + (canClaimDailyLogin() ? 'LATER' : 'CLOSE') + '</button>';
       h += '</div></div>';
     }
     if (UI.trophyRoadOpen) {
@@ -7173,7 +7173,7 @@
     if (act==='toggle-party-popup') { UI.partyOpen = !UI.partyOpen; render(); return; }
     if (act==='open-rocket-lift') { UI.liftedCardId = 'rocket-unlock'; render(); return; }
     if (act==='buy-map-unlock') { if (unlockMapTab()) render(); return; }
-    if (act==='goto-map') { UI.liftedCardId = null; UI.activeTab = 'map'; render(); return; }
+    if (act==='goto-map') { UI.liftedCardId = null; UI.activeTab = 'map'; markTabDirty(); render(); return; }
     if (act==='map-sub-tab') { UI.mapSubTab = val; markTabDirty(); render(); return; }
     if (act==='galaxy-cell') {
       var gp = val.split(':');
@@ -7625,6 +7625,7 @@
       saveTabScroll(UI.activeTab);
       var tab = t.dataset.tab;
       UI.farmOpen = false;
+      UI.dailyLoginOpen = false;
       if (tab !== UI.activeTab) clearArcadePops();
       UI.activeTab = tab;
       markTabDirty();

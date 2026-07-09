@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="index.css?v=20" />
+  <link rel="stylesheet" href="index.css?v=21" />
 </head>
 <body>
   <div id="voidline-app">
@@ -56,6 +56,7 @@
       <div id="battle-toast-layer"></div>
       <div id="arcade-pop-layer"></div>
       <main id="screen-root"></main>
+      <div id="overlay-aux"></div>
       <nav id="bottom-dock">
         <button type="button" class="nav-btn" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6h15l-1.5 9H7.5L6 6z"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>SHOP</button>
         <button type="button" class="nav-btn" data-tab="index"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg>INDEX</button>
@@ -74,13 +75,12 @@
     <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel halftone-panel glass-panel ink-border p-4" id="settings-panel"></div></div>
     <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
     <div id="overlay-merge-lab" class="overlay"></div>
-    <div id="overlay-aux"></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-auth.js?v=5"></script>
   <script src="player-core.js?v=1"></script>
   <script src="clan-system.js?v=2"></script>
   <script src="catalog.js?v=35"></script>
-  <script src="game.js?v=65"></script>
+  <script src="game.js?v=66"></script>
 </body>
 </html>
