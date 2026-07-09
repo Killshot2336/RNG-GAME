@@ -1,21 +1,23 @@
     :root {
-      --void: #1c120c; --void-deep: #0c0805; --panel: #2b1b11;
-      --wood-light: #402b1b; --wood-dark: #1f120a;
-      --leaf: #7ca61e; --leaf-dark: #43610b;
-      --gold: #f59e0b; --gold-dark: #b45309;
-      --terracotta: #ea580c; --terracotta-dark: #9a3412;
-      --neon-purple: #402b1b; --neon-glow: #7ca61e; --green: #7ca61e;
-      --pink: #ea580c; --cyan: #b45309; --muted: #a68b6b; --text: #f5e6d3;
-      --ink: #0c0805;
-      --glass-skin: linear-gradient(165deg, #402b1b 0%, #2b1b11 48%, #1f120a 100%);
-      --glass-blur: none;
-      --glass-border: 4px solid #0c0805;
-      --farm-shadow: 0 8px 0 #0c0805, inset 0 -6px 0 rgba(0, 0, 0, 0.5);
-      --farm-shadow-sm: 0 4px 0 #0c0805, inset 0 -3px 0 rgba(0, 0, 0, 0.45);
+      --void: #050810; --void-deep: #020408; --panel: rgba(12, 18, 32, 0.72);
+      --wood-light: #1a2438; --wood-dark: #0a0f1a;
+      --leaf: #22C55E; --leaf-dark: #15803d;
+      --gold: #F59E0B; --gold-dark: #b45309;
+      --terracotta: #EC4899; --terracotta-dark: #9d174d;
+      --neon-purple: #A855F7; --neon-glow: #06B6D4; --green: #22C55E;
+      --pink: #EC4899; --cyan: #06B6D4; --muted: #94a3b8; --text: #e2e8f0;
+      --ink: #020408;
+      --glass-skin: linear-gradient(165deg, rgba(15, 23, 42, 0.88) 0%, rgba(8, 12, 24, 0.92) 48%, rgba(4, 6, 14, 0.96) 100%);
+      --glass-blur: blur(18px) saturate(1.35);
+      --glass-border: 1px solid rgba(6, 182, 212, 0.22);
+      --farm-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      --farm-shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
       --ease-os: cubic-bezier(0.16, 1, 0.3, 1);
       --font-display: "Fredoka", "Audiowide", system-ui, sans-serif;
       --font-body: "Exo 2", system-ui, sans-serif;
       --font-mono: "Share Tech Mono", monospace;
+      --rarity-common: #94a3b8; --rarity-rare: #38bdf8; --rarity-epic: #a855f7;
+      --rarity-legendary: #f59e0b; --rarity-mythic: #ffd700; --rarity-divine: #f0f9ff;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html { height: 100%; height: 100dvh; }
@@ -3005,3 +3007,100 @@
     .campaign-speedrun-row { padding: 0.2rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .rocket-lift-card .rocket-lift-icon { filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.5)); }
     .party-popup-panel .game-btn { letter-spacing: 0.08em; }
+
+    /* === AAA VISUAL MATRIX === */
+    .glass-panel, .halftone-panel {
+      background: var(--glass-skin);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: var(--glass-border);
+      box-shadow: var(--farm-shadow-sm);
+    }
+    .cr-screen-carousel {
+      will-change: transform;
+      transition: transform 0.42s var(--ease-os);
+      backface-visibility: hidden;
+      transform: translate3d(0,0,0);
+    }
+    .cr-screen-panel { contain: layout style paint; }
+    .cr-card, .holo-card, .strain-card {
+      position: relative;
+      overflow: hidden;
+    }
+    .cr-tier-dust, .cr-tier-street { box-shadow: 0 0 12px rgba(148,163,184,0.25); }
+    .cr-tier-pulse, .cr-tier-haze { box-shadow: 0 0 16px rgba(56,189,248,0.35); animation: rarity-pulse-blue 3s ease-in-out infinite; }
+    .cr-tier-bloom, .cr-tier-spark { box-shadow: 0 0 18px rgba(168,85,247,0.4); animation: rarity-pulse-violet 2.8s ease-in-out infinite; }
+    .cr-tier-legend, .cr-tier-eclipse { box-shadow: 0 0 22px rgba(245,158,11,0.45); animation: rarity-pulse-gold 2.4s ease-in-out infinite; }
+    .cr-tier-mythic, .cr-tier-ascendant { box-shadow: 0 0 28px rgba(255,215,0,0.55); animation: rarity-shimmer-mythic 2s linear infinite; }
+    .cr-tier-voidgod, .cr-tier-transcendent, .cr-tier-godroll {
+      box-shadow: 0 0 36px rgba(6,182,212,0.5), 0 0 48px rgba(236,72,153,0.35);
+      animation: rarity-divine-distort 1.6s ease-in-out infinite;
+    }
+    .cr-tier-mythic::after, .cr-tier-voidgod::after, .cr-tier-godroll::after {
+      content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
+      animation: shimmer-slide 2.2s ease-in-out infinite;
+    }
+    @keyframes rarity-pulse-blue { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.15)} }
+    @keyframes rarity-pulse-violet { 0%,100%{box-shadow:0 0 18px rgba(168,85,247,0.35)} 50%{box-shadow:0 0 26px rgba(236,72,153,0.5)} }
+    @keyframes rarity-pulse-gold { 0%,100%{transform:scale(1)} 50%{transform:scale(1.01)} }
+    @keyframes rarity-shimmer-mythic { 0%,100%{filter:hue-rotate(0deg)} 50%{filter:hue-rotate(18deg)} }
+    @keyframes rarity-divine-distort {
+      0%,100%{transform:translateZ(0) rotate(0deg); filter:brightness(1.1) saturate(1.2)}
+      33%{transform:translateZ(0) rotate(0.3deg); filter:brightness(1.25) saturate(1.35)}
+      66%{transform:translateZ(0) rotate(-0.3deg); filter:brightness(1.15) saturate(1.25)}
+    }
+    .rarity-glow-dust { --planet-glow: var(--rarity-common); }
+    .rarity-glow-haze, .rarity-glow-pulse { --planet-glow: var(--rarity-rare); }
+    .rarity-glow-bloom, .rarity-glow-mist { --planet-glow: var(--rarity-epic); }
+    .rarity-glow-legend, .rarity-glow-eclipse { --planet-glow: var(--rarity-legendary); }
+    .rarity-glow-mythic, .rarity-glow-ascendant { --planet-glow: var(--rarity-mythic); }
+    .rarity-glow-voidgod, .rarity-glow-godroll { --planet-glow: var(--rarity-divine); }
+    .galaxy-cell-planet .galaxy-cell-orb {
+      box-shadow: 0 0 14px var(--planet-glow), 0 0 28px color-mix(in srgb, var(--planet-glow) 40%, transparent);
+      animation: rarity-pulse-blue 3.5s ease-in-out infinite;
+    }
+
+    /* Profile theme isolation */
+    .theme-aden { --theme-accent: #dc2626; --theme-glow: rgba(220,38,38,0.35); }
+    .theme-aden .glass-panel, .theme-aden .halftone-panel {
+      background: linear-gradient(165deg, rgba(12,8,16,0.94) 0%, rgba(24,10,18,0.92) 50%, rgba(8,6,12,0.96) 100%);
+      border-color: rgba(220,38,38,0.28);
+      box-shadow: 0 0 32px var(--theme-glow), var(--farm-shadow-sm);
+    }
+    .theme-aden .profile-banner::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 0%, rgba(220,38,38,0.22) 0%, transparent 65%);
+      animation: void-haze-pulse 4s ease-in-out infinite;
+    }
+    @keyframes void-haze-pulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
+
+    .theme-edward { --theme-accent: #eab308; --theme-glow: rgba(234,179,8,0.25); }
+    .theme-edward .glass-panel, .theme-edward .halftone-panel {
+      background: linear-gradient(165deg, rgba(28,22,12,0.92) 0%, rgba(18,14,8,0.94) 50%, rgba(10,8,4,0.96) 100%);
+      border-color: rgba(234,179,8,0.22);
+    }
+    .theme-edward .brand-title { text-shadow: 0 0 12px rgba(234,179,8,0.35); }
+
+    .theme-jamie { --theme-accent: #c084fc; --theme-glow: rgba(192,132,252,0.3); }
+    .theme-jamie .glass-panel, .theme-jamie .halftone-panel {
+      background: linear-gradient(165deg, rgba(20,12,32,0.92) 0%, rgba(12,8,24,0.94) 50%, rgba(6,4,14,0.96) 100%);
+      border-color: rgba(192,132,252,0.25);
+    }
+    .theme-jamie.jamie-focus-mode .profile-stats-scroll .text-muted,
+    .theme-jamie.jamie-focus-mode #hud-cloud-sync,
+    .theme-jamie.jamie-focus-mode .coop-sync-status,
+    .theme-jamie.jamie-focus-mode .mod-section-card .text-muted { display: none !important; }
+
+    .essence-tree-wrap .essence-perk-card { border-left: 3px solid var(--cyan); }
+    .clan-type-grid, .clan-emblem-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .clan-emblem-btn { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; border: 1px solid rgba(6,182,212,0.3); background: rgba(8,12,24,0.8); }
+    .clan-market-columns { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0.35rem; }
+    .clan-market-slot { position: relative; min-height: 4.5rem; }
+    .coop-hub-tabs .farm-tab { flex: 1; }
+    .player-pick-card { backdrop-filter: blur(12px); border: 1px solid rgba(6,182,212,0.2); }
+    .nav-btn.active { box-shadow: 0 0 16px rgba(6,182,212,0.35); }
+    .backdrop-gradient {
+      background: radial-gradient(ellipse at 20% 0%, rgba(6,182,212,0.12) 0%, transparent 45%),
+        radial-gradient(ellipse at 80% 100%, rgba(236,72,153,0.1) 0%, transparent 40%), var(--void-deep);
+    }

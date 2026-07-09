@@ -4,6 +4,14 @@
 
   var AUTH_MODE_KEY = 'voidline_auth_mode';
   var PLAYER_IDS = ['aden', 'dad', 'jamie'];
+
+  function registryPlayerIds() {
+    if (window.VoidlinePlayerCore && window.VoidlinePlayerCore.getRegistry) {
+      var reg = window.VoidlinePlayerCore.getRegistry();
+      if (reg && reg.length) return reg.map(function (e) { return e.id; });
+    }
+    return PLAYER_IDS.slice();
+  }
   var CLOUD_DEBOUNCE_MS = 2000;
   var SAVE_PREFIX = 'voidline_galaxy_farm_v2_';
 
@@ -292,7 +300,7 @@
     pendingCloudPushes = [];
     var byPlayer = {};
     (rows || []).forEach(function (row) { byPlayer[row.player_id] = row; });
-    PLAYER_IDS.forEach(function (pid) {
+    registryPlayerIds().forEach(function (pid) {
       var local = readLocalSave(pid);
       var cloud = byPlayer[pid] || null;
       var cloudData = cloud && cloud.save_json;
@@ -558,7 +566,7 @@
       var byPlayer = {};
       (rows || []).forEach(function (row) { byPlayer[row.player_id] = row; });
       var pushes = [];
-      PLAYER_IDS.forEach(function (pid) {
+      registryPlayerIds().forEach(function (pid) {
         var local = readLocalSave(pid);
         var cloud = byPlayer[pid] || null;
         var cloudData = cloud && cloud.save_json;

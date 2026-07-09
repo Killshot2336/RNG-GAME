@@ -8,6 +8,7 @@
   var BLITZ_BY_ID = CAT.blitzById || {};
   var BLITZ_SHOP_SIZE = 10;
   var BLITZ_MS = 1800000, CLONE_MS = 60000, XP_LVL = 500;
+  var EMPIRE_MAX_LEVEL = 200;
   var AUTO_SCAN_MS = 60000;
   var AUTO_SCAN_MIN_RARITY = 'mist';
   var BOSS_TRAIT_NAMES = ['Standard', 'Solar Flare', 'Cosmic Shield', 'Chronos Enrage'];
@@ -15,9 +16,9 @@
   var LEGACY_SAVE = 'voidline_galaxy_farm_v1';
   var SESSION_KEY = 'voidline_active_player';
   var LAST_PLAYER_KEY = 'voidline_last_player';
-  var APP_VERSION = '7';
+  var APP_VERSION = '8';
   var VERSION_KEY = 'voidline_app_version';
-  var SAVE_VERSION = 7;
+  var SAVE_VERSION = 8;
   var PLANET_REGISTRY_KEY = 'voidline_planet_registry';
   var PLANET_PREFIX = ['Kepler', 'Nova', 'Rift', 'Obsidian', 'Crimson', 'Azure', 'Phantom', 'Eclipse', 'Stellar', 'Void'];
   var PLANET_SUFFIX = ['IV', 'VII', 'IX', 'Prime', 'Reach', 'Haven', 'Crown', 'Shard', 'Belt', 'Gate'];
@@ -39,10 +40,22 @@
   var LEASE_MAX_PERCENT = 50;
   var TAB_ORDER = ['shop', 'index', 'battle', 'coop', 'map'];
 
-  var PLAYERS = [
-    { id: 'aden', label: 'Aden', portrait: '/public/art/portraits/aden.svg', defaultName: 'Aden' },
-    { id: 'dad', label: 'Dad', portrait: '/public/art/portraits/dad.svg', defaultName: 'Dad' },
-    { id: 'jamie', label: 'Jamie', portrait: '/public/art/portraits/jamie.svg', defaultName: 'Jamie' },
+  var PC = window.VoidlinePlayerCore || null;
+  var PLAYERS = PC ? PC.listProfiles().map(function (p) {
+    return { id: p.id, label: p.label, portrait: p.portrait, defaultName: p.defaultName || p.label, theme: p.theme, tag: p.tag };
+  }) : [
+    { id: 'aden', label: 'Aden', portrait: '/public/art/portraits/aden.svg', defaultName: 'Aden', theme: 'aden' },
+    { id: 'dad', label: 'Edward', portrait: '/public/art/portraits/dad.svg', defaultName: 'Edward', theme: 'edward' },
+    { id: 'jamie', label: 'Jamie', portrait: '/public/art/portraits/jamie.svg', defaultName: 'Jamie', theme: 'jamie' },
+  ];
+
+  var ESSENCE_PERK_DEFS = [
+    { id: 'mutation_odds', name: 'Mutation Odds', desc: '+4% mutation roll weight per rank.', max: 10, cost: 2, step: 1 },
+    { id: 'auto_fuse', name: 'Auto-Fuse Core', desc: '+3% auto-fuse proc chance per rank.', max: 8, cost: 3, step: 1 },
+    { id: 'yield_amp', name: 'Yield Amplifier', desc: '+8% global void essence output per rank.', max: 12, cost: 2, step: 1 },
+    { id: 'scan_boost', name: 'Scan Thrusters', desc: '+6% sector scan rate per rank.', max: 10, cost: 2, step: 1 },
+    { id: 'pack_luck', name: 'Pack Luck', desc: '+5% pack rarity ceiling per rank.', max: 8, cost: 4, step: 1 },
+    { id: 'cash_magnet', name: 'Cash Magnet', desc: '+10% passive cash routing per rank.', max: 10, cost: 3, step: 1 },
   ];
 
   function liftShellTierClass(strain) {
@@ -295,6 +308,7 @@
     'strainMastery', 'shopFlashPurchased',
     'idleBuildings', 'mapUnlocked', 'junk', 'shipRange', 'shipShield',
     'galaxyPos', 'galaxyClaims', 'farmPortalUpgrades', 'campaignSpeedruns',
+    'uniqueTag', 'profileTheme', 'legacySlug', 'essencePerks', 'cashSinkTier', 'jamieFocusMode',
   ];
 
   function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -303,7 +317,17 @@
   function fmtCd(ms) { var t = Math.max(0, Math.ceil(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
   function fmtSp(v) { return v.toLocaleString() + ' SP'; }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
-  function playerDef(id) { return PLAYERS.find(function (p) { return p.id === id; }) || PLAYERS[0]; }
+  function playerDef(id) {
+    if (PC) return PC.getProfile(id);
+    return PLAYERS.find(function (p) { return p.id === id; }) || PLAYERS[0];
+  }
+  function playerThemeClass(pid) {
+    var p = playerDef(pid || activePlayerId);
+    if (PC) return PC.themeClass(p.theme);
+    if (p.theme === 'edward' || p.id === 'dad') return 'theme-edward';
+    if (p.theme === 'jamie' || p.id === 'jamie') return 'theme-jamie';
+    return 'theme-aden';
+  }
   function saveKey(pid) { return SAVE_PREFIX + pid; }
 
   function rngSeed(seed) {
@@ -810,7 +834,8 @@
     var seed = ((a.seed || 0) ^ (b.seed || 0)) + (opts.preview ? 1337 : Date.now());
     var rng = rngSeed(seed);
     var tierIdx = Math.max(rarityIndex(a.rarity), rarityIndex(b.rarity));
-    var bump = rng() > 0.65 ? 1 : 0;
+    var mutOdds = essencePerkLevel('mutation_odds') * 0.04;
+    var bump = rng() > (0.65 - mutOdds) ? 1 : 0;
     var childRar = RARITIES[Math.min(RARITIES.length - 1, tierIdx + bump)].id;
     var child = genStrain(seed, childRar, 0.03, opts);
     child.hue = Math.floor((a.hue + b.hue) / 2 + (rng() - 0.5) * 40) % 360;
@@ -1598,7 +1623,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, idleOpen: false, idleTab: 'buildings', partyOpen: false, mapSubTab: 'scan', coopBattle: null, floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, idleOpen: false, idleTab: 'buildings', partyOpen: false, mapSubTab: 'scan', coopBattle: null, coopHubMode: 'market', _clanPickType: 'family', _clanPickEmblem: 'rift', floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -1607,6 +1632,9 @@
   var bossTickAcc = 0;
   var autoScanAcc = 0;
   var visualRafId = 0;
+  var renderRafPending = 0;
+  var simAcc = 0;
+  var SIM_TICK_MS = 50;
   var lastDamageVisualAt = 0;
   var DAMAGE_VISUAL_MS = 130;
   var ARCADE_POOL_SIZE = 15;
@@ -1625,6 +1653,7 @@
   function markBossHpDirty() { UI.dirty.bossHp = true; }
   function markBossDpsDirty() { UI.dirty.bossDps = true; }
   function markBossTraitDirty() { UI.dirty.bossTrait = true; }
+  function isBossShieldDirty() { return !!UI.dirty.bossShield; }
   function markBossShieldDirty() { UI.dirty.bossShield = true; }
   function markTabDirty() { UI.dirty.activeTab = true; }
   function markAllVisualDirty() {
@@ -1673,7 +1702,55 @@
   }
 
   function voidEssenceMult() {
-    return 1 + (G.voidEssence || 0) * 0.05;
+    var base = 1 + (G.voidEssence || 0) * 0.05;
+    var perk = essencePerkLevel('yield_amp') * 0.08;
+    return base * (1 + perk);
+  }
+
+  function essencePerkLevel(id) {
+    if (!G || !G.essencePerks) return 0;
+    return G.essencePerks[id] || 0;
+  }
+
+  function essencePerkDef(id) {
+    return ESSENCE_PERK_DEFS.find(function (p) { return p.id === id; }) || null;
+  }
+
+  function buyEssencePerk(id) {
+    var def = essencePerkDef(id);
+    if (!def || !G) return false;
+    var lvl = essencePerkLevel(id);
+    if (lvl >= def.max) { showBattleToast('Perk maxed', false); return false; }
+    var cost = def.cost + lvl * def.step;
+    if ((G.voidEssence || 0) < cost) { showBattleToast('Need ' + cost + ' Void Essence', false); return false; }
+    G.voidEssence -= cost;
+    if (!G.essencePerks) G.essencePerks = {};
+    G.essencePerks[id] = lvl + 1;
+    showBattleToast(def.name + ' rank ' + G.essencePerks[id], true);
+    scheduleSave();
+    markHudDirty();
+    return true;
+  }
+
+  function tickCashSink(d) {
+    if (!G || G.cash < 500000) return;
+    var tier = G.cashSinkTier || 0;
+    var threshold = 2500000 * (1 + tier * 0.35);
+    if (G.cash < threshold) return;
+    var rate = 0.015 + tier * 0.002;
+    var spend = Math.min(G.cash * rate * (d / 1000), G.cash - threshold * 0.7);
+    if (spend < 5000) return;
+    G.cash -= spend;
+    G.cashSinkTier = tier + spend / 2000000;
+    G.totalCashEarned = (G.totalCashEarned || 0);
+    if (Math.random() < 0.12) {
+      G.inventory = G.inventory.map(function (i) {
+        if (i.type === 'pipe') return Object.assign({}, i, { owned: (i.owned || 0) + 1 });
+        return i;
+      });
+    }
+    if (Math.random() < 0.04 && G.sp != null) G.sp += 1;
+    markWalletDirty();
   }
 
   function getBossTrait() {
@@ -1776,6 +1853,9 @@
       galaxyPos: { qx: 0, qy: 0 }, galaxyClaims: {},
       farmPortalUpgrades: { dropRate: 1, speed: 1, multiplier: 1 },
       campaignSpeedruns: [],
+      essencePerks: {}, cashSinkTier: 0, jamieFocusMode: false,
+      uniqueTag: PC && PC.generateTag ? PC.generateTag() : null,
+      profileTheme: p.theme || 'aden', legacySlug: p.legacySlug || null,
     };
   }
 
@@ -2191,6 +2271,9 @@
     if (G.bossShieldMax == null) G.bossShieldMax = 0;
     if (G.voidEssence == null) G.voidEssence = 0;
     if (!G.prestigeVault) G.prestigeVault = [];
+    if (!G.essencePerks) G.essencePerks = {};
+    if (G.cashSinkTier == null) G.cashSinkTier = 0;
+    if (G.jamieFocusMode == null) G.jamieFocusMode = false;
     if (G.totalCashEarned == null) G.totalCashEarned = 0;
     ensureStorefrontSlots();
     if (!G.planetLeases) G.planetLeases = { active: [], archive: [], pending: [] };
@@ -2423,13 +2506,17 @@
 
   function battleWaveNum() { return ((currentCampaignNode() - 1) % 5) + 1; }
   function isBossWave() { return isCampaignMegaNode(currentCampaignNode()); }
-  function xpNeededForLevel(lvl) { return (lvl || 1) * XP_LVL; }
+  function xpNeededForLevel(lvl) {
+    lvl = Math.min(Math.max(1, lvl || 1), EMPIRE_MAX_LEVEL);
+    return Math.floor(lvl * XP_LVL * (1 + (lvl - 1) * 0.012));
+  }
   function packLuckBonus() {
     var luck = blitzMod('packLuck');
     G.strains.forEach(function (st) { luck += abilityBonus(st, 'rift_luck', 0.05); });
     luck += CoOpSynergyManager.getPackLuckBonus();
     luck += G.mutationPackLuck || 0;
     luck += (battlePassPerkMult('luck') - 1);
+    luck += essencePerkLevel('pack_luck') * 0.05;
     return luck;
   }
 
@@ -3044,7 +3131,7 @@
     }
     addTrophyPoints(mega ? 15 : 8);
     addBattlePassXp(mega ? 12 : 6, { silent: true });
-    if (window.VoidlineClan && window.VoidlineClan.addTrophies) { /* clan removed */ }
+    if (window.VoidlineClan && window.VoidlineClan.addTrophies) window.VoidlineClan.addTrophies(Math.max(1, Math.floor(wave)));
     checkAchievements();
     scheduleSave();
   }
@@ -3234,11 +3321,17 @@
   function selectPlayer(pid) {
     if (activePlayerId && G) flushSave();
     activePlayerId = pid;
+    if (PC) PC.setActiveId(pid);
     try {
       sessionStorage.setItem(SESSION_KEY, pid);
       localStorage.setItem(LAST_PLAYER_KEY, pid);
     } catch (e) { }
     loadGame(pid);
+    if (PC && G) {
+      var prof = PC.getProfile(pid);
+      if (prof.tag && !G.uniqueTag) G.uniqueTag = prof.tag;
+      if (prof.theme) G.profileTheme = prof.theme;
+    }
     saveGame();
     UI.playerSelectOpen = false;
     UI.activeTab = 'battle';
@@ -3261,8 +3354,9 @@
     return base * blitzRushMult();
   }
   function scanMult() {
-    if (!G || !Array.isArray(G.sectorUpgrades)) return blitzMod('scan') + (battlePassPerkMult('scan') - 1);
-    return G.sectorUpgrades.reduce(function (s, x) { return s + (x.level || 0) * (x.scanRateBonus || 0); }, 0) + blitzMod('scan') + (battlePassPerkMult('scan') - 1);
+    var perk = essencePerkLevel('scan_boost') * 0.06;
+    if (!G || !Array.isArray(G.sectorUpgrades)) return blitzMod('scan') + (battlePassPerkMult('scan') - 1) + perk;
+    return G.sectorUpgrades.reduce(function (s, x) { return s + (x.level || 0) * (x.scanRateBonus || 0); }, 0) + blitzMod('scan') + (battlePassPerkMult('scan') - 1) + perk;
   }
   function revMs() {
     var rm = 1 + blitzMod('revenue'), ym = 1 + blitzMod('yield'), t = 0;
@@ -3284,6 +3378,7 @@
     t += idleBuildingsIncomePerSec();
     var fp = G.farmPortalUpgrades || { multiplier: 1 };
     t *= (fp.multiplier || 1);
+    t *= 1 + essencePerkLevel('cash_magnet') * 0.10;
     return (t / 1000) * voidEssenceMult() * battlePassPerkMult('rev');
   }
 
@@ -3306,7 +3401,7 @@
     if (amt > 0) amt = Math.floor(amt * (1 + blitzMod('xp')));
     if (amt > 0 && !skipPop) popXp(amt);
     G.empireXp = (G.empireXp || 0) + amt;
-    while (G.empireXp >= xpNeededForLevel(G.empireLevel)) {
+    while (G.empireLevel < EMPIRE_MAX_LEVEL && G.empireXp >= xpNeededForLevel(G.empireLevel)) {
       G.empireXp -= xpNeededForLevel(G.empireLevel);
       G.empireLevel++;
       onLevelUp(G.empireLevel);
@@ -3332,6 +3427,13 @@
     if (autoScanAcc >= autoScanIntervalMs()) { autoScanAcc = 0; processAutoScan(); }
     processLeaseBilling();
     tickFarmPortal(d);
+    tickCashSink(d);
+    if (!UI.mergeLab || UI.mergeLab.phase === 'idle') {
+      var fuseLvl = essencePerkLevel('auto_fuse');
+      if (fuseLvl > 0 && G.breedSlotA && G.breedSlotB && !mergeLabError() && Math.random() < fuseLvl * 0.03 * (d / 1000)) {
+        startMergeFuse();
+      }
+    }
     G.lastTickAt = now;
   }
 
@@ -4071,9 +4173,8 @@
     if (!force && !UI.dirty.shell) return;
     var shell = DOM.phoneShell || document.getElementById('phone-shell');
     if (shell) {
-      shell.className = 'phone-inner void-bg tab-bg-' + (UI.farmOpen ? 'farm' : UI.activeTab);
-      // #region agent log
-      // #endregion
+      var tabSkin = UI.farmOpen ? 'farm' : (UI.activeTab || 'battle');
+      shell.className = 'phone-inner void-bg farm-backyard ' + playerThemeClass(activePlayerId) + (G && G.jamieFocusMode ? ' jamie-focus-mode' : '') + ' tab-bg-' + tabSkin;
     }
     var app = DOM.voidlineApp || document.getElementById('voidline-app');
     var warp = DOM.realityWarp || document.getElementById('overlay-reality-warp');
@@ -4229,6 +4330,26 @@
     if (label) label.textContent = pct + '%';
   }
 
+  function scheduleRender() {
+    if (renderRafPending) return;
+    renderRafPending = requestAnimationFrame(function () {
+      renderRafPending = 0;
+      render();
+    });
+  }
+
+  function syncCarouselTransform(root) {
+    if (!root) return;
+    var carousel = root.querySelector('.cr-screen-carousel');
+    if (!carousel) return;
+    var idx = tabCarouselIndex();
+    carousel.style.transform = 'translate3d(-' + (idx * 20) + '%,0,0)';
+    var panels = root.querySelectorAll('.cr-screen-panel');
+    panels.forEach(function (panel, i) {
+      panel.classList.toggle('cr-screen-panel-active', i === idx);
+    });
+  }
+
   function scrollMapDiscoverPanel() {
     if (!UI._scrollMapDiscover) return;
     UI._scrollMapDiscover = false;
@@ -4245,6 +4366,14 @@
     visualRafId = requestAnimationFrame(visualLoop);
     if (!G || UI.playerSelectOpen) return;
     var now = Date.now();
+    simAcc += now - (visualLoop._last || now);
+    visualLoop._last = now;
+    while (simAcc >= SIM_TICK_MS) {
+      tick(now);
+      simAcc -= SIM_TICK_MS;
+      if (G.cash < 10000 && now - dialogueState.lastAt > 60000) plantSay('lowcash');
+      if (now - lastSaveAt >= AUTOSAVE_MS) flushSave();
+    }
     processDamagePopQueue(now);
     updateArcadeLayerTick();
     syncWalletDom(false);
@@ -4271,12 +4400,15 @@
     var cloudBadge = cloud && cloud.isLoggedIn()
       ? '<div class="auth-account-badge"><span class="cloud-sync-dot"></span>CLOUD · ' + esc(cloud.getEmail() || 'synced') + '</div>'
       : '<div class="auth-account-badge text-muted">LOCAL GUEST SAVE</div>';
-    var h = '<div class="overlay-panel ' + SKIN_PANEL + ' p-5 text-center"><h2 class="font-display chromatic-text mb-2" style="font-size:1rem;letter-spacing:0.15em">WHO ARE YOU?</h2><p class="text-muted text-xs mb-1">Each person gets their own save on this device.</p>' + cloudBadge + '<div class="player-pick-grid">';
+    var h = '<div class="overlay-panel ' + SKIN_PANEL + ' p-5 text-center"><h2 class="font-display chromatic-text mb-2" style="font-size:1rem;letter-spacing:0.15em">PILOT SELECT</h2><p class="text-muted text-xs mb-1">Each profile keeps its own #V0ID save on this device.</p>' + cloudBadge + '<div class="player-pick-grid">';
     PLAYERS.forEach(function (pl) {
       var save = readPlayerSave(pl.id);
       var lvl = save ? save.empireLevel : 1;
       var av = avatarHtml(pl.portrait, '2.5rem');
-      h += '<button type="button" class="player-pick-card" data-action="pick-player" data-pid="' + pl.id + '">' + av + '<div style="font-weight:700">' + esc(pl.label) + '</div><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(save ? (save.name || pl.label) : 'New game') + ' · Lv.' + lvl + '</div></button>';
+      var tag = pl.tag || (save && save.uniqueTag) || '';
+      h += '<button type="button" class="player-pick-card" data-action="pick-player" data-pid="' + pl.id + '">' + av + '<div style="font-weight:700">' + esc(pl.label) + '</div><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(save ? (save.name || pl.label) : 'New game') + ' · Lv.' + lvl + '</div>';
+      if (tag) h += '<div class="font-mono text-cyan" style="font-size:0.5rem;margin-top:0.15rem">' + esc(tag) + '</div>';
+      h += '</button>';
     });
     h += '</div><button type="button" class="game-btn w-full mt-3" data-action="auth-manage">' + farmIcon('settings') + ' ACCOUNT</button></div>';
     el.innerHTML = h;
@@ -5657,6 +5789,10 @@
       h += '<div class="text-xs text-muted">' + esc(rarityName(gf.info.rarity)) + ' · Owner: ' + esc(gf.info.ownerName || gf.info.ownerId || 'Unclaimed') + '</div>';
       if (gf.info.foreign) h += '<button type="button" class="game-btn game-btn-green w-full mt-2" data-action="galaxy-claim" data-id="' + gf.qx + ':' + gf.qy + '">CLAIM PLANET</button>';
       else h += '<button type="button" class="game-btn w-full mt-2" data-action="galaxy-scan-cell" data-id="' + gf.qx + ':' + gf.qy + '">SCAN FOR JUNK</button>';
+      if (gf.info.ownerId === activePlayerId) {
+        h += '<button type="button" class="game-btn game-btn-sm w-full mt-2" data-action="lease-draft" data-id="' + gf.qx + ':' + gf.qy + '">PORTION LEASE / BUYOUT</button>';
+        h += '<button type="button" class="game-btn game-btn-sm w-full mt-1" data-action="map-billings">BILLING LEDGER</button>';
+      }
       h += '</div>';
     }
     h += '<div class="miner-field-viewport mt-2' + (UI.scanAnimating ? ' miner-field-prospecting' : '') + '" data-map-viewport><div class="miner-field-world" data-map-world style="width:' + MAP_WORLD_W + 'px;height:' + MAP_WORLD_H + 'px;transform:translate3d(' + UI._mapPan.x + 'px,' + UI._mapPan.y + 'px,0)">';
@@ -5809,14 +5945,81 @@
     return h;
   }
 
+  function renderCoopClanPanel() {
+    var clan = window.VoidlineClan ? window.VoidlineClan.getState() : null;
+    if (!clan) return '<div class="text-muted text-xs">Clan engine loading…</div>';
+    var h = '';
+    if (!clan.inClan) {
+      h += '<div class="section-label mb-2">CREATE CLAN</div>';
+      h += '<input type="text" class="input-field mb-2" id="clan-create-name" placeholder="Clan name" maxlength="24">';
+      h += '<div class="clan-type-grid mb-2">';
+      Object.keys(window.VoidlineClan.CLAN_TYPES || {}).forEach(function (k) {
+        var t = window.VoidlineClan.CLAN_TYPES[k];
+        h += '<button type="button" class="game-btn game-btn-sm clan-type-btn" data-action="clan-pick-type" data-id="' + k + '">' + esc(t.label) + ' · ' + t.max + '</button>';
+      });
+      h += '</div><div class="clan-emblem-grid mb-2">';
+      (clan.emblems || []).forEach(function (em) {
+        h += '<button type="button" class="clan-emblem-btn" data-action="clan-pick-emblem" data-id="' + em + '">' + farmIcon(em) + '</button>';
+      });
+      h += '</div><button type="button" class="game-btn game-btn-green w-full mb-3" data-action="clan-create">FOUND CLAN</button>';
+      h += '<div class="section-label mb-2">JOIN CLAN</div>';
+      h += '<input type="text" class="input-field mb-2" id="clan-join-hash" placeholder="VOID-XXXX-XXXX" style="text-transform:uppercase">';
+      h += '<button type="button" class="game-btn w-full" data-action="clan-join">JOIN WITH HASH</button>';
+      return h;
+    }
+    h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 clan-roster-header"><div class="flex-between"><div><div class="font-display text-sm">' + esc(clan.name) + '</div><div class="font-mono text-xs text-cyan">' + esc(clan.hash) + ' · ' + esc(clan.typeLabel || '') + '</div></div><div>' + farmIcon(clan.emblem || 'rift', { xl: true }) + '</div></div>';
+    h += '<div class="text-muted text-xs mt-1">' + clan.memberCount + '/' + clan.maxMembers + ' pilots · ' + (clan.trophies || 0) + ' trophies</div></div>';
+    h += '<div class="clan-market-columns mb-3">';
+    (clan.marketSlots || []).forEach(function (slot) {
+      h += '<div class="clan-market-slot ' + SKIN_PANEL + ' p-2"><div class="text-xs font-display">' + esc(slot.strainName || 'Listing') + '</div><div class="text-green font-mono text-xs">' + fmtCash(slot.price || 0) + '</div>';
+      h += '<div class="flex-row gap-1 mt-1"><button type="button" class="game-btn game-btn-sm" data-action="clan-market-info" data-id="' + esc(slot.id) + '">i</button>';
+      h += '<button type="button" class="roadside-slot-x" data-action="clan-market-remove-ask" data-id="' + esc(slot.id) + '">×</button></div></div>';
+    });
+    if (!(clan.marketSlots || []).length) h += '<div class="text-muted text-xs text-center" style="grid-column:1/-1">No clan market listings yet.</div>';
+    h += '</div>';
+    h += '<button type="button" class="game-btn game-btn-sm w-full mb-2" data-action="clan-leave">LEAVE CLAN</button>';
+    return h;
+  }
+
+  function renderCoopLinkPanel() {
+    var links = PC ? PC.getLinks() : [];
+    var selfTag = (G && G.uniqueTag) || (PC && PC.getProfile(activePlayerId).tag) || '';
+    var h = '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div class="section-label section-label-green mb-1">YOUR TAG</div><div class="font-mono text-cyan text-sm">' + esc(selfTag || '—') + '</div></div>';
+    h += '<input type="text" class="input-field mb-2" id="link-player-tag" placeholder="#V0ID-XXXXXX" style="text-transform:uppercase">';
+    h += '<button type="button" class="game-btn game-btn-green w-full mb-3" data-action="link-add-player">ADD RIVAL / PARTNER</button>';
+    if (!links.length) h += '<div class="text-muted text-xs text-center">No linked pilots yet.</div>';
+    links.forEach(function (l) {
+      h += '<div class="coop-player-card ' + SKIN_PANEL + ' p-2 mb-2 flex-between"><div><div class="font-mono text-cyan text-xs">' + esc(l.tag) + '</div><div class="text-xs">' + esc(l.label) + '</div></div>';
+      h += '<button type="button" class="game-btn game-btn-sm" data-action="link-remove" data-id="' + esc(l.tag) + '">×</button></div>';
+    });
+    return h;
+  }
+
   function renderCoop() {
     ensureStorefrontSlots();
     var view = UI.coopView || 'hub';
+    var mode = UI.coopHubMode || 'market';
     var h = '<div class="screen-section coop-screen market-screen">';
     h += '<div class="market-hero ' + SKIN_PANEL + ' text-center mb-2">';
-    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">FAMILY MARKET</h2>';
-    h += '<p class="text-muted text-xs mt-1">Roadside shops · buy &amp; sell between family members</p>';
-    h += '</div>';
+    h += '<h2 class="font-display chromatic-text" style="font-size:1.125rem;letter-spacing:0.2em;margin:0">SYNDICATE HUB</h2>';
+    h += '<p class="text-muted text-xs mt-1">Market · Clan matrix · Pilot links</p></div>';
+    if (view === 'hub') {
+      h += '<div class="farm-tabs mb-3 coop-hub-tabs">';
+      h += '<button type="button" class="farm-tab' + (mode === 'market' ? ' active' : '') + '" data-action="coop-hub-mode" data-id="market">MARKET</button>';
+      h += '<button type="button" class="farm-tab' + (mode === 'clan' ? ' active' : '') + '" data-action="coop-hub-mode" data-id="clan">CLAN</button>';
+      h += '<button type="button" class="farm-tab' + (mode === 'link' ? ' active' : '') + '" data-action="coop-hub-mode" data-id="link">LINK</button>';
+      h += '</div>';
+      if (mode === 'clan') {
+        h += renderCoopClanPanel();
+        h += '</div>';
+        return h;
+      }
+      if (mode === 'link') {
+        h += renderCoopLinkPanel();
+        h += '</div>';
+        return h;
+      }
+    }
 
     if (view === 'myshop') {
       h += '<button type="button" class="game-btn game-btn-sm mb-2" data-action="coop-back">← MARKET</button>';
@@ -6086,6 +6289,24 @@
     return h;
   }
 
+  function profileEssenceTreeHtml() {
+    var h = '<div class="profile-stats-scroll essence-tree-wrap">';
+    h += '<div class="' + SKIN_PANEL + ' p-3 mb-3 text-center"><div class="section-label section-label-green mb-1">VOID ESSENCE TREE</div>';
+    h += '<div class="font-mono text-sm text-cyan">' + (G.voidEssence || 0) + ' ESSENCE</div>';
+    h += '<div class="text-muted text-xs mt-1">Permanent perks from prestige loops</div></div>';
+    ESSENCE_PERK_DEFS.forEach(function (def) {
+      var lvl = essencePerkLevel(def.id);
+      var cost = def.cost + lvl * def.step;
+      var maxed = lvl >= def.max;
+      h += '<div class="essence-perk-card ' + SKIN_PANEL + ' p-3 mb-2">';
+      h += '<div class="flex-between mb-1"><span class="font-display text-xs">' + esc(def.name) + '</span><span class="font-mono text-green text-xs">RANK ' + lvl + '/' + def.max + '</span></div>';
+      h += '<div class="text-muted text-xs mb-2">' + esc(def.desc) + '</div>';
+      h += '<button type="button" class="game-btn game-btn-sm game-btn-green w-full" data-action="buy-essence-perk" data-id="' + def.id + '"' + (maxed || (G.voidEssence || 0) < cost ? ' disabled' : '') + '>' + (maxed ? 'MAXED' : 'UPGRADE · ' + cost + ' ESSENCE') + '</button></div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
   function helpEncyclopediaHtml() {
     return '<div class="help-scroll text-xs" style="line-height:1.55;color:var(--muted)">' +
       '<p><span class="text-green">SP</span> — Strain Points from boss waves and planet harvests. Spend on merges (15 SP), infinite ability upgrades (cost scales per level), and planet output multipliers.</p>' +
@@ -6154,11 +6375,13 @@
     var pl = playerDef(activePlayerId);
     var tab = UI.profileTab || 'modifiers';
     var h = '<div class="profile-banner"><button type="button" class="profile-close" data-close="profile">' + farmIcon('close') + '</button><div class="profile-avatar-lg"><div class="avatar-ring"></div><div class="avatar-inner" style="inset:4px;border-width:3px">' + avatarHtml(migrateAvatar(G.avatar), '100%') + '</div></div></div><div class="profile-body">';
-    h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'modifiers' ? ' active' : '') + '" data-action="profile-tab" data-id="modifiers">MODIFIERS</button><button type="button" class="farm-tab' + (tab === 'stats' ? ' active' : '') + '" data-action="profile-tab" data-id="stats">STATS</button><button type="button" class="farm-tab' + (tab === 'custom' ? ' active' : '') + '" data-action="profile-tab" data-id="custom">CUSTOMIZE</button></div>';
+    h += '<div class="farm-tabs mb-3"><button type="button" class="farm-tab' + (tab === 'modifiers' ? ' active' : '') + '" data-action="profile-tab" data-id="modifiers">MODIFIERS</button><button type="button" class="farm-tab' + (tab === 'stats' ? ' active' : '') + '" data-action="profile-tab" data-id="stats">STATS</button><button type="button" class="farm-tab' + (tab === 'essence' ? ' active' : '') + '" data-action="profile-tab" data-id="essence">ESSENCE</button><button type="button" class="farm-tab' + (tab === 'custom' ? ' active' : '') + '" data-action="profile-tab" data-id="custom">CUSTOMIZE</button></div>';
     if (tab === 'modifiers') {
       h += profileModifiersHtml();
     } else if (tab === 'stats') {
       h += profileStatsHtml();
+    } else if (tab === 'essence') {
+      h += profileEssenceTreeHtml();
     } else {
       h += '<div class="font-mono text-green text-center mb-2" style="font-size:0.6rem;letter-spacing:0.2em">' + esc(pl.label.toUpperCase()) + '</div><input type="text" class="input-field text-center font-display chromatic-text mb-3" id="edit-name" value="' + esc(G.name) + '" maxlength="24">';
       h += '<div class="font-mono text-muted mb-2 text-center" style="font-size:0.5rem">AVATAR</div><div class="avatar-picker customize-avatar-picker">';
@@ -6174,6 +6397,10 @@
         h += '</div></div>';
       });
       h += '<div class="profile-badge-preview text-center mb-2">' + profileBadgesHtml() + '</div>';
+      if ((pl.theme === 'jamie' || pl.id === 'jamie') && G.jamieFocusMode != null) {
+        h += '<div class="' + SKIN_PANEL + ' p-3 mb-2"><div class="flex-between align-center"><div><div class="font-display text-xs">ADHD CLUTTER-FREE</div><div class="text-muted text-xs">Hide secondary metrics &amp; floating alerts</div></div>';
+        h += '<button type="button" class="toggle-switch" data-action="toggle-jamie-focus" style="background:' + (G.jamieFocusMode ? 'linear-gradient(90deg,#22C55E,#06B6D4)' : 'rgba(15,23,42,0.85)') + '"><span class="toggle-knob" style="left:' + (G.jamieFocusMode ? 'calc(100% - 1.625rem)' : '0.125rem') + '"></span></button></div></div>';
+      }
     }
     h += '<div class="flex-row gap-2 mb-3"><button type="button" class="game-btn" style="flex:1" data-action="switch-player">' + farmIcon('swap') + ' SWITCH PLAYER</button><button type="button" class="game-btn" style="flex:1" data-action="open-settings">' + farmIcon('settings') + ' SETTINGS</button></div><button type="button" class="game-btn game-btn-green w-full" data-close="profile">RESUME</button></div>';
     document.getElementById('profile-panel').innerHTML = h;
@@ -6667,7 +6894,11 @@
     renderHUD();
     renderPlayerSelect();
     if (!UI.playerSelectOpen && root) {
-      renderActiveTabPanel(root, scrollTop);
+      if (isTabDirty()) {
+        renderActiveTabPanel(root, scrollTop);
+      } else {
+        syncCarouselTransform(root);
+      }
     }
     document.getElementById('overlay-profile').classList.toggle('open', UI.profileOpen);
     document.getElementById('overlay-settings').classList.toggle('open', UI.settingsOpen);
@@ -6897,14 +7128,26 @@
     root.addEventListener('touchend', onLeave, true);
   }
 
+  function refreshPlayers() {
+    if (!PC) return;
+    PLAYERS = PC.listProfiles().map(function (p) {
+      return { id: p.id, label: p.label, portrait: p.portrait, defaultName: p.defaultName || p.label, theme: p.theme, tag: p.tag };
+    });
+  }
+
   function resolveStartupPlayer() {
     try {
+      if (PC) {
+        var regId = PC.getActiveId();
+        if (regId && readPlayerSave(regId)) return regId;
+      }
       var pid = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LAST_PLAYER_KEY);
-      if (pid && PLAYERS.some(function (p) { return p.id === pid; })) return pid;
+      if (pid && (PLAYERS.some(function (p) { return p.id === pid; }) || readPlayerSave(pid))) return pid;
     } catch (e) { }
     return null;
   }
   function hasAnyPlayerSave() {
+    if (PC) return PC.getRegistry().some(function (e) { return !!readPlayerSave(e.id); });
     return PLAYERS.some(function (p) { return !!readPlayerSave(p.id); });
   }
 
@@ -7059,6 +7302,68 @@
       }
       UI.mergeLab = Object.assign({}, UI.mergeLab || {}, { error: '' });
       UI.fuseAbilityPick = {};
+    }
+    else if (act==='buy-essence-perk') { if (buyEssencePerk(val)) render(); return; }
+    else if (act==='toggle-jamie-focus') { G.jamieFocusMode = !G.jamieFocusMode; scheduleSave(); render(); return; }
+    else if (act==='coop-hub-mode') { UI.coopHubMode = val; markTabDirty(); render(); return; }
+    else if (act==='clan-pick-type') { UI._clanPickType = val; return; }
+    else if (act==='clan-pick-emblem') { UI._clanPickEmblem = val; return; }
+    else if (act==='clan-create') {
+      var cname = document.getElementById('clan-create-name');
+      var ctype = UI._clanPickType || 'family';
+      var cem = UI._clanPickEmblem || 'rift';
+      var cdef = window.VoidlineClan && window.VoidlineClan.CLAN_TYPES[ctype];
+      if (!cname || !cname.value.trim()) { showBattleToast('Enter a clan name', false); return; }
+      if (cdef && (G.cash < cdef.cashCost || (G.sp || 0) < cdef.spCost)) { showBattleToast('Need ' + fmtCash(cdef.cashCost) + ' + ' + cdef.spCost + ' SP', false); return; }
+      if (cdef) { G.cash -= cdef.cashCost; G.sp -= cdef.spCost; markWalletDirty(); }
+      window.VoidlineClan.createClan({ name: cname.value.trim(), type: ctype, emblem: cem, displayName: G.name, playerTag: G.uniqueTag, dps: totalBattleDps() }).then(function (r) {
+        if (!r.ok) showBattleToast(r.error || 'Clan create failed', false);
+        else showBattleToast('Clan founded · ' + r.state.hash, true);
+        markTabDirty(); render();
+      });
+      return;
+    }
+    else if (act==='clan-join') {
+      var jhash = document.getElementById('clan-join-hash');
+      window.VoidlineClan.joinClan(jhash ? jhash.value : '', G.name, G.uniqueTag, totalBattleDps()).then(function (r) {
+        if (!r.ok) showBattleToast(r.error || 'Join failed', false);
+        else showBattleToast('Joined ' + r.state.name, true);
+        markTabDirty(); render();
+      });
+      return;
+    }
+    else if (act==='clan-leave') {
+      window.VoidlineClan.leaveClan().then(function () { markTabDirty(); render(); });
+      return;
+    }
+    else if (act==='clan-market-remove-ask') {
+      UI.confirmDialog = { message: 'Are you sure? Remove this clan listing?', yes: 'clan-market-remove:' + val };
+      render();
+      return;
+    }
+    else if (act==='clan-market-info') {
+      var clanSt = window.VoidlineClan && window.VoidlineClan.getState();
+      var slot = clanSt && (clanSt.marketSlots || []).find(function (s) { return s.id === val; });
+      if (slot) showBattleToast((slot.strainName || 'Listing') + ' · ' + fmtCash(slot.price || 0) + (slot.traits ? ' · ' + slot.traits : ''), true);
+      return;
+    }
+    else if (act==='clan-market-remove') {
+      window.VoidlineClan.removeMarketSlot(val).then(function () { markTabDirty(); render(); });
+      return;
+    }
+    else if (act==='link-add-player') {
+      var inp = document.getElementById('link-player-tag');
+      var res = PC && inp ? PC.addLink(inp.value) : { ok: false, error: 'Unavailable' };
+      if (!res.ok) showBattleToast(res.error || 'Link failed', false);
+      else showBattleToast('Linked ' + res.link.tag, true);
+      markTabDirty(); render();
+      return;
+    }
+    else if (act==='link-remove') { if (PC) PC.removeLink(val); markTabDirty(); render(); return; }
+    else if (act==='lease-draft') {
+      UI.leaseDraft = { planetId: val, ownerId: activePlayerId };
+      render();
+      return;
     }
     else if (act==='profile-tab') UI.profileTab = val;
     else if (act==='toggle-help') UI.helpOpen = !UI.helpOpen;
@@ -7397,6 +7702,8 @@
 
   function bootGame() {
     try {
+      if (PC) { PC.boot(); refreshPlayers(); }
+      if (window.VoidlineClan && window.VoidlineClan.boot) window.VoidlineClan.boot();
       if (window.VoidlineCloud && window.VoidlineCloud.onSyncChange) {
         window.VoidlineCloud.onSyncChange(function () { UI.dirty.cloudSync = true; });
         UI.dirty.cloudSync = true;
@@ -7449,12 +7756,7 @@
     if (document.visibilityState === 'hidden') flushSave();
   });
 
-  setInterval(function () {
-    if (!G || UI.playerSelectOpen) return;
-    tick(Date.now());
-    if (G.cash < 10000 && Date.now() - dialogueState.lastAt > 60000) plantSay('lowcash');
-    if (Date.now() - lastSaveAt >= AUTOSAVE_MS) flushSave();
-  }, 50);
+  /* Economy sim runs inside visualLoop rAF — no duplicate setInterval tick */
 
   /* ===========================================================================
    * VOIDLINE ENGINE QA — Simulation Bot Suite (non-destructive validation)
