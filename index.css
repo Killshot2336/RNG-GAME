@@ -620,7 +620,9 @@
     .binder-grid > .cr-card,
     .binder-grid > button.cr-card,
     .binder-grid > .merge-pick-card,
-    .binder-grid > button.merge-pick-card {
+    .binder-grid > button.merge-pick-card,
+    .binder-grid > .mutation-burn-card,
+    .binder-grid > button.mutation-burn-card {
       width: 100%;
       max-width: var(--card-grid-max);
       justify-self: center;
@@ -645,6 +647,7 @@
     .index-strain-grid .cr-card-frame,
     .strain-picker-grid .cr-card-frame,
     .mutation-pick-grid .cr-card-frame,
+    .mutation-burn-grid .cr-card-frame,
     .planet-owned-grid .cr-card-frame,
     .roadside-slot-card .cr-card-frame,
     .shop-daily-card .cr-card-frame {
@@ -1795,6 +1798,7 @@
       border-color: color-mix(in srgb, var(--daily-accent, var(--gold)) 40%, rgba(0,0,0,0.85)) !important;
       box-shadow: 0 12px 28px rgba(0,0,0,0.45), 0 0 20px color-mix(in srgb, var(--daily-accent) 18%, transparent);
       display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+      overflow: hidden;
     }
     .shop-daily-tag {
       font-family: var(--font-mono); font-size: 0.42rem; letter-spacing: 0.12em; font-weight: 700;
@@ -3394,6 +3398,10 @@
 
     .essence-tree-wrap .essence-perk-card { border-left: 3px solid var(--cyan); }
     .clan-type-grid, .clan-emblem-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .clan-type-btn.active, .clan-emblem-btn.active {
+      outline: 2px solid var(--green);
+      box-shadow: 0 0 12px rgba(74, 222, 128, 0.35);
+    }
     .clan-emblem-btn { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; border: 1px solid rgba(6,182,212,0.3); background: rgba(8,12,24,0.8); }
     .clan-market-columns { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0.35rem; }
     .clan-market-slot { position: relative; min-height: 4.5rem; }

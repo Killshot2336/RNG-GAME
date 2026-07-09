@@ -24,9 +24,9 @@
   var PLANET_SUFFIX = ['IV', 'VII', 'IX', 'Prime', 'Reach', 'Haven', 'Crown', 'Shard', 'Belt', 'Gate'];
   var PORTAL_BASE_COST = 25000;
   var SLOT_COST = 500;
-  var BUD_ART = '/public/art/strains/leaf-bud.png';
+  var BUD_ART = '/public/art/strains/leaf-bud.svg';
   var BUD_ART_FALLBACK = '/public/art/strain-bud.svg';
-  var BOSS_ART = '/public/art/characters/boss-avatar.png';
+  var BOSS_ART = '/public/art/characters/boss-avatar.svg';
   var BOSS_ART_FALLBACK = '/public/art/boss.svg';
   var ACTION_TOGGLE_FARM = 'data-action="toggle-farm"';
   var BATTLE_EQUIP_MAX = 8;
@@ -1240,6 +1240,7 @@
     UI._abilityUpFlash = sid + ':' + entry;
     setTimeout(function () { if (UI._abilityUpFlash === sid + ':' + entry) UI._abilityUpFlash = null; }, 600);
     markWalletDirty();
+    markHudDirty();
     scheduleSave();
     return true;
   }
@@ -1423,8 +1424,8 @@
   function scanGalaxyCell(qx, qy) {
     var info = galaxyCellInfo(qx, qy);
     if (!info) { showBattleToast('Empty void', false); return; }
+    UI.galaxyFocus = { qx: qx, qy: qy, info: info };
     if (info.foreign && info.ownerId !== activePlayerId) {
-      UI.galaxyFocus = { qx: qx, qy: qy, info: info };
       render();
       return;
     }
@@ -1655,6 +1656,7 @@
   function markBossHpDirty() { UI.dirty.bossHp = true; }
   function markBossDpsDirty() { UI.dirty.bossDps = true; }
   function markBossTraitDirty() { UI.dirty.bossTrait = true; }
+  function isBossTraitDirty() { return !!UI.dirty.bossTrait; }
   function isBossShieldDirty() { return !!UI.dirty.bossShield; }
   function markBossShieldDirty() { UI.dirty.bossShield = true; }
   function markTabDirty() { UI.dirty.activeTab = true; }
@@ -1753,6 +1755,7 @@
     }
     if (Math.random() < 0.04 && G.sp != null) G.sp += 1;
     markWalletDirty();
+    markHudDirty();
   }
 
   function getBossTrait() {
@@ -5520,6 +5523,15 @@
       h += '</div>';
     });
     h += '</div>';
+    var cod = cardOfDayStrain();
+    var codSold = !!G.cardOfDayPurchased;
+    h += '<div class="section-label section-label-green mb-2" style="text-align:left">CARD OF THE DAY</div>';
+    h += '<div class="card-of-day-spotlight ' + SKIN_PANEL + ' mb-3">';
+    h += '<div class="shop-daily-card">' + crCardHtml(cod.strain, { noFocus: true }) + '</div>';
+    h += '<div class="card-of-day-info"><div class="font-display text-sm">' + esc(cod.strain.name) + '</div>';
+    h += '<div class="text-xs text-muted">' + esc(rarityName(cod.strain.rarity)) + ' · THC ' + cod.strain.thcPercent + '%</div>';
+    h += '<div class="font-mono text-green text-xs mt-1" style="font-weight:700">' + fmtCash(cod.price) + '</div>';
+    h += '<button type="button" class="game-btn game-btn-green game-btn-sm w-full mt-2" data-action="buy-card-of-day"' + (codSold || G.cash < cod.price ? ' disabled' : '') + '>' + (codSold ? 'ACQUIRED' : 'BUY TODAY') + '</button></div></div>';
     h += '<div class="section-label mb-2" style="text-align:left">DAILY LUXURY SHOWCASE</div>';
     h += '<div class="shop-daily-grid mb-3">';
     dailyShowcaseItems().forEach(function (item) {
@@ -5974,11 +5986,13 @@
       h += '<div class="clan-type-grid mb-2">';
       Object.keys(window.VoidlineClan.CLAN_TYPES || {}).forEach(function (k) {
         var t = window.VoidlineClan.CLAN_TYPES[k];
-        h += '<button type="button" class="game-btn game-btn-sm clan-type-btn" data-action="clan-pick-type" data-id="' + k + '">' + esc(t.label) + ' · ' + t.max + '</button>';
+        var on = (UI._clanPickType || 'family') === k;
+        h += '<button type="button" class="game-btn game-btn-sm clan-type-btn' + (on ? ' active' : '') + '" data-action="clan-pick-type" data-id="' + k + '">' + esc(t.label) + ' · ' + t.max + '</button>';
       });
       h += '</div><div class="clan-emblem-grid mb-2">';
       (clan.emblems || []).forEach(function (em) {
-        h += '<button type="button" class="clan-emblem-btn" data-action="clan-pick-emblem" data-id="' + em + '">' + farmIcon(em) + '</button>';
+        var emOn = (UI._clanPickEmblem || 'rift') === em;
+        h += '<button type="button" class="clan-emblem-btn' + (emOn ? ' active' : '') + '" data-action="clan-pick-emblem" data-id="' + em + '">' + farmIcon(em) + '</button>';
       });
       h += '</div><button type="button" class="game-btn game-btn-green w-full mb-3" data-action="clan-create">FOUND CLAN</button>';
       h += '<div class="section-label mb-2">JOIN CLAN</div>';
@@ -7284,14 +7298,15 @@
     if (act==='galaxy-cell') {
       var gp = val.split(':');
       var gqx = parseInt(gp[0], 10), gqy = parseInt(gp[1], 10);
-      if (travelGalaxyCell(gqx, gqy)) {
+      var traveled = travelGalaxyCell(gqx, gqy);
+      if (traveled) {
         var gi = galaxyCellInfo(gqx, gqy);
         if (gi && (gi.foreign || (gi.ownerId && gi.ownerId !== activePlayerId))) UI.galaxyFocus = { qx: gqx, qy: gqy, info: gi };
         else if (gi && gi.harvestable !== false) scanGalaxyCell(gqx, gqy);
         else UI.galaxyFocus = gi ? { qx: gqx, qy: gqy, info: gi } : null;
         markTabDirty();
-        render();
       }
+      render();
       return;
     }
     if (act==='galaxy-claim') {
@@ -7411,8 +7426,8 @@
     else if (act==='buy-essence-perk') { if (buyEssencePerk(val)) render(); return; }
     else if (act==='toggle-jamie-focus') { G.jamieFocusMode = !G.jamieFocusMode; scheduleSave(); render(); return; }
     else if (act==='coop-hub-mode') { UI.coopHubMode = val; markTabDirty(); render(); return; }
-    else if (act==='clan-pick-type') { UI._clanPickType = val; return; }
-    else if (act==='clan-pick-emblem') { UI._clanPickEmblem = val; return; }
+    else if (act==='clan-pick-type') { UI._clanPickType = val; render(); return; }
+    else if (act==='clan-pick-emblem') { UI._clanPickEmblem = val; render(); return; }
     else if (act==='clan-create') {
       var cname = document.getElementById('clan-create-name');
       var ctype = UI._clanPickType || 'family';
@@ -7620,6 +7635,8 @@
       return;
     }
     else if (act==='mutation-buy-luck') spendMutationPackLuck();
+    else if (act==='mutation-buy-guarantee') { if (spendMutationGuaranteeCharge()) { render(); return; } }
+    else if (act==='toggle-fuse-guarantee') { UI.fuseGuarantee = !UI.fuseGuarantee; render(); return; }
     else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
     else if (act==='equip-mutation') { var em = val.split(':'); equipMutationItem(em[0], em[1]); UI.mutationEquipPick = null; }
     else if (act==='equip-raid') { equipRaid(val); UI.liftedCardId = null; dismissCardHero(); }
@@ -7809,6 +7826,7 @@
     if (e.target.dataset.action === 'index-search') { G.indexSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'fleet-search') { G.fleetSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'battle-equip-search') { UI.battleEquipSearch = e.target.value; render(); }
+    if (e.target.dataset.action === 'raid-equip-search') { UI.raidEquipSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'strain-picker-search') { UI.strainPickerSearch = e.target.value; renderStrainPicker(); }
     if (e.target.dataset.action === 'planet-rename') { renamePlanet(e.target.dataset.id, e.target.value); }
     if (e.target.dataset.action === 'planet-rename-pending' && G.scanPending) {
@@ -8869,6 +8887,8 @@
     TAB_ORDER: TAB_ORDER.slice(),
     PLAYERS: PLAYERS.map(function (p) { return { id: p.id, label: p.label }; }),
     getState: function () { return G ? clone(G) : null; },
+    getLiveState: function () { return G; },
+    unlockMap: function () { return unlockMapTab(); },
     getPlayerId: function () { return activePlayerId; },
     selectPlayer: selectPlayer,
     saveGame: saveGame,

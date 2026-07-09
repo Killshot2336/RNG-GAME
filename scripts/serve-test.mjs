@@ -15,6 +15,11 @@ const port = Number(process.env.PORT || 3458);
 http.createServer((req, res) => {
   let url = req.url.split('?')[0];
   if (url === '/') url = '/index.html';
+  if (url === '/api/supabase-config') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ url: null, anonKey: null }));
+    return;
+  }
   const file = path.join(root, decodeURIComponent(url));
   if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404);

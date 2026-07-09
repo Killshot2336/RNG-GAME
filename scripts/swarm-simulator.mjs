@@ -76,7 +76,9 @@ async function main() {
       try {
         window.__SWARM_LAST_REPORT__ = null;
         if (!window.VoidlineGalaxyFarm.getPlayerId()) {
-          window.VoidlineGalaxyFarm.selectPlayer('aden');
+          var players = window.VoidlineGalaxyFarm.PLAYERS;
+          var pid = players && players.length ? players[0].id : null;
+          if (pid) window.VoidlineGalaxyFarm.selectPlayer(pid);
         }
         return window.VoidlineSwarm.runSync({
           sandbox: true,

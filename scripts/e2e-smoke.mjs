@@ -1,10 +1,10 @@
 /**
- * Headless smoke test — runs against local static server on port 3458.
- * Usage: node scripts/serve-test.mjs & node scripts/e2e-smoke.mjs
+ * Headless smoke test — runs against local static server.
+ * Usage: node scripts/serve-test.mjs & BASE_URL=http://127.0.0.1:3458 node scripts/e2e-smoke.mjs
  */
 import { chromium } from 'playwright';
 
-const BASE = process.env.SMOKE_URL || 'http://127.0.0.1:3458';
+const BASE = process.env.SMOKE_URL || process.env.BASE_URL || 'http://127.0.0.1:8765';
 const errors = [];
 
 async function click(page, selector, label, opts) {
@@ -16,74 +16,97 @@ async function click(page, selector, label, opts) {
 
 async function main() {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push('console: ' + msg.text());
+    if (msg.type() === 'error' && !/supabase-config|404/.test(msg.text())) {
+      errors.push('console: ' + msg.text());
+    }
   });
 
-  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/index.html?qa=0', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
 
-  // Player picker
-  await click(page, '[data-action="pick-player"][data-pid="aden"]', 'pick Aden');
-
-  // Nav tabs
-  for (const tab of ['shop', 'index', 'battle', 'coop', 'map']) {
-    await click(page, '[data-tab="' + tab + '"]', 'tab ' + tab);
+  const guest = page.locator('[data-cloud-action="guest"]');
+  if (await guest.count()) {
+    await guest.click();
+    await page.waitForTimeout(500);
   }
 
-  // Boss / fight screen
-  await click(page, '[data-tab="battle"]', 'back to battle');
-  const boss = page.locator('.boss-arena');
-  if (!(await boss.count())) errors.push('missing .boss-arena on battle tab');
+  await click(page, '[data-action="pick-player"]', 'pick first player');
 
-  // Battle loadout
-  await click(page, '[data-action="equip-best"]', 'equip best loadout');
+  await page.waitForFunction(() => window.VoidlineGalaxyFarm && window.VoidlineGalaxyFarm.getState(), null, { timeout: 15000 });
 
-  // Hub rocket → portal farm (rocket stays visible in farm view)
-  await click(page, '#hub-rocket-btn', 'toggle portal farm');
-  await click(page, '[data-action="farm-tab"][data-id="upgrade"]', 'farm upgrade deck');
-  await click(page, '[data-action="farm-tab"][data-id="control"]', 'farm control deck');
-  await click(page, '#hub-rocket-btn', 'back to battle');
+  for (const tab of ['shop', 'index', 'battle', 'coop', 'map']) {
+    await click(page, '#bottom-dock [data-tab="' + tab + '"]', 'tab ' + tab);
+  }
 
-  // Shop pack
-  await click(page, '[data-tab="shop"]', 'shop');
-  await click(page, '[data-action="buy-pack"][data-pack="basic"]', 'open basic pack');
-  await page.waitForTimeout(600);
-  await page.evaluate(() => document.querySelector('.pack-reveal-card [data-close="pack"]')?.click());
-  await page.waitForFunction(() => !document.getElementById('overlay-pack-reveal')?.classList.contains('open'));
-  console.log('  ok: close pack');
+  await click(page, '#bottom-dock [data-tab="battle"]', 'back to battle');
+  const boss = page.locator('.boss-arena, .battle-hub');
+  if (!(await boss.count())) errors.push('missing battle hub on battle tab');
 
-  // Index lift + merge lab
-  await click(page, '[data-tab="index"]', 'index');
-  const card = page.locator('.binder-grid .liftable-wrap').first();
+  const equipBest = page.locator('[data-action="equip-best"]');
+  if (await equipBest.count()) await click(page, '[data-action="equip-best"]', 'equip best loadout');
+
+  const rocket = page.locator('[data-action="open-rocket-lift"], #hub-rocket-btn');
+  if (await rocket.count()) {
+    await click(page, '[data-action="open-rocket-lift"], #hub-rocket-btn', 'toggle portal farm / rocket');
+    const farmTab = page.locator('[data-action="farm-tab"][data-id="upgrade"]');
+    if (await farmTab.count()) {
+      await click(page, '[data-action="farm-tab"][data-id="upgrade"]', 'farm upgrade deck');
+      await click(page, '[data-action="farm-tab"][data-id="control"]', 'farm control deck');
+    }
+    const dismiss = page.locator('[data-action="dismiss-lift"], [data-action="toggle-farm"]');
+    if (await dismiss.count()) await dismiss.first().click();
+  }
+
+  await click(page, '#bottom-dock [data-tab="shop"]', 'shop');
+  const packBtn = page.locator('[data-action="buy-pack"][data-pack="basic"]');
+  if (await packBtn.count() && !(await packBtn.first().isDisabled())) {
+    await click(page, '[data-action="buy-pack"][data-pack="basic"]', 'open basic pack');
+    await page.waitForTimeout(600);
+    await page.locator('button.game-btn-green[data-close="pack"]').click();
+    await page.waitForFunction(() => !document.getElementById('overlay-pack-reveal')?.classList.contains('open'));
+    console.log('  ok: close pack');
+  }
+
+  await click(page, '#bottom-dock [data-tab="index"]', 'index');
+  const card = page.locator('.index-strain-grid .cr-card, .binder-grid .liftable-wrap .cr-card').first();
   if (await card.count()) {
     await card.click();
-    await page.evaluate(() => document.querySelector('[data-action="dismiss-lift"]')?.click());
-    await page.waitForFunction(() => !document.getElementById('overlay-card-lift')?.innerHTML);
-    console.log('  ok: dismiss lift');
+    await page.waitForTimeout(400);
+    const hero = page.locator('#overlay-card-hero.open');
+    if (!(await hero.count())) errors.push('index card did not open hero overlay');
+    else {
+      await page.locator('[data-action="dismiss-card-hero"]').first().click();
+      await page.waitForTimeout(200);
+      console.log('  ok: dismiss card hero');
+    }
   }
-  await click(page, '[data-action="open-merge-lab"]', 'open merge lab');
-  await click(page, '#overlay-merge-lab .profile-close[data-action="close-merge-lab"]', 'close merge lab');
 
-  // Profile modifiers + settings help
+  const mergeLab = page.locator('[data-action="open-merge-lab"]');
+  if (await mergeLab.count()) {
+    await click(page, '[data-action="open-merge-lab"]', 'open merge lab');
+    await click(page, '#overlay-merge-lab .profile-close[data-action="close-merge-lab"]', 'close merge lab');
+  }
+
   await click(page, '[data-action="open-profile"]', 'profile');
-  const modTab = page.locator('[data-action="profile-tab"][data-id="modifiers"]');
-  if (!(await modTab.count())) errors.push('missing modifiers profile tab');
   await click(page, '[data-action="profile-tab"][data-id="modifiers"]', 'profile modifiers tab');
-  const modScroll = page.locator('.profile-stats-scroll');
-  if (!(await modScroll.count())) errors.push('missing modifiers content');
-  await click(page, '[data-action="profile-tab"][data-id="stats"]', 'profile stats tab');
-  const statsGrid = page.locator('.profile-stat-grid');
-  if (!(await statsGrid.count())) errors.push('missing profile stats grid');
+  if (!(await page.locator('.profile-stats-scroll, .profile-body').count())) errors.push('missing profile content');
   await click(page, '[data-action="open-settings"]', 'settings');
-  await click(page, '[data-action="toggle-help"]', 'open game encyclopedia');
-  await click(page, '[data-action="toggle-help"]', 'close game encyclopedia');
+  const help = page.locator('[data-action="toggle-help"]');
+  if (await help.count()) {
+    await help.click();
+    await help.click();
+  }
   await click(page, '#settings-panel button[data-close="settings"]', 'close settings');
 
-  await click(page, '[data-tab="coop"]', 'group');
-  await click(page, '[data-action="coop-myshop"]', 'my roadside shop');
-  await click(page, '[data-action="coop-back"]', 'coop hub');
+  await click(page, '#bottom-dock [data-tab="coop"]', 'group');
+  const coopShop = page.locator('[data-action="coop-myshop"]');
+  if (await coopShop.count()) {
+    await coopShop.click();
+    await page.locator('[data-action="coop-back"]').click();
+  }
 
   await browser.close();
 

@@ -2,6 +2,23 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:8765';
 
+async function unlockMapForTest(page) {
+  const unlocked = await page.evaluate(() => window.VoidlineGalaxyFarm.getState()?.mapUnlocked);
+  if (unlocked) return;
+  await page.locator('#bottom-dock [data-tab="battle"]').click();
+  await page.waitForTimeout(300);
+  const rocket = page.locator('[data-action="open-rocket-lift"]').first();
+  if (await rocket.count()) {
+    await rocket.click();
+    await page.waitForTimeout(300);
+    const buy = page.locator('[data-action="buy-map-unlock"]').first();
+    if (await buy.count() && !(await buy.isDisabled())) {
+      await buy.click();
+      await page.waitForTimeout(400);
+    }
+  }
+}
+
 async function waitGame(page) {
   await page.goto(BASE + '/index.html?qa=0', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(800);
@@ -76,6 +93,8 @@ try {
   }
 
   await clickNav(page, 'map');
+  await unlockMapForTest(page);
+  await clickNav(page, 'map');
   const pe = await panelPointerEvents(page);
   const mapPanel = pe.find((p) => p.i === 4);
   if (!mapPanel || mapPanel.pe === 'none') failures.push('map panel pointer-events blocked: ' + JSON.stringify(pe));
@@ -88,16 +107,30 @@ try {
 
   await clickAction(page, 'map-sub-tab', 'scan');
 
-  const cell = page.locator('[data-action="galaxy-cell"]').first();
+  const cell = page.locator('.galaxy-cell-planet:not(.galaxy-cell-far)').first();
   if (await cell.count()) {
     await cell.click();
     await page.waitForTimeout(300);
-    const focus = await page.evaluate(() => {
-      return document.querySelector('.galaxy-focus-panel') != null;
+    const ok = await page.evaluate(() => {
+      return !!document.querySelector('.galaxy-focus-panel') ||
+        !!document.querySelector('#battle-toast-layer .battle-toast');
     });
-    if (!focus) failures.push('galaxy cell click did not update state');
+    if (!ok) failures.push('galaxy in-range cell click had no visible response');
   } else {
-    failures.push('no galaxy cells rendered');
+    failures.push('no in-range galaxy cells rendered');
+  }
+
+  const card = page.locator('.index-strain-grid .cr-card, .binder-grid .liftable-wrap .cr-card').first();
+  if (await card.count()) {
+    await clickNav(page, 'index');
+    await card.click();
+    await page.waitForTimeout(300);
+    const heroOpen = await page.evaluate(() => document.getElementById('overlay-card-hero')?.classList.contains('open'));
+    if (!heroOpen) failures.push('index card tap did not open hero overlay');
+    else {
+      await page.locator('[data-action="dismiss-card-hero"]').first().click();
+      await page.waitForTimeout(200);
+    }
   }
 
   await clickNav(page, 'battle');
