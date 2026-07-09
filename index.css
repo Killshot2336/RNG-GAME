@@ -614,8 +614,24 @@
       content: ""; position: absolute; inset: 0; pointer-events: none;
       background: repeating-linear-gradient(180deg, rgba(57,255,20,0.06) 0 24px, transparent 24px 48px);
     }
-    .binder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--card-grid-gap); justify-items: center; }
+    .binder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--card-grid-gap); justify-items: stretch; align-items: start; }
     @media (min-width: 420px) { .binder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; } }
+    .binder-grid .liftable-wrap,
+    .binder-grid > .cr-card,
+    .binder-grid > button.cr-card,
+    .binder-grid > .merge-pick-card,
+    .binder-grid > button.merge-pick-card {
+      width: 100%;
+      max-width: var(--card-grid-max);
+      justify-self: center;
+      min-width: 0;
+    }
+    .binder-grid .liftable-wrap .cr-card,
+    .binder-grid .merge-pick-card .cr-card {
+      width: 100%;
+      max-width: none;
+      display: block;
+    }
     /* —— Clash Royale style strain cards —— */
     .cr-card {
       position: relative;
@@ -632,7 +648,11 @@
     .planet-owned-grid .cr-card-frame,
     .roadside-slot-card .cr-card-frame,
     .shop-daily-card .cr-card-frame {
-      width: 100%; max-width: var(--card-grid-max); margin-left: auto; margin-right: auto;
+      width: 100%;
+      max-width: var(--card-grid-max);
+      margin-left: auto;
+      margin-right: auto;
+      min-width: 5.5rem;
     }
     .cr-card:hover { transform: translateY(-8px) rotate(-1deg) scale(1.03); filter: brightness(1.06); }
     .cr-card:active { transform: translateY(-2px) scale(0.96); transition-duration: 0.08s; }
@@ -646,7 +666,8 @@
       box-shadow:
         0 10px 28px rgba(0,0,0,0.55),
         0 0 0 3px var(--cr-border, #6b7280);
-      background: transparent;
+      background: #0c0805;
+      contain: layout style;
     }
     .cr-card-sandwich {
       position: absolute; inset: 0; border-radius: inherit;
@@ -839,7 +860,7 @@
       box-shadow: inset -6px -8px 16px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.35);
     }
     .cr-badge {
-      position: absolute; z-index: 5; display: flex; align-items: center; justify-content: center;
+      position: absolute; z-index: 9; display: flex; align-items: center; justify-content: center;
       font-family: "Fredoka", var(--font-display); font-weight: 700; line-height: 1;
       box-shadow: 0 3px 0 rgba(0,0,0,0.45), 0 4px 10px rgba(0,0,0,0.35);
     }
@@ -876,7 +897,7 @@
       filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
     }
     .cr-card-banner {
-      position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
       min-height: 2.1rem; padding: 0.3rem 0.35rem;
       display: flex; align-items: center; justify-content: center;
       background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.88) 25%, rgba(0,0,0,0.95) 100%);
@@ -1799,6 +1820,45 @@
 
     /* INDEX — tri-pane + mutation lab */
     .index-screen { gap: 0.75rem; }
+    .index-strain-grid .liftable-wrap {
+      position: relative;
+      isolation: isolate;
+    }
+    .index-strain-grid .cr-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      z-index: 4;
+    }
+    .index-strain-grid .cr-card-frame {
+      overflow: visible;
+    }
+    .index-strain-grid .cr-card-sandwich {
+      overflow: hidden;
+    }
+    .index-strain-grid .cr-badge,
+    .index-strain-grid .cr-card-banner {
+      z-index: 10;
+    }
+    .binder-grid .cr-tier-mythic .cr-card-frame,
+    .binder-grid .cr-tier-champion .cr-card-frame,
+    .index-strain-grid .cr-tier-mythic .cr-card-frame,
+    .index-strain-grid .cr-tier-champion .cr-card-frame {
+      animation: none;
+    }
+    .binder-grid .cr-tier-mythic .cr-card-layer-canvas,
+    .binder-grid .cr-tier-champion .cr-card-layer-canvas,
+    .index-strain-grid .cr-tier-mythic .cr-card-layer-canvas,
+    .index-strain-grid .cr-tier-champion .cr-card-layer-canvas {
+      animation: cr-mythic-hue 4s linear infinite, resinChroma 6s linear infinite, cr-nebula-drift 14s ease-in-out infinite !important;
+    }
+    .binder-grid .cr-card-divine-particles,
+    .index-strain-grid .cr-card-divine-particles {
+      inset: 0;
+      filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.45));
+    }
+    .binder-grid .cr-card-mythic-crackle,
+    .index-strain-grid .cr-card-mythic-crackle {
+      inset: 0;
+    }
     .index-nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
     .index-nav-card {
       border-radius: 0.9rem; padding: 0.65rem 0.35rem; cursor: pointer;
