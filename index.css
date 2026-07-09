@@ -149,32 +149,19 @@
     
     #hud-xp-strip { border-bottom: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
     .holo-card {
-      --x-pct: 0; --y-pct: 0;
+      --rx: 0deg; --ry: 0deg; --x-pct: 0; --y-pct: 0;
       transform-style: preserve-3d;
       will-change: transform;
-      transition: transform 0.08s var(--ease-os);
+      transition: transform 0.12s var(--ease-os);
     }
     .foil-active .holo-card,
-    .holo-card.foil-active {
-      transform: perspective(900px) rotateX(calc(var(--y-pct) * -18deg)) rotateY(calc(var(--x-pct) * 18deg)) scale3d(1.02, 1.02, 1.02);
+    .holo-card.foil-active,
+    .foil-active.holo-card {
+      transform: perspective(1000px) rotateX(var(--rx)) rotateY(var(--ry)) scale(1.05);
       transition: none;
     }
-    .cr-card-foil {
-      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
-      pointer-events: none; z-index: 6; opacity: 0;
-      mix-blend-mode: color-dodge;
-      background: linear-gradient(125deg, rgba(255, 0, 128, 0.35) 0%, rgba(0, 240, 255, 0.3) 35%, rgba(255, 215, 0, 0.28) 55%, rgba(168, 85, 247, 0.32) 75%, transparent 90%);
-      background-size: 220% 220%;
-      transition: opacity 0.18s ease;
-    }
-    .foil-active .cr-card-foil,
-    .holo-card.foil-active .cr-card-foil { opacity: 0.92; }
+    .cr-card-tilt-root { transform-origin: center center; }
     .liftable-wrap.foil-active { z-index: 2; }
-    .cr-card-shine {
-      mix-blend-mode: color-dodge;
-      background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.45) 45%, rgba(250,204,21,0.35) 50%, transparent 65%);
-      background-size: 200% 200%;
-    }
     .cr-art-fallback { width: 100%; max-height: 100%; display: block; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.45)); }
     .roadside-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
     .roadside-slot { position: relative; min-height: 7.5rem; border-radius: 12px; border: 1px dashed rgba(163,230,53,0.35); background: rgba(0,0,0,0.25); }
@@ -300,6 +287,73 @@
       border-radius: 0 0 1rem 1rem;
     }
     .lift-footer .game-btn { flex: 1; font-size: 0.62rem; padding: 10px 8px; }
+    /* —— Card Hero inspection overlay —— */
+    #overlay-card-hero {
+      position: absolute; inset: 0; z-index: 52;
+      pointer-events: none; display: flex; align-items: center; justify-content: center;
+    }
+    #overlay-card-hero.open { pointer-events: auto; }
+    .card-hero-backdrop {
+      position: absolute; inset: 0; border: none; cursor: pointer; z-index: 0;
+      background: radial-gradient(ellipse at center, rgba(12, 8, 5, 0.35) 0%, rgba(0, 0, 0, 0.82) 72%);
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    #overlay-card-hero.open .card-hero-backdrop { opacity: 1; }
+    .card-hero-shell {
+      position: relative; z-index: 1;
+      width: min(68vw, 19rem);
+      max-height: 88vh;
+      display: flex; flex-direction: column;
+      transform: scale(0.82) translateY(12px);
+      opacity: 0;
+      transition: transform 0.48s cubic-bezier(0.22, 1.12, 0.36, 1), opacity 0.32s ease;
+      will-change: transform, opacity;
+      --glow: #7ca61e;
+    }
+    #overlay-card-hero.open .card-hero-shell {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+    .card-hero-stage {
+      flex-shrink: 0; display: flex; justify-content: center;
+      perspective: 1200px;
+      padding: 0.25rem 0;
+    }
+    .card-hero-stage .cr-card {
+      width: 100%; max-width: none; pointer-events: auto;
+      transform: none !important;
+    }
+    .card-hero-stage .cr-card-frame {
+      width: 100%; max-width: none; margin: 0 auto;
+      aspect-ratio: 3 / 4;
+      box-shadow:
+        0 0 36px var(--glow),
+        0 0 72px color-mix(in srgb, var(--glow) 45%, transparent),
+        0 18px 40px rgba(0,0,0,0.65);
+    }
+    .card-hero-stage .cr-card:hover { transform: none; filter: none; }
+    .card-hero-meta {
+      text-align: center; padding: 0.5rem 0.75rem 0.35rem;
+      font-family: var(--font-mono); font-size: 0.55rem; color: var(--muted);
+      text-shadow: 0 1px 0 #0c0805, 0 0 8px color-mix(in srgb, var(--glow) 35%, transparent);
+    }
+    .card-hero-meta .lift-rarity {
+      font-weight: 700; font-size: 0.68rem;
+      text-shadow: 0 1px 0 #0c0805, 0 0 12px var(--glow);
+    }
+    .card-hero-abilities {
+      flex: 1; min-height: 0; max-height: 28vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      margin: 0 0.35rem 0.35rem; padding: 0.55rem 0.65rem; border-radius: 0.75rem;
+      background: rgba(31, 18, 10, 0.82); border: 2px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 0 14px color-mix(in srgb, var(--glow) 14%, transparent);
+    }
+    .card-hero-footer {
+      flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 0.45rem;
+      padding: 0.5rem 0.35rem 0.65rem;
+    }
+    .card-hero-footer .game-btn { flex: 1; min-width: 5.5rem; font-size: 0.58rem; padding: 9px 8px; }
+    .card-hero-footer .input-field { flex: 1 1 100%; }
     .sort-chip-row {
       display: flex; flex-wrap: wrap; gap: 0.35rem;
       overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.15rem;
@@ -588,26 +642,182 @@
     }
     .cr-card-frame {
       position: relative; overflow: visible; aspect-ratio: 3 / 4;
-      border-radius: 0.75rem; border: 3px solid var(--cr-border, #6b7280);
+      border-radius: 0.75rem; border: none;
       box-shadow:
         0 10px 28px rgba(0,0,0,0.55),
-        inset 0 2px 0 rgba(255,255,255,0.18),
-        inset 0 -3px 0 rgba(0,0,0,0.35);
-      background: #1A1209;
+        0 0 0 3px var(--cr-border, #6b7280);
+      background: transparent;
     }
-    .cr-card-bevel {
-      position: absolute; inset: 3px; border-radius: 0.55rem; pointer-events: none; z-index: 4;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 4px rgba(0,0,0,0.25);
+    .cr-card-sandwich {
+      position: absolute; inset: 0; border-radius: inherit;
+      overflow: hidden; transform-style: preserve-3d;
     }
-    .cr-card-arena {
-      position: absolute; inset: 3px; bottom: 2.1rem; border-radius: 0.55rem 0.55rem 0 0;
-      pointer-events: none; z-index: 0;
-      background: var(--cr-arena, radial-gradient(ellipse 90% 70% at 50% 85%, #2D5A27 0%, #1A1209 70%));
+    .cr-card-layer {
+      position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
     }
-    .cr-card-art {
-      position: absolute; left: 0; right: 0; top: 8%; bottom: 2.1rem;
+    /* Layer 1 — cosmic nebula canvas */
+    .cr-card-layer-canvas {
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 120% 90% at 20% 30%, rgba(88, 28, 135, 0.55) 0%, transparent 55%),
+        radial-gradient(ellipse 90% 70% at 80% 70%, rgba(6, 182, 212, 0.35) 0%, transparent 50%),
+        radial-gradient(ellipse 100% 80% at 50% 100%, var(--cr-arena, rgba(45, 90, 39, 0.9)) 0%, #0c011a 72%);
+      background-size: 200% 200%, 180% 180%, 100% 100%;
+      animation: cr-nebula-drift 14s ease-in-out infinite;
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    @keyframes cr-nebula-drift {
+      0%, 100% { background-position: 0% 40%, 100% 60%, 50% 100%; filter: hue-rotate(0deg); }
+      50% { background-position: 100% 60%, 0% 30%, 50% 100%; filter: hue-rotate(18deg); }
+    }
+    /* Layer 2 — emblem / art */
+    .cr-card-layer-emblem {
+      z-index: 1; inset: 4px 4px 2.15rem;
+      border-radius: 0.55rem 0.55rem 0 0;
+      overflow: hidden;
+      clip-path: inset(0 round 0.55rem 0.55rem 0 0);
+      -webkit-clip-path: inset(0 round 0.55rem 0.55rem 0 0);
+    }
+    .cr-card-layer-emblem .cr-card-art {
+      position: absolute; left: 0; right: 0; top: 6%; bottom: 0;
       display: flex; align-items: flex-end; justify-content: center; z-index: 1;
       padding: 0 0.15rem;
+    }
+    /* Layer 3 — metallic filigree frame */
+    .cr-card-layer-frame {
+      z-index: 3; inset: -1px;
+      border-radius: inherit;
+      border: 3px solid transparent;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.2), inset 0 -3px 6px rgba(0,0,0,0.45);
+      background: transparent;
+    }
+    .cr-tier-legend .cr-card-layer-frame {
+      border-color: transparent;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.35) 0%, transparent 40%) border-box,
+        linear-gradient(180deg, #fde68a 0%, #d97706 35%, #92400e 65%, #422006 100%) border-box;
+      border: 4px solid transparent;
+      background-clip: padding-box, border-box;
+      box-shadow: inset 0 0 12px rgba(250, 204, 21, 0.35), 0 0 18px rgba(250, 204, 21, 0.25);
+    }
+    .cr-tier-mythic .cr-card-layer-frame,
+    .cr-tier-champion .cr-card-layer-frame {
+      border: 4px solid #1a0a12;
+      background: linear-gradient(135deg, #0f0f12, #2a0a18, #0a0a10) padding-box;
+      box-shadow:
+        0 0 0 2px rgba(234, 88, 12, 0.65),
+        inset 0 0 14px rgba(255, 80, 0, 0.35);
+      animation: cr-crystal-pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes cr-crystal-pulse {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(234, 88, 12, 0.5)); }
+      50% { filter: drop-shadow(0 0 16px rgba(255, 120, 0, 0.85)); }
+    }
+    .cr-tier-godroll .cr-card-layer-frame,
+    .cr-tier-god .cr-card-layer-frame,
+    .cr-tier-voidgod .cr-card-layer-frame {
+      border: 4px solid rgba(255, 255, 255, 0.35);
+      background:
+        repeating-linear-gradient(90deg, transparent 0 6px, rgba(255,255,255,0.04) 6px 7px),
+        radial-gradient(ellipse at 50% 0%, rgba(0, 240, 255, 0.25), transparent 55%);
+      box-shadow:
+        inset 0 0 20px rgba(255, 0, 255, 0.25),
+        0 0 24px rgba(0, 240, 255, 0.35);
+      animation: cr-runic-glow 3s ease-in-out infinite;
+    }
+    @keyframes cr-runic-glow {
+      0%, 100% { border-color: rgba(255,255,255,0.35); }
+      50% { border-color: rgba(0, 240, 255, 0.75); box-shadow: inset 0 0 28px rgba(255,0,255,0.45), 0 0 36px rgba(0,240,255,0.55); }
+    }
+    /* Layer 4 — holo shimmer foil */
+    .cr-card-layer-holo {
+      z-index: 5; inset: 4px 4px 2.15rem;
+      border-radius: 0.55rem 0.55rem 0 0;
+      opacity: 0.55;
+      mix-blend-mode: color-dodge;
+      background: linear-gradient(135deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 70%);
+      background-size: 220% 220%;
+      transform: translate(var(--holo-x, 0%), var(--holo-y, 0%));
+      transition: opacity 0.2s ease;
+      animation: cr-holo-sweep 4.5s ease-in-out infinite;
+    }
+    .foil-active .cr-card-layer-holo,
+    .holo-card.foil-active .cr-card-layer-holo { opacity: 0.95; animation: none; }
+    @keyframes cr-holo-sweep {
+      0%, 100% { background-position: -40% -40%; }
+      50% { background-position: 140% 140%; }
+    }
+    /* High-tier texture glitch sheen */
+    .cr-card-texture-glitch {
+      position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0.35;
+      background: repeating-linear-gradient(
+        -12deg,
+        transparent 0 3px,
+        rgba(255,255,255,0.03) 3px 4px,
+        transparent 4px 10px
+      ), linear-gradient(105deg, transparent 40%, rgba(0,240,255,0.12) 48%, rgba(255,0,255,0.1) 52%, transparent 60%);
+      background-size: 100% 100%, 240% 100%;
+      animation: cr-liquid-sheen 3.2s linear infinite;
+      mix-blend-mode: overlay;
+    }
+    @keyframes cr-liquid-sheen {
+      0% { background-position: 0 0, -120% 0; }
+      100% { background-position: 0 0, 220% 0; }
+    }
+    /* Mythic crackle */
+    .cr-card-mythic-crackle {
+      position: absolute; inset: -8px; z-index: -1; border-radius: inherit; pointer-events: none;
+      animation: cr-mythic-hue 4s linear infinite, cr-mythic-glow 2s ease-in-out infinite;
+    }
+    .cr-tier-mythic .cr-card-frame,
+    .cr-tier-champion .cr-card-frame {
+      animation: cr-mythic-hue 4s linear infinite;
+    }
+    @keyframes cr-mythic-hue {
+      0% { filter: hue-rotate(0deg); }
+      100% { filter: hue-rotate(360deg); }
+    }
+    @keyframes cr-mythic-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(234, 88, 12, 0.45), 0 10px 28px rgba(0,0,0,0.55); }
+      50% { box-shadow: 0 0 42px rgba(255, 120, 0, 0.75), 0 0 64px rgba(168, 85, 247, 0.35), 0 12px 32px rgba(0,0,0,0.55); }
+    }
+    /* Divine particle field */
+    .cr-card-divine-particles {
+      position: absolute; inset: -6px; z-index: 2; pointer-events: none; overflow: visible;
+      filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.65)) drop-shadow(0 0 12px rgba(255, 0, 255, 0.45));
+    }
+    .cr-card-divine-particles::before,
+    .cr-card-divine-particles::after {
+      content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(0, 240, 255, 0.9);
+      box-shadow:
+        18px 24px 0 rgba(255, 0, 255, 0.75),
+        -22px 40px 0 rgba(250, 204, 21, 0.65),
+        36px 58px 0 rgba(0, 240, 255, 0.55),
+        -8px 72px 0 rgba(255, 255, 255, 0.5);
+      animation: cr-divine-float 5.5s ease-in-out infinite;
+    }
+    .cr-card-divine-particles::after {
+      left: 55%; top: 20%; width: 4px; height: 4px;
+      animation-duration: 7s; animation-delay: -2s;
+      filter: blur(0.5px);
+    }
+    @keyframes cr-divine-float {
+      0%, 100% { transform: translateY(0) scale(1); opacity: 0.55; }
+      50% { transform: translateY(-14px) scale(1.15); opacity: 1; }
+    }
+    .cr-tier-godroll .cr-card-layer-canvas,
+    .cr-tier-god .cr-card-layer-canvas {
+      -webkit-mask-image: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.9) 50%, transparent 65%);
+      mask-image: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.9) 50%, transparent 65%);
+      -webkit-mask-size: 280% 280%;
+      mask-size: 280% 280%;
+      animation: cr-nebula-drift 14s ease-in-out infinite, cr-divine-mask-sweep 5s linear infinite;
+    }
+    @keyframes cr-divine-mask-sweep {
+      0% { -webkit-mask-position: -80% 0; mask-position: -80% 0; }
+      100% { -webkit-mask-position: 180% 0; mask-position: 180% 0; }
     }
     .cr-card-art img, .cr-card-art .cr-planet-orb {
       width: 100%; max-height: 100%; object-fit: contain;
@@ -696,13 +906,13 @@
     .cr-tier-legend { --cr-border: var(--gold); box-shadow: 0 0 22px #facc1566, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
     .cr-tier-champion { --cr-border: #FB923C; box-shadow: 0 0 26px #fb923c88, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.22); }
     .cr-tier-god { --cr-border: #fff; box-shadow: 0 0 32px rgba(255,255,255,0.45), 0 0 48px rgba(234,88,12,0.25), 0 14px 36px rgba(0,0,0,0.6), inset 0 2px 0 rgba(255,255,255,0.3); animation: cr-god-pulse 2.5s ease-in-out infinite; }
-    .cr-tier-rare .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #1E3A5F 55%, #0F172A 100%); }
-    .cr-tier-epic .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5B21B6 0%, #3B0764 55%, #1A0533 100%); }
-    .cr-tier-legend .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #854D0E 0%, #422006 55%, #1A1209 100%); }
-    .cr-tier-champion .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #C2410C 0%, #7C2D12 55%, #1A1209 100%); }
-    .cr-tier-god .cr-card-arena { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4C1D95 0%, #1E1B4B 40%, #0C011A 100%); }
-    .cr-tier-epic .cr-card-shine, .cr-tier-legend .cr-card-shine, .cr-tier-champion .cr-card-shine, .cr-tier-god .cr-card-shine {
-      opacity: 1; animation: cr-shine-sweep 3.5s ease-in-out infinite;
+    .cr-tier-rare .cr-card-layer-canvas { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1E5A8A 0%, #1E3A5F 55%, #0F172A 100%); }
+    .cr-tier-epic .cr-card-layer-canvas { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5B21B6 0%, #3B0764 55%, #1A0533 100%); }
+    .cr-tier-legend .cr-card-layer-canvas { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #854D0E 0%, #422006 55%, #1A1209 100%); }
+    .cr-tier-champion .cr-card-layer-canvas { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #C2410C 0%, #7C2D12 55%, #1A1209 100%); }
+    .cr-tier-god .cr-card-layer-canvas { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #4C1D95 0%, #1E1B4B 40%, #0C011A 100%); }
+    .cr-tier-epic .cr-card-layer-holo, .cr-tier-legend .cr-card-layer-holo, .cr-tier-champion .cr-card-layer-holo, .cr-tier-god .cr-card-layer-holo {
+      opacity: 0.72; animation: cr-holo-sweep 3.2s ease-in-out infinite;
     }
     .cr-tier-epic .cr-card-art img, .cr-tier-legend .cr-card-art img,
     .cr-tier-champion .cr-card-art img, .cr-tier-god .cr-card-art img {
@@ -721,13 +931,13 @@
     .cr-arena-9 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #3A1A4A 0%, #180A20 70%); }
     .cr-arena-10 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #5A1A2A 0%, #280A12 70%); }
     .cr-arena-11 { --cr-arena: radial-gradient(ellipse 95% 75% at 50% 90%, #1A5A4A 0%, #082820 70%); }
-    .cr-frame-accent-0 .cr-card-bevel::after { background: linear-gradient(135deg, rgba(74,222,128,0.12), transparent 60%); }
-    .cr-frame-accent-1 .cr-card-bevel::after { background: linear-gradient(225deg, rgba(56,189,248,0.14), transparent 55%); }
-    .cr-frame-accent-2 .cr-card-bevel::after { background: linear-gradient(45deg, rgba(250,204,21,0.12), transparent 50%); }
-    .cr-frame-accent-3 .cr-card-bevel::after { background: linear-gradient(315deg, rgba(245,158,11,0.14), transparent 55%); }
-    .cr-frame-accent-4 .cr-card-bevel::after { background: radial-gradient(circle at 80% 20%, rgba(244,114,182,0.12), transparent 50%); }
-    .cr-frame-accent-5 .cr-card-bevel::after { background: radial-gradient(circle at 20% 80%, rgba(52,211,153,0.12), transparent 50%); }
-    .cr-card-bevel::after {
+    .cr-frame-accent-0 .cr-card-layer-emblem::after { background: linear-gradient(135deg, rgba(74,222,128,0.12), transparent 60%); }
+    .cr-frame-accent-1 .cr-card-layer-emblem::after { background: linear-gradient(225deg, rgba(56,189,248,0.14), transparent 55%); }
+    .cr-frame-accent-2 .cr-card-layer-emblem::after { background: linear-gradient(45deg, rgba(250,204,21,0.12), transparent 50%); }
+    .cr-frame-accent-3 .cr-card-layer-emblem::after { background: linear-gradient(315deg, rgba(245,158,11,0.14), transparent 55%); }
+    .cr-frame-accent-4 .cr-card-layer-emblem::after { background: radial-gradient(circle at 80% 20%, rgba(244,114,182,0.12), transparent 50%); }
+    .cr-frame-accent-5 .cr-card-layer-emblem::after { background: radial-gradient(circle at 20% 80%, rgba(52,211,153,0.12), transparent 50%); }
+    .cr-card-layer-emblem::after {
       content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
     }
     .cr-card-sparkle {
@@ -812,11 +1022,11 @@
     }
     @keyframes borderSweep { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    .cr-tier-mythic .cr-card-arena,
-    .cr-tier-champion .cr-card-arena {
+    .cr-tier-mythic .cr-card-layer-canvas,
+    .cr-tier-champion .cr-card-layer-canvas {
       background: conic-gradient(from 0deg, #1f120a, #43610b, #ea580c, #b45309, #1f120a) !important;
       background-size: 200% 200% !important;
-      animation: resinChroma 6s linear infinite !important;
+      animation: resinChroma 6s linear infinite, cr-nebula-drift 14s ease-in-out infinite !important;
     }
     @keyframes resinChroma {
       0% { background-position: 0% 50%; }
@@ -2705,20 +2915,9 @@
     .planet-scan-card-wrap .cr-card { max-width: 9.5rem; margin: 0 auto; }
     .map-index-book { display: grid; gap: 0.75rem; }
     .map-index-planet-wrap .cr-card { max-width: 10rem; margin: 0 auto; }
-    .map-screen .planet-owned-grid .foil-active .cr-card-frame,
-    .map-screen .planet-scan-card-wrap .foil-active .cr-card-frame,
-    .map-screen .planet-owned-grid .cr-card-frame.foil-active,
-    .map-screen .planet-scan-card-wrap .cr-card-frame.foil-active {
-      transform: none !important;
-    }
-    .map-screen .planet-owned-grid .cr-card-shine,
-    .map-screen .planet-scan-card-wrap .cr-card-shine {
-      opacity: 0;
-      animation: none;
-    }
-    .map-screen .planet-owned-grid .cr-card-foil,
-    .map-screen .planet-scan-card-wrap .cr-card-foil {
-      opacity: 0;
+    .map-screen .planet-owned-grid .foil-active .cr-card-layer-holo,
+    .map-screen .planet-scan-card-wrap .foil-active .cr-card-layer-holo {
+      opacity: 0.75;
     }
     .map-screen .planet-owned-grid .cr-art-wrap,
     .map-screen .planet-scan-card-wrap .cr-art-wrap,

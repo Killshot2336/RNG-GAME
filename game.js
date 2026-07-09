@@ -1586,11 +1586,13 @@
     var rev = Math.max(1, Math.floor(planetOutputPerSec(p) * 8));
     var lvl = Math.max(1, (p.harvesterLv || 0) + (p.conveyorLv || 0) + 1);
     var orb = '<div class="planet-card-art cr-art-layered"><div class="cr-planet-terrain cr-arena-' + artArenaIdx(p) + '"></div><div class="cr-planet-orb" style="background:radial-gradient(circle at 32% 28%,' + c + 'dd,' + c + '55 42%,#1A1209 78%)"></div></div>';
-    return '<button type="button" class="cr-card planet-card planet-glow' + (opts.glow ? ' planet-glow-active' : '') + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '') + '"' + focusAttr + ' style="--planet-color:' + c + '">' +
-      crCardFrameInner({ tier: tier, name: nm, artHtml: orb,
+    var pTierIdx = cardTierIndex(p.rarity);
+    return '<button type="button" class="cr-card planet-card planet-glow' + (opts.glow ? ' planet-glow-active' : '') + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '') + '"' + focusAttr + ' data-planet-id="' + esc(p.id) + '" data-card-inspect="1" style="--planet-color:' + c + '">' +
+      crCardFrameInner({ tier: tier, tierIdx: pTierIdx, name: nm, artHtml: orb,
         badgeLeft: '<div class="cr-badge cr-badge-thc cr-badge-sm">' + rev + '</div>',
         badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + lvl + '</div>',
-        tag: farmIcon('planet') }) + '</button>';
+        tag: farmIcon('planet'), arenaIdx: artArenaIdx(p),
+        frameStyle: '--cr-border:' + c }) + '</button>';
   }
 
   function revSec(s) { return (effectiveYield(s) * s.quantity * s.thcPercent) / 100; }
@@ -1623,7 +1625,7 @@
     return '<span class="bud-art-composite cr-arena-' + arena + '" style="width:' + w + ';height:' + w + '"><span class="bud-art-terrain cr-arena-' + arena + '"></span><img src="' + BUD_ART + '" alt="" class="strain-bud-art voidline-art"' + id + ' data-art-kind="bud" onerror="this.onerror=null;this.src=\'' + BUD_ART_FALLBACK + '\'"></span>';
   }
 
-  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, idleOpen: false, idleTab: 'buildings', partyOpen: false, mapSubTab: 'scan', coopBattle: null, coopHubMode: 'market', _clanPickType: 'family', _clanPickEmblem: 'rift', floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
+  var UI = { activeTab: 'battle', farmOpen: false, campaignTrailOpen: false, homeQuestOpen: false, idleOpen: false, idleTab: 'buildings', partyOpen: false, mapSubTab: 'scan', coopBattle: null, coopHubMode: 'market', _clanPickType: 'family', _clanPickEmblem: 'rift', floorUpgradeId: null, profileOpen: false, profileTab: 'modifiers', settingsOpen: false, helpOpen: false, realityWarp: false, liftedCardId: null, liftOnUpgrade: null, cardHero: null, playerSelectOpen: false, dailyLoginOpen: false, trophyRoadOpen: false, achievementsOpen: false, battlePassOpen: false, battleToasts: [], battleFlash: null, battleWaveFlash: null, scanAnimating: false, focusedPlanetId: null, strainPickerFloorId: null, strainPickerSearch: '', strainPickerSort: 'rarity', battleEquipSearch: '', battleEquipSort: 'dps', raidEquipSearch: '', raidEquipSort: 'dps', mutationEquipPick: null, mutationPoolPick: null, packGuarantee: false, fuseGuarantee: false, fuseAbilityPick: {}, mergeLab: { open: false, phase: 'idle', child: null, error: '' }, indexPane: 'strains', mutationMode: 'create', _passiveCashAcc: 0, _planetCashAcc: 0, _lastPassivePop: 0, _lastCritPop: 0, _bossHitAcc: 0, _planetSpAcc: 0, _lastPlanetPop: 0, _lastPlanetSpPop: 0, coopView: 'hub', coopShopPlayer: null, storefrontPickSlot: null, confirmDialog: null, mapBillingsOpen: false, mapBillingsTab: 'active', leaseDraft: null, giftStrainId: null, dirty: { wallet: true, hud: true, bossHp: true, bossDps: true, toasts: false, activeTab: true, bossTrait: true, bossShield: true, shell: true, blitzTimer: false, cloneTimer: false, eventTimer: false, cloudSync: false }, damagePopQueue: [] };
   var DOM = {};
   var G = null;
   var activePlayerId = null;
@@ -3874,7 +3876,6 @@
     var h = '';
     if (tierIdx >= 10) h += '<div class="cr-card-particles" style="--phase:' + vis.particlePhase + 's"></div>';
     if (tierIdx >= 18) h += '<div class="cr-card-aura" style="background:radial-gradient(ellipse at 50% 80%, ' + rc + '44 0%, transparent 65%)"></div>';
-    if (tierIdx >= 25) h += '<div class="cr-card-holo"></div>';
     return h;
   }
 
@@ -4043,19 +4044,34 @@
   }
 
   function crCardFrameInner(opts) {
+    opts = opts || {};
+    var tierIdx = opts.tierIdx || 0;
     var qtyBadge = (opts.qty && opts.qty > 1) ? '<div class="cr-badge cr-badge-qty">x' + opts.qty + '</div>' : '';
     var tagBadge = opts.tag ? '<div class="cr-badge cr-badge-tag">' + opts.tag + '</div>' : '';
-    var arenaCls = 'cr-card-arena' + (opts.arenaIdx != null ? ' cr-arena-' + opts.arenaIdx : '');
+    var arenaCls = opts.arenaIdx != null ? ' cr-arena-' + opts.arenaIdx : '';
     var bannerStyle = opts.bannerColor ? ' style="border-top-color:' + opts.bannerColor + '88"' : '';
-    return '<div class="cr-card-frame holo-card ' + opts.tier + (opts.frameExtra || '') + '"' + (opts.frameStyle || '') + '>' +
-      '<div class="cr-card-bevel"></div>' +
-      '<div class="' + arenaCls + '"></div>' +
+    var tierFx = '';
+    if (tierIdx >= 10) tierFx += '<div class="cr-card-texture-glitch" aria-hidden="true"></div>';
+    if (tierIdx >= 20) tierFx += '<div class="cr-card-mythic-crackle" aria-hidden="true"></div>';
+    if (tierIdx >= 25) tierFx += '<div class="cr-card-divine-particles" aria-hidden="true"></div>';
+    var frameStyle = opts.frameStyle || '';
+    if (frameStyle && frameStyle.indexOf('style=') !== 0) frameStyle = ' style="' + frameStyle.replace(/^ style="/, '').replace(/"$/, '') + ';--rx:0deg;--ry:0deg"';
+    else if (!frameStyle) frameStyle = ' style="--rx:0deg;--ry:0deg"';
+    else if (frameStyle.indexOf('--rx') === -1) frameStyle = frameStyle.replace(/"$/, ';--rx:0deg;--ry:0deg"');
+    return '<div class="cr-card-frame holo-card cr-card-tilt-root ' + opts.tier + (opts.frameExtra || '') + '"' + frameStyle + '>' +
+      '<div class="cr-card-sandwich">' +
+      '<div class="cr-card-layer cr-card-layer-canvas' + arenaCls + '"></div>' +
+      '<div class="cr-card-layer cr-card-layer-emblem">' +
       '<div class="cr-card-art">' + opts.artHtml + '</div>' +
-      (opts.cardFx || '') +
+      (opts.cardFx || '') + tierFx +
+      '</div>' +
+      '<div class="cr-card-layer cr-card-layer-frame" aria-hidden="true"></div>' +
+      '<div class="cr-card-layer cr-card-layer-holo" aria-hidden="true"></div>' +
+      '</div>' +
       opts.badgeLeft + (opts.badgeCenter || '') + opts.badgeRight + qtyBadge + tagBadge +
       (opts.abilityPips || '') +
       '<div class="cr-card-banner cr-card-banner-accent"' + bannerStyle + '><span class="cr-card-name">' + esc(opts.name) + '</span></div>' +
-      '<div class="cr-card-shine"></div><div class="cr-card-foil"></div></div>';
+      '</div>';
   }
 
   function liftWrap(id, inner, onUp) { return '<div class="liftable-wrap" data-lift="' + esc(id) + '" data-lift-up="' + (onUp || '') + '"><div class="' + SKIN_PANEL + ' neon-card-static p-4">' + inner + '</div></div>'; }
@@ -4073,7 +4089,7 @@
     var cls = 'cr-card' + (opts.selected ? ' selected' : '') + (opts.large ? ' cr-card-lg' : '') + (tierIdx >= 25 ? ' cr-card-godlift' : '');
     var dpsBadge = opts.showDps ? '<div class="cr-badge cr-badge-dps"><span>DPS</span>' + strainBattleDpsBase(s).toFixed(0) + '</div>' : '';
     var inner = crCardFrameInner({
-      tier: tier, name: s.name, artHtml: strainCardArtImg(s),
+      tier: tier, tierIdx: tierIdx, name: s.name, artHtml: strainCardArtImg(s),
       badgeLeft: '<div class="cr-badge cr-badge-thc' + thcCls + '">' + thcStr + '</div>',
       badgeCenter: dpsBadge,
       badgeRight: '<div class="cr-badge cr-badge-lvl"><span>Lv</span>' + strainCardLevel(s) + '</div>',
@@ -4083,10 +4099,11 @@
       cardFx: cardFxHtml(tierIdx, vis, rc) + (vis.sparkle && tierIdx >= 4 ? '<div class="cr-card-sparkle"></div>' : ''),
       bannerColor: rc,
       frameExtra: vis.frameAccent ? ' cr-frame-accent-' + vis.frameAccent : '',
-      frameStyle: tierIdx >= 4 ? ' style="--cr-border:' + rc + '"' : '',
+      frameStyle: tierIdx >= 4 ? '--cr-border:' + rc : '',
     });
-    if (opts.noFocus) return '<div class="' + cls + '">' + inner + '</div>';
-    return '<button type="button" class="' + cls + '" data-strain-focus="' + esc(s.id) + '">' + inner + '</button>';
+    var inspectAttr = ' data-strain-id="' + esc(s.id) + '" data-card-inspect="1"';
+    if (opts.noFocus) return '<div class="' + cls + '"' + inspectAttr + '>' + inner + '</div>';
+    return '<button type="button" class="' + cls + '" data-strain-focus="' + esc(s.id) + '"' + inspectAttr + '>' + inner + '</button>';
   }
 
   function renderHUD() {
@@ -6530,6 +6547,86 @@
     return wrap ? wrap.innerHTML : '';
   }
 
+  function heroFooterHtml(id) {
+    if (!id) return '<button type="button" class="game-btn w-full" data-action="dismiss-card-hero">CLOSE</button>';
+    return liftFooterHtml(id).replace(/data-action="dismiss-lift"/g, 'data-action="dismiss-card-hero"');
+  }
+
+  function dismissCardHero() {
+    UI.cardHero = null;
+  }
+
+  function openCardHeroFromEl(cardEl) {
+    if (!cardEl) return;
+    var strainId = cardEl.dataset.strainId || null;
+    var planetId = cardEl.dataset.planetId || null;
+    if (!strainId && !planetId) return;
+    var wrap = cardEl.closest('[data-lift]');
+    UI.cardHero = {
+      open: true,
+      strainId: strainId,
+      planetId: planetId,
+      liftId: wrap ? wrap.dataset.lift : null,
+      liftUp: wrap ? (wrap.dataset.liftUp || null) : null,
+    };
+    UI.liftedCardId = null;
+    UI.liftOnUpgrade = null;
+    render();
+  }
+
+  function renderCardHero() {
+    var el = document.getElementById('overlay-card-hero');
+    if (!el) return;
+    var h = UI.cardHero;
+    if (!h || !h.open) { el.innerHTML = ''; el.classList.remove('open'); return; }
+    var cardHtml = '';
+    var meta = '';
+    var abilities = '';
+    var footer = '';
+    var tierCls = '';
+    var glow = '';
+    if (h.strainId) {
+      var s = strainById(h.strainId);
+      if (!s) { dismissCardHero(); el.innerHTML = ''; el.classList.remove('open'); return; }
+      tierCls = liftShellTierClass(s);
+      glow = rarityColor(s.rarity);
+      var showDps = h.liftId && h.liftId.indexOf('battle-') === 0;
+      cardHtml = crCardHtml(s, { noFocus: true, large: true, showDps: showDps });
+      meta = strainLiftMetaHtml(s);
+      abilities = '<div class="card-hero-abilities">' + abilityListHtml(s, { upgradeable: true, lift: true }) + '</div>';
+      footer = heroFooterHtml(h.liftId);
+    } else if (h.planetId) {
+      var pl = (G.ownedPlanets || []).find(function (p) { return p.id === h.planetId; }) || (G.scanPending && G.scanPending.id === h.planetId ? G.scanPending : null);
+      if (!pl) { dismissCardHero(); el.innerHTML = ''; el.classList.remove('open'); return; }
+      tierCls = cardTierClass(pl.rarity);
+      glow = rarityColor(pl.rarity);
+      cardHtml = planetCardHtml(pl, { large: true, glow: h.planetId === (G.scanPending && G.scanPending.id) });
+      meta = planetLiftMetaHtml(pl);
+      if (h.liftId === 'planet-scan' && G.scanPending) {
+        footer = '<input type="text" class="input-field mb-2" placeholder="Name your mining site" data-action="planet-rename-pending" value="' + esc(G.scanPending.customName || '') + '">' +
+          '<button type="button" class="game-btn game-btn-green" data-action="planet-keep">' + farmIcon('nutrient') + ' CLAIM SITE</button>' +
+          '<button type="button" class="game-btn" data-action="planet-discard">PASS</button>';
+      } else if (G.ownedPlanets && G.ownedPlanets.some(function (p) { return p.id === h.planetId; })) {
+        footer = planetLiftFooterHtml(pl).replace(/data-action="dismiss-lift"/g, 'data-action="dismiss-card-hero"');
+      } else {
+        footer = heroFooterHtml(null);
+      }
+    } else {
+      dismissCardHero();
+      el.innerHTML = '';
+      el.classList.remove('open');
+      return;
+    }
+    el.classList.add('open');
+    el.innerHTML = '<button type="button" class="card-hero-backdrop" data-action="dismiss-card-hero" aria-label="Close card"></button>' +
+      '<div class="card-hero-shell ' + tierCls + '" style="--glow:' + glow + '">' +
+      '<div class="card-hero-stage">' + cardHtml + '</div>' +
+      '<div class="card-hero-meta">' + meta + '</div>' +
+      abilities +
+      '<div class="card-hero-footer">' + footer + '</div></div>';
+    bindCardParallax();
+  }
+
   function renderLift() {
     var el = document.getElementById('overlay-card-lift');
     if (!UI.liftedCardId) { el.innerHTML = ''; return; }
@@ -6903,6 +7000,7 @@
     if (UI.profileOpen) renderProfile();
     if (UI.settingsOpen) renderSettings();
     renderPack();
+    renderCardHero();
     renderLift();
     renderBeam();
     renderStrainPicker();
@@ -7036,94 +7134,102 @@
     }
   }
   var foilRaf = null;
-  var foilState = { wrap: null, frame: null, xPct: 0, yPct: 0 };
+  var foilState = { frame: null, wrap: null, rx: 0, ry: 0, xPct: 0, yPct: 0 };
 
   function bindCardParallax() {
-    var root = document.getElementById('screen-root');
-    if (!root || root._foilBound) return;
-    root._foilBound = true;
+    var root = document.getElementById('phone-shell');
+    if (!root || root._cardTiltBound) return;
+    root._cardTiltBound = true;
 
-    function foilTarget(el) {
-      var wrap = el.closest('.liftable-wrap') || el.closest('.cr-card') || el.closest('.strain-card') || el.closest('.strain-picker-card') || el.closest('.binder-grid .liftable-wrap');
-      if (wrap && wrap.closest('.map-screen')) return null;
-      return wrap;
+    function tiltFrame(el) {
+      if (!el) return null;
+      return el.closest('.cr-card-tilt-root') || el.closest('.holo-card');
     }
 
-    function foilFrame(wrap) {
-      if (!wrap) return null;
-      return wrap.querySelector('.holo-card') || wrap.querySelector('.cr-card-frame');
+    function tiltWrap(frame) {
+      if (!frame) return null;
+      return frame.closest('.cr-card') || frame.closest('.card-hero-stage') || frame.closest('.liftable-wrap');
     }
 
-    function scheduleFoil(wrap, frame, xPct, yPct) {
-      foilState.wrap = wrap;
+    function scheduleTilt(frame, wrap, xPct, yPct) {
       foilState.frame = frame;
+      foilState.wrap = wrap;
       foilState.xPct = xPct;
       foilState.yPct = yPct;
-      if (!foilRaf) foilRaf = requestAnimationFrame(applyFoil);
+      foilState.ry = xPct * 22;
+      foilState.rx = -yPct * 18;
+      if (!foilRaf) foilRaf = requestAnimationFrame(applyCardTilt);
     }
 
-    function applyFoil() {
+    function applyCardTilt() {
       foilRaf = null;
-      var wrap = foilState.wrap;
       var frame = foilState.frame;
-      if (!wrap || !frame) return;
+      var wrap = foilState.wrap;
+      if (!frame) return;
+      frame.style.setProperty('--rx', foilState.rx.toFixed(2) + 'deg');
+      frame.style.setProperty('--ry', foilState.ry.toFixed(2) + 'deg');
       frame.style.setProperty('--x-pct', foilState.xPct.toFixed(4));
       frame.style.setProperty('--y-pct', foilState.yPct.toFixed(4));
-      var foil = frame.querySelector('.cr-card-foil');
-      if (foil) {
-        foil.style.backgroundPosition = ((foilState.xPct + 1) * 50) + '% ' + ((foilState.yPct + 1) * 50) + '%';
+      var holo = frame.querySelector('.cr-card-layer-holo');
+      if (holo) {
+        holo.style.setProperty('--holo-x', (foilState.xPct * 14).toFixed(2) + '%');
+        holo.style.setProperty('--holo-y', (foilState.yPct * 14).toFixed(2) + '%');
       }
-      var shine = frame.querySelector('.cr-card-shine');
-      if (shine) {
-        shine.style.backgroundPosition = ((foilState.xPct + 1) * 50) + '% ' + ((foilState.yPct + 1) * 50) + '%';
-        shine.style.opacity = '0.88';
-      }
-      wrap.classList.add('foil-active');
       frame.classList.add('foil-active');
+      if (wrap) wrap.classList.add('foil-active');
     }
 
-    function resetFoil(wrap) {
-      if (!wrap) return;
-      wrap.classList.remove('foil-active');
-      var frame = foilFrame(wrap);
+    function resetTilt(frame) {
       if (!frame) return;
-      frame.classList.remove('foil-active');
+      var wrap = tiltWrap(frame);
+      frame.style.setProperty('--rx', '0deg');
+      frame.style.setProperty('--ry', '0deg');
       frame.style.removeProperty('--x-pct');
       frame.style.removeProperty('--y-pct');
-      var foil = frame.querySelector('.cr-card-foil');
-      if (foil) foil.style.backgroundPosition = '';
-      var shine = frame.querySelector('.cr-card-shine');
-      if (shine) { shine.style.backgroundPosition = ''; shine.style.opacity = ''; }
+      var holo = frame.querySelector('.cr-card-layer-holo');
+      if (holo) {
+        holo.style.removeProperty('--holo-x');
+        holo.style.removeProperty('--holo-y');
+      }
+      frame.classList.remove('foil-active');
+      if (wrap) wrap.classList.remove('foil-active');
+      if (foilState.frame === frame) {
+        foilState.frame = null;
+        foilState.wrap = null;
+      }
     }
 
     function onPointer(e) {
-      var wrap = foilTarget(e.target);
-      if (!wrap) return;
-      var frame = foilFrame(wrap);
+      var frame = tiltFrame(e.target);
       if (!frame) return;
       var rect = frame.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
       var px = e.clientX != null ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : null);
       var py = e.clientY != null ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : null);
       if (px == null || py == null) return;
       var xPct = Math.max(-1, Math.min(1, (px - rect.left - rect.width / 2) / (rect.width / 2)));
       var yPct = Math.max(-1, Math.min(1, (py - rect.top - rect.height / 2) / (rect.height / 2)));
-      scheduleFoil(wrap, frame, xPct, yPct);
+      scheduleTilt(frame, tiltWrap(frame), xPct, yPct);
     }
 
     function onLeave(e) {
-      var wrap = foilTarget(e.target);
-      if (!wrap) return;
-      resetFoil(wrap);
-      if (foilState.wrap === wrap) {
-        foilState.wrap = null;
-        foilState.frame = null;
-      }
+      var frame = tiltFrame(e.target);
+      if (!frame) return;
+      resetTilt(frame);
     }
 
     root.addEventListener('pointermove', onPointer);
     root.addEventListener('pointerleave', onLeave, true);
+    root.addEventListener('pointerout', function (e) {
+      var frame = tiltFrame(e.target);
+      if (!frame) return;
+      var related = e.relatedTarget;
+      if (related && frame.contains(related)) return;
+      resetTilt(frame);
+    }, true);
     root.addEventListener('touchmove', onPointer, { passive: true });
     root.addEventListener('touchend', onLeave, true);
+    root.addEventListener('touchcancel', onLeave, true);
   }
 
   function refreshPlayers() {
@@ -7283,7 +7389,7 @@
     else if (act==='strain-picker-search') UI.strainPickerSearch = val;
     else if (act==='strain-picker-sort') UI.strainPickerSort = val;
     else if (act==='up-floor') upFloor(val);
-    else if (act==='equip-battle') { equipBattle(val); UI.liftedCardId = null; }
+    else if (act==='equip-battle') { equipBattle(val); UI.liftedCardId = null; dismissCardHero(); }
     else if (act==='equip-best') equipBestBattle();
     else if (act==='battle-equip-search') UI.battleEquipSearch = val;
     else if (act==='battle-equip-sort') UI.battleEquipSort = val;
@@ -7388,14 +7494,17 @@
     else if (act==='dismiss-lift') {
       UI.liftedCardId = null; UI.liftOnUpgrade = null;
     }
+    else if (act==='dismiss-card-hero') {
+      dismissCardHero();
+    }
     else if (act==='lift-upgrade' && UI.liftOnUpgrade) { runAction(UI.liftOnUpgrade.split(':')[0], UI.liftOnUpgrade.split(':').slice(1).join(':')); UI.liftedCardId = null; UI.liftOnUpgrade = null; }
     else if (act==='index-search') G.indexSearch = val;
     else if (act==='index-sort') G.indexSort = val;
     else if (act==='fleet-search') G.fleetSearch = val;
     else if (act==='fleet-sort') G.fleetSort = val;
     else if (act==='map-scan') { startMapScan(); scheduleSave(); render(); return; }
-    else if (act==='planet-keep') { keepScannedPlanet(); }
-    else if (act==='planet-discard') { discardScannedPlanet(); }
+    else if (act==='planet-keep') { keepScannedPlanet(); dismissCardHero(); }
+    else if (act==='planet-discard') { discardScannedPlanet(); dismissCardHero(); }
     else if (act==='planet-focus') { UI.focusedPlanetId = UI.focusedPlanetId === val ? null : val; }
     else if (act==='star-map-focus') {
       if (val.indexOf('star-') !== 0) UI.focusedPlanetId = UI.focusedPlanetId === val ? null : val;
@@ -7513,7 +7622,7 @@
     else if (act==='mutation-buy-luck') spendMutationPackLuck();
     else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
     else if (act==='equip-mutation') { var em = val.split(':'); equipMutationItem(em[0], em[1]); UI.mutationEquipPick = null; }
-    else if (act==='equip-raid') { equipRaid(val); UI.liftedCardId = null; }
+    else if (act==='equip-raid') { equipRaid(val); UI.liftedCardId = null; dismissCardHero(); }
     else if (act==='equip-best-raid') equipBestRaid();
     else if (act==='raid-equip-search') UI.raidEquipSearch = val;
     else if (act==='raid-equip-sort') UI.raidEquipSort = val;
@@ -7617,7 +7726,17 @@
   }
 
   document.getElementById('voidline-app').addEventListener('click', function (e) {
-    var t = e.target.closest('[data-tab],[data-action],[data-close],[data-lift],[data-strain-focus]');
+    var t = e.target.closest('[data-tab],[data-action],[data-close],[data-lift],[data-strain-focus],[data-card-inspect]');
+    var cardEl = e.target.closest('[data-card-inspect]');
+    if (cardEl) {
+      var blockParent = e.target.closest('button[data-action], .merge-pick-card, .mutation-burn-card');
+      if (!blockParent || blockParent === cardEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCardHeroFromEl(cardEl);
+        return;
+      }
+    }
     if (!t) return;
     if (t.dataset.action === 'pick-player') { e.preventDefault(); runAction('pick-player', t.dataset.pid); return; }
     if (t.dataset.tab) {
@@ -7654,7 +7773,12 @@
       return;
     }
     var liftEl = e.target.closest('[data-lift]');
-    if (liftEl && !UI.liftedCardId) {
+    if (liftEl && !UI.liftedCardId && !cardEl) {
+      var liftCard = liftEl.querySelector('[data-card-inspect]');
+      if (liftCard) {
+        openCardHeroFromEl(liftCard);
+        return;
+      }
       UI.liftedCardId = liftEl.dataset.lift;
       if (UI.liftedCardId.indexOf('planet-') === 0) UI.focusedPlanetId = UI.liftedCardId.slice(7);
       UI.liftOnUpgrade = liftEl.dataset.liftUp || null;
@@ -7739,6 +7863,7 @@
   try {
     cacheDomRefs();
     initMapPanHandlers();
+    bindCardParallax();
     initArcadePool();
     startVisualLoop();
     var storedVer = localStorage.getItem(VERSION_KEY);
