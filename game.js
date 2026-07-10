@@ -596,7 +596,15 @@
     }, 3200);
   }
 
+  function syncPendingPlanetRename() {
+    var inp = document.querySelector('[data-action="planet-rename-pending"]');
+    if (inp && G.scanPending) {
+      G.scanPending = Object.assign({}, G.scanPending, { customName: inp.value.trim() || null });
+    }
+  }
+
   function keepScannedPlanet() {
+    syncPendingPlanetRename();
     var p = G.scanPending;
     if (!p) return;
     if (p.customName) p = Object.assign({}, p, { customName: p.customName.trim() || null });
@@ -2017,7 +2025,7 @@
     return true;
   }
 
-  function buyFromPlayerShop(sellerId, slotIdx) {
+  function buyFromPlayerShop(sellerId, slotIdx, priceOverride) {
     var buyer = G;
     var seller = readPlayerSaveMutable(sellerId);
     if (!seller || sellerId === activePlayerId) return false;
@@ -2027,7 +2035,7 @@
     if (!slot || !slot.strainId || !slot.price) return false;
     var strain = (seller.strains || []).find(function (s) { return s.id === slot.strainId; });
     if (!strain || (strain.quantity || 1) < (slot.quantity || 1)) return false;
-    var total = slot.price;
+    var total = priceOverride != null && priceOverride > 0 ? priceOverride : slot.price;
     if (buyer.cash < total) return false;
     buyer.cash -= total;
     seller.cash = (seller.cash || 0) + total;
@@ -3519,12 +3527,21 @@
     var luck = packLuckBonus();
     G.cash = nc; G.sp = ns;
     G.packReveal = { open: true, packType: type, strain: strain, wheelSpin: true, wheelPct: packWheelPercent(strain, luck), paidWithSp: usedSp };
+    schedulePackWheelStop();
     if (spEarn > 0) popSp(spEarn, { big: spEarn >= 5 });
     popLabel(usedSp ? 'VAULT OPEN · SP' : 'PACK OPEN!', { mega: true });
     UI._vaultOpenFlash = type;
     setTimeout(function () { UI._vaultOpenFlash = null; }, 700);
     return true;
   }
+  function schedulePackWheelStop() {
+    setTimeout(function () {
+      if (!G.packReveal || !G.packReveal.wheelSpin) return;
+      G.packReveal = Object.assign({}, G.packReveal, { wheelSpin: false });
+      renderPack();
+    }, 2200);
+  }
+
   function closePack() {
     var pr = G.packReveal;
     if (pr.strains && pr.strains.length) {
@@ -3602,27 +3619,32 @@
     render();
     return true;
   }
+  function parseStorefrontOfferId(oid) {
+    var m = String(oid || '').match(/^(.+)-slot-(\d+)$/);
+    if (!m) return null;
+    return { sellerId: m[1], slotIdx: parseInt(m[2], 10) };
+  }
+
   function acceptOffer(oid) {
+    var parsed = parseStorefrontOfferId(oid);
+    if (!parsed) return false;
     var offers = getSharedOffers(), o = offers.find(function (x) { return x.id === oid; });
     if (!o || G.cash < o.offerPrice) return false;
-    var s = genPack('guaranteed', oid.split('').reduce(function (a, c) { return a + c.charCodeAt(0); }, 0));
-    s.name = o.strainName; s.thcPercent = o.thcPercent; s.yield = o.yield;
-    G.cash -= o.offerPrice;
-    G.strains = mergeStrains(G.strains, s);
-    if (!G.focusedStrainId) G.focusedStrainId = s.id;
+    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx)) return false;
     addXp(15);
-    popStrain(s, { big: true });
     plantSay('pack');
+    scheduleSave();
     return true;
   }
   function counterOffer(oid) {
+    var parsed = parseStorefrontOfferId(oid);
+    if (!parsed) return false;
     var offers = getSharedOffers(), o = offers.find(function (x) { return x.id === oid; }), c = G.counterPrices[oid];
     if (!o || !c || c <= 0 || G.cash < c || c < o.offerPrice * 0.85) return false;
-    var s = genPack('basic', c);
-    s.name = o.strainName; s.thcPercent = o.thcPercent; s.yield = o.yield;
-    G.cash -= c;
-    G.strains = mergeStrains(G.strains, s);
-    popStrain(s);
+    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx, c)) return false;
+    addXp(10);
+    plantSay('pack');
+    scheduleSave();
     return true;
   }
   function buyPortal() {
@@ -4212,9 +4234,11 @@
     if (isBossHpDirty()) {
       var hpPct = G.bossMaxHp ? Math.max(0, G.bossHp / G.bossMaxHp * 100) : 0;
       var hp = document.querySelector('.boss-hp-fill') || document.querySelector('.battle-hub-hp-fill');
+      var hpUpdated = false;
       if (hp && G.bossMaxHp && UI_LAST.bossHpPct !== hpPct) {
         hp.style.width = hpPct + '%';
         UI_LAST.bossHpPct = hpPct;
+        hpUpdated = true;
       }
       var hpCur = document.querySelector('.battle-hub-hp-current');
       if (hpCur && G.bossMaxHp) {
@@ -4222,9 +4246,10 @@
         if (UI_LAST.bossHpCur !== hpTxt) {
           hpCur.textContent = hpTxt;
           UI_LAST.bossHpCur = hpTxt;
+          hpUpdated = true;
         }
       }
-      UI.dirty.bossHp = false;
+      if (hpUpdated || hp || hpCur) UI.dirty.bossHp = false;
     }
     if (isBossShieldDirty()) {
       var shieldBar = document.querySelector('.boss-shield-fill');
@@ -4234,8 +4259,8 @@
           shieldBar.style.width = shieldPct + '%';
           UI_LAST.bossShieldPct = shieldPct;
         }
+        UI.dirty.bossShield = false;
       }
-      UI.dirty.bossShield = false;
     }
     if (isBossTraitDirty()) {
       var traitState = document.querySelector('.boss-trait-state');
@@ -4245,8 +4270,8 @@
           traitState.textContent = traitText;
           UI_LAST.bossTrait = traitText;
         }
+        UI.dirty.bossTrait = false;
       }
-      UI.dirty.bossTrait = false;
     }
     if (isBossDpsDirty()) {
       var dpsVal = totalBattleDps();
@@ -4448,6 +4473,7 @@
       }
       var top = pair[0];
       G.packReveal = { open: true, packType: r.packType || 'rift-twin', strains: pair, strain: null, wheelSpin: true, wheelPct: packWheelPercent(top, luck) };
+      schedulePackWheelStop();
     } else if (r.kind === 'single') {
       var s = genPack('basic', Date.now() + Math.floor(Math.random() * 1e9), opts);
       if (useGuarantee) {
@@ -4455,6 +4481,7 @@
         showBattleToast('Guaranteed ability roll applied to chest', true);
       }
       G.packReveal = { open: true, packType: r.packType || 'level', strains: null, strain: s, wheelSpin: true, wheelPct: packWheelPercent(s, luck) };
+      schedulePackWheelStop();
     }
   }
 
@@ -4952,17 +4979,50 @@
     return h;
   }
 
+  function battleHubBossHudHtml() {
+    var node = currentCampaignNode();
+    var hpPct = G.bossMaxHp ? Math.max(0, G.bossHp / G.bossMaxHp * 100) : 0;
+    var gates = campaignGateFailures(node);
+    var h = '<div class="battle-hub-boss-hud">';
+    h += '<div class="battle-hub-boss-name font-display">' + esc(G.bossName || 'Void Boss') + '</div>';
+    h += '<div class="battle-hub-boss-tier">' + esc(rarityName(G.bossRarity)) + ' tier · Node ' + node + '/' + CAMPAIGN_NODE_COUNT + '</div>';
+    h += '<div class="battle-hub-hp-track"><div class="battle-hub-hp-fill boss-hp-fill" style="width:' + hpPct + '%"></div></div>';
+    if (getBossTrait() === 2 && (G.bossShieldMax || 0) > 0) {
+      var shPct = Math.max(0, (G.bossShieldHp / G.bossShieldMax) * 100);
+      h += '<div class="boss-shield-bar"><div class="boss-shield-fill" style="width:' + shPct + '%"></div></div>';
+    }
+    h += '<div class="battle-hub-hp-text"><span class="text-green battle-hub-hp-current">' + Math.ceil(G.bossHp || 0).toLocaleString() + '</span><span class="text-muted">' + (G.bossMaxHp || 0).toLocaleString() + ' HP</span></div>';
+    h += '<div class="boss-trait-badge"><span class="boss-trait-name">' + esc(bossTraitLabel(getBossTrait())) + '</span><span class="boss-trait-state">' + esc(bossTraitStatusText()) + '</span></div>';
+    if (gates.length) {
+      h += '<div class="battle-hub-gate-warn">';
+      gates.slice(0, 2).forEach(function (g) { h += '<div class="battle-hub-gate-line">' + esc(g) + '</div>'; });
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
   function battleHubHeroHtml() {
     var dps = totalBattleDps();
+    var questBadge = homeQuestBadgeCount();
     var h = '<section class="home-island battle-hub-hero">';
     h += '<div class="home-island-nebula boss-stage-nebula"></div>';
     h += '<div class="home-island-stars"></div>';
+    h += '<button type="button" class="home-bubble home-bubble-quest' + (UI.homeQuestOpen ? ' active' : '') + (questBadge ? ' has-badge' : '') + '" data-action="toggle-home-quest" title="Quests & Events">';
+    h += '<span class="home-bubble-icon">' + farmIcon('help') + '</span>';
+    if (questBadge) h += '<span class="home-bubble-badge">' + questBadge + '</span>';
+    h += '</button>';
+    h += '<button type="button" class="home-bubble home-bubble-trophy" data-action="open-trophy-road" title="Trophy Road">';
+    h += '<span class="home-bubble-icon">' + farmIcon('mega') + '</span></button>';
+    h += '<button type="button" class="home-bubble home-bubble-achieve" data-action="open-achievements" title="Achievements">';
+    h += '<span class="home-bubble-icon">' + farmIcon('check') + '</span></button>';
     h += '<button type="button" class="home-bubble home-bubble-money' + (UI.idleOpen ? ' active' : '') + '" data-action="toggle-idle-capitalist" title="Idle Empire">';
     h += '<span class="home-bubble-icon">' + farmIcon('bill') + '</span></button>';
     h += '<button type="button" class="home-bubble home-bubble-rocket" data-action="open-rocket-lift" title="Planet Mines">';
     h += '<span class="home-bubble-icon">' + farmIcon('pipe') + '</span></button>';
     h += '<div class="home-island-center">';
     h += homeBossStrainHtml();
+    h += battleHubBossHudHtml();
     h += '<button type="button" class="battle-hub-start-btn home-start-btn" data-action="start-run">';
     h += '<span class="battle-hub-start-label">START</span></button>';
     h += '<button type="button" class="home-party-btn" data-action="toggle-party-popup">' + farmIcon('equip') + ' PARTY</button>';
@@ -7331,10 +7391,7 @@
       if (val === 'campaign') { UI.partyOpen = false; UI.campaignTrailOpen = true; UI.battleWaveFlash = 'battle-hub-run-flash'; render(); return; }
       if (val === 'battle') {
         UI.partyOpen = false;
-        UI.activeTab = 'coop';
-        UI.coopView = 'hub';
-        showBattleToast('Pick a family member to battle', true);
-        render();
+        startCoopBattle('battle');
         return;
       }
       startCoopBattle(val);
@@ -7437,8 +7494,10 @@
       if (cdef && (G.cash < cdef.cashCost || (G.sp || 0) < cdef.spCost)) { showBattleToast('Need ' + fmtCash(cdef.cashCost) + ' + ' + cdef.spCost + ' SP', false); return; }
       if (cdef) { G.cash -= cdef.cashCost; G.sp -= cdef.spCost; markWalletDirty(); }
       window.VoidlineClan.createClan({ name: cname.value.trim(), type: ctype, emblem: cem, displayName: G.name, playerTag: G.uniqueTag, dps: totalBattleDps() }).then(function (r) {
-        if (!r.ok) showBattleToast(r.error || 'Clan create failed', false);
-        else showBattleToast('Clan founded · ' + r.state.hash, true);
+        if (!r.ok) {
+          if (cdef) { G.cash += cdef.cashCost; G.sp = (G.sp || 0) + cdef.spCost; markWalletDirty(); }
+          showBattleToast(r.error || 'Clan create failed', false);
+        } else showBattleToast('Clan founded · ' + r.state.hash, true);
         markTabDirty(); render();
       });
       return;
@@ -7518,7 +7577,7 @@
     else if (act==='fleet-search') G.fleetSearch = val;
     else if (act==='fleet-sort') G.fleetSort = val;
     else if (act==='map-scan') { startMapScan(); scheduleSave(); render(); return; }
-    else if (act==='planet-keep') { keepScannedPlanet(); dismissCardHero(); }
+    else if (act==='planet-keep') { syncPendingPlanetRename(); keepScannedPlanet(); dismissCardHero(); }
     else if (act==='planet-discard') { discardScannedPlanet(); dismissCardHero(); }
     else if (act==='planet-focus') { UI.focusedPlanetId = UI.focusedPlanetId === val ? null : val; }
     else if (act==='star-map-focus') {
@@ -7527,7 +7586,11 @@
     else if (act==='up-planet') { var pu = val.split(':'); upPlanetUpgrade(pu[0], pu[1]); }
     else if (act==='harvest-planet') { harvestPlanet(val); }
     else if (act==='harvest-all-planets') { harvestAllPlanets(); render(); return; }
-    else if (act==='breed-run') { startMergeFuse(); return; }
+    else if (act==='breed-run') {
+      if (!startMergeFuse()) showBattleToast((UI.mergeLab && UI.mergeLab.error) || 'Cannot fuse', false);
+      render();
+      return;
+    }
     else if (act==='void-prestige') { if (confirm('Void Prestige resets cash, SP, and strains (keeps top 3 + all blitz). Continue?')) triggerVoidPrestige(); }
     else if (act==='coop-myshop') { UI.coopView = 'myshop'; }
     else if (act==='coop-back') { UI.coopView = 'hub'; UI.coopShopPlayer = null; }

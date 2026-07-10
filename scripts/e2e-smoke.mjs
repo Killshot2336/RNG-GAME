@@ -33,7 +33,10 @@ async function main() {
     await page.waitForTimeout(500);
   }
 
-  await click(page, '[data-action="pick-player"]', 'pick first player');
+  const pick = page.locator('[data-action="pick-player"]').first();
+  if (await pick.count()) {
+    await click(page, '[data-action="pick-player"]', 'pick first player');
+  }
 
   await page.waitForFunction(() => window.VoidlineGalaxyFarm && window.VoidlineGalaxyFarm.getState(), null, { timeout: 15000 });
 
@@ -42,7 +45,7 @@ async function main() {
   }
 
   await click(page, '#bottom-dock [data-tab="battle"]', 'back to battle');
-  const boss = page.locator('.boss-arena, .battle-hub');
+  const boss = page.locator('.boss-arena, .battle-hub, .battle-hub-hero');
   if (!(await boss.count())) errors.push('missing battle hub on battle tab');
 
   const equipBest = page.locator('[data-action="equip-best"]');
@@ -78,7 +81,9 @@ async function main() {
     const hero = page.locator('#overlay-card-hero.open');
     if (!(await hero.count())) errors.push('index card did not open hero overlay');
     else {
-      await page.locator('[data-action="dismiss-card-hero"]').first().click();
+      const closeHero = page.locator('#overlay-card-hero .lift-footer [data-action="dismiss-card-hero"], #overlay-card-hero button.game-btn[data-action="dismiss-card-hero"]').first();
+      if (await closeHero.count()) await closeHero.click({ force: true });
+      else await page.locator('[data-action="dismiss-card-hero"]').first().click({ force: true });
       await page.waitForTimeout(200);
       console.log('  ok: dismiss card hero');
     }

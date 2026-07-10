@@ -182,7 +182,7 @@
       position: absolute; left: 0; right: 0; top: 0; bottom: 0;
       z-index: 28; pointer-events: none;
     }
-    #overlay-aux.open { pointer-events: auto; }
+    #overlay-aux.open { z-index: 46; pointer-events: auto; }
     .aux-overlay {
       position: absolute; inset: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center; padding: 1rem;
@@ -3154,6 +3154,24 @@
     .home-bubble.active { border-color: var(--leaf); box-shadow: 0 0 20px rgba(74, 222, 128, 0.4); }
     .home-bubble-money { top: 0.65rem; right: 0.65rem; }
     .home-bubble-rocket { bottom: 0.65rem; right: 0.65rem; }
+    .home-bubble-quest { top: 0.65rem; left: 0.65rem; }
+    .home-bubble-trophy { bottom: 0.65rem; left: 0.65rem; }
+    .home-bubble-achieve { top: 3.5rem; left: 0.65rem; }
+    .home-bubble.has-badge { animation: battle-hub-orb-pulse 1.8s ease-in-out infinite; }
+    .home-bubble-badge {
+      position: absolute; top: -0.2rem; right: -0.2rem; min-width: 1rem; height: 1rem;
+      padding: 0 0.2rem; border-radius: 999px; background: #ef4444; color: #fff;
+      font-family: var(--font-mono); font-size: 0.45rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid #0c0805; box-shadow: 0 2px 0 #0c0805;
+    }
+    .battle-hub-boss-hud {
+      width: min(100%, 18rem); text-align: center; margin-bottom: 0.35rem;
+    }
+    .battle-hub-boss-name {
+      font-size: 0.72rem; letter-spacing: 0.08em; margin-bottom: 0.1rem;
+      text-shadow: 0 2px 0 #0c0805;
+    }
     .home-bubble-icon .farm-icon { font-size: 1rem; }
     .home-boss-strain {
       position: relative; text-align: center; padding: 0.5rem;
