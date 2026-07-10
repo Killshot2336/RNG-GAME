@@ -3120,10 +3120,19 @@
 
     /* === HOME ISLAND HUB === */
     .home-island {
-      position: relative; min-height: 22rem; border-radius: 1rem; overflow: hidden;
+      position: relative; min-height: 13.5rem; border-radius: 1rem; overflow: visible;
       border: 2px solid rgba(139, 92, 246, 0.35);
       background: radial-gradient(ellipse at 50% 120%, #1a0533 0%, #05020a 55%, #000 100%);
       box-shadow: 0 0 40px rgba(139, 92, 246, 0.15), inset 0 0 60px rgba(56, 189, 248, 0.06);
+    }
+    .home-island.battle-hub-hero {
+      min-height: 13.5rem;
+      border: 2px solid rgba(139, 92, 246, 0.35);
+      box-shadow: 0 0 40px rgba(139, 92, 246, 0.15), inset 0 0 60px rgba(56, 189, 248, 0.06);
+    }
+    .home-island.battle-hub-hero-mega {
+      border-color: rgba(250, 204, 21, 0.45);
+      box-shadow: 0 0 50px rgba(250, 204, 21, 0.2), inset 0 0 60px rgba(236, 72, 153, 0.08);
     }
     .home-island-nebula {
       position: absolute; inset: 0; opacity: 0.7;
@@ -3141,7 +3150,7 @@
     }
     .home-island-center {
       position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center;
-      padding: 3.5rem 1rem 1.25rem; gap: 0.55rem;
+      padding: 2.75rem 0.75rem 0.85rem; gap: 0.4rem;
     }
     .home-bubble {
       position: absolute; z-index: 5; width: 2.75rem; height: 2.75rem; border-radius: 50%;
@@ -3153,6 +3162,7 @@
     .home-bubble:hover { transform: translateY(-2px) scale(1.05); }
     .home-bubble.active { border-color: var(--leaf); box-shadow: 0 0 20px rgba(74, 222, 128, 0.4); }
     .home-bubble-money { top: 0.65rem; right: 0.65rem; }
+    .home-bubble-portal { bottom: 3.5rem; right: 0.65rem; border-color: rgba(56, 189, 248, 0.55); }
     .home-bubble-rocket { bottom: 0.65rem; right: 0.65rem; }
     .home-bubble-quest { top: 0.65rem; left: 0.65rem; }
     .home-bubble-trophy { bottom: 0.65rem; left: 0.65rem; }
@@ -3175,22 +3185,36 @@
     }
     .home-bubble-icon .farm-icon { font-size: 1rem; }
     .home-boss-strain {
-      position: relative; text-align: center; padding: 0.5rem;
+      position: relative; text-align: center; padding: 0.15rem 0.5rem 0;
     }
     .home-boss-aura-ring {
-      position: absolute; inset: -8px; border-radius: 50%;
+      position: absolute; inset: -6px; border-radius: 50%;
       border: 2px solid var(--boss-glow, rgba(168, 85, 247, 0.6));
-      box-shadow: 0 0 30px var(--boss-glow, rgba(168, 85, 247, 0.4));
+      box-shadow: 0 0 24px var(--boss-glow, rgba(168, 85, 247, 0.4));
       animation: battle-hub-aura 3s ease-in-out infinite alternate;
     }
     .boss-strain-aura.rarity-voidgod .home-boss-aura-ring { box-shadow: 0 0 40px gold, 0 0 80px rgba(255,255,255,0.3); }
     .boss-strain-aura.rarity-haze .home-boss-aura-ring { border-color: #38bdf8; box-shadow: 0 0 28px #38bdf8; }
     .boss-strain-aura.rarity-dust .home-boss-aura-ring { border-color: #9ca3af; }
-    .home-boss-sprite { width: 5rem; height: 5rem; object-fit: contain; filter: drop-shadow(0 0 20px var(--boss-glow)); }
+    .home-boss-sprite { width: 4.25rem; height: 4.25rem; object-fit: contain; filter: drop-shadow(0 0 20px var(--boss-glow)); }
     .home-boss-level { font-family: var(--font-mono); font-size: 0.55rem; color: var(--gold); letter-spacing: 0.12em; margin-top: 0.35rem; }
     .home-boss-node { font-family: var(--font-mono); font-size: 0.48rem; color: var(--muted); }
     .home-boss-rarity { font-family: var(--font-display); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; }
-    .home-start-btn { margin-top: 0.25rem; min-width: 10rem; }
+    .home-start-btn { margin-top: 0; min-width: 8.5rem; }
+    .home-action-row {
+      display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+      flex-wrap: wrap; width: 100%; max-width: 18rem;
+    }
+    .battle-hub-strip {
+      margin-top: 0.5rem; padding: 0.55rem 0.65rem 0.65rem;
+      border-radius: 0.85rem; display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+    }
+    .battle-hub-strip .battle-hub-squad { margin-bottom: 0; }
+    .battle-hub-power-compact {
+      font-size: 0.95rem !important; margin-bottom: 0 !important;
+      animation: none;
+    }
+    .battle-hub-strip .home-hub-dock { margin-top: 0.15rem; }
     .home-party-btn {
       font-family: var(--font-mono); font-size: 0.55rem; letter-spacing: 0.1em;
       padding: 0.45rem 1rem; border-radius: 9999px; border: 2px solid rgba(56, 189, 248, 0.45);

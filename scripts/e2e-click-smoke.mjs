@@ -134,12 +134,14 @@ try {
   }
 
   await clickNav(page, 'battle');
-  const farmBtn = page.locator('[data-action="toggle-farm"]').first();
+  const farmBtn = page.locator('[data-action="toggle-farm"], [data-action="open-portal-farm"]').first();
   if (await farmBtn.count()) {
     await farmBtn.click();
     await page.waitForTimeout(300);
     const farmVisible = await page.locator('.farm-screen, .portal-rm-scene, [data-action="farm-tab"]').count();
-    if (!farmVisible) failures.push('toggle-farm did not show farm UI');
+    if (!farmVisible) failures.push('portal farm entry did not show farm UI');
+  } else {
+    failures.push('missing portal farm entry on HOME');
   }
 
   await page.locator('[data-action="open-profile"]').click();

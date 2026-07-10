@@ -5047,9 +5047,6 @@
     } else {
       h += '<img src="' + BOSS_ART + '" alt="" class="home-boss-sprite voidline-art campaign-boss-hue-' + (def.bossHue % 12) + '" data-art-kind="boss" onerror="this.onerror=null;this.src=\'' + BOSS_ART_FALLBACK + '\'">';
     }
-    h += '<div class="home-boss-level">BOSS Lv.' + node + '</div>';
-    h += '<div class="home-boss-node">NODE ' + node + '/' + CAMPAIGN_NODE_COUNT + (mega ? ' · MEGA' : '') + '</div>';
-    h += '<div class="home-boss-rarity" style="color:' + bc + '">' + esc(rarityName(G.bossRarity)) + ' STRAIN</div>';
     h += '</div>';
     return h;
   }
@@ -5080,7 +5077,8 @@
   function battleHubHeroHtml() {
     var dps = totalBattleDps();
     var questBadge = homeQuestBadgeCount();
-    var h = '<section class="home-island battle-hub-hero">';
+    var mega = isBossWave();
+    var h = '<section class="home-island battle-hub-hero' + (mega ? ' battle-hub-hero-mega' : '') + '">';
     h += '<div class="home-island-nebula boss-stage-nebula"></div>';
     h += '<div class="home-island-stars"></div>';
     h += '<button type="button" class="home-bubble home-bubble-quest' + (UI.homeQuestOpen ? ' active' : '') + (questBadge ? ' has-badge' : '') + '" data-action="toggle-home-quest" title="Quests & Events">';
@@ -5097,20 +5095,25 @@
     }
     h += '<button type="button" class="home-bubble home-bubble-money' + (UI.idleOpen ? ' active' : '') + '" data-action="toggle-idle-capitalist" title="Idle Empire">';
     h += '<span class="home-bubble-icon">' + farmIcon('bill') + '</span></button>';
+    h += '<button type="button" class="home-bubble home-bubble-portal' + (UI.farmOpen ? ' active' : '') + '" data-action="open-portal-farm" title="Portal Farm">';
+    h += '<span class="home-bubble-icon">' + farmIcon('portal') + '</span></button>';
     h += '<button type="button" class="home-bubble home-bubble-rocket" data-action="open-rocket-lift" title="Planet Mines">';
     h += '<span class="home-bubble-icon">' + farmIcon('pipe') + '</span></button>';
     h += '<div class="home-island-center">';
     h += homeBossStrainHtml();
     h += battleHubBossHudHtml();
+    h += '<div class="home-action-row">';
     h += '<button type="button" class="battle-hub-start-btn home-start-btn" data-action="start-run">';
     h += '<span class="battle-hub-start-label">START</span></button>';
     h += '<button type="button" class="home-party-btn" data-action="toggle-party-popup">' + farmIcon('equip') + ' PARTY</button>';
-    h += '<div class="battle-hub-dps battle-hub-power" id="home-dps-display">';
+    h += '</div></div></section>';
+    h += '<div class="battle-hub-strip ' + SKIN_PANEL + '">';
+    h += battleHubSquadHtml();
+    h += '<div class="battle-hub-dps battle-hub-power battle-hub-power-compact" id="home-dps-display">';
     h += '<span class="battle-hub-dps-label">POWER</span>';
     h += '<span class="battle-hub-dps-value boss-stage-dps">DPS: ' + dps.toFixed(1) + '</span></div>';
-    h += battleHubSquadHtml();
-    h += '<button type="button" class="battle-hub-equip-link" data-action="hub-raid">' + farmIcon('equip') + ' EDIT SQUAD</button>';
-    h += '</div></section>';
+    h += '<div class="home-hub-dock">' + hubOrbBtn('PORTAL FARM', 'toggle-farm', 'tower') + hubOrbBtn('EDIT SQUAD', 'hub-raid', 'equip') + '</div>';
+    h += '</div>';
     return h;
   }
 
@@ -5281,7 +5284,7 @@
     h += '<div class="battle-hub-cloner-row">' + farmIcon('clone', { lg: true });
     h += '<span class="battle-hub-cloner-timer" id="battle-hub-clone-timer">' + (cloneActive ? fmtCd(cr) : 'READY') + '</span></div></div>';
     h += '</div>';
-    h += '<button type="button" class="battle-hub-upgrade-btn" data-action="open-portal-farm">' + farmIcon('tower') + ' UPGRADE</button>';
+    h += '<button type="button" class="battle-hub-upgrade-btn" data-action="open-portal-farm">' + farmIcon('portal') + ' OPEN PORTAL FARM</button>';
     h += '</section>';
     return h;
   }
@@ -5557,6 +5560,7 @@
     var mega = isBossWave();
     var h = '<div class="screen-section battle-hub' + (mega ? ' battle-hub-mega' : '') + (UI.battleWaveFlash ? ' ' + UI.battleWaveFlash : '') + '">';
     h += battleHubHeroHtml();
+    h += battleHubPortalPanelHtml();
     if (UI.campaignTrailOpen) {
       h += '<div id="home-campaign-trail" class="battle-hub-campaign-wrap">';
       h += renderCampaignTrail();
