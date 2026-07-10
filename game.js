@@ -8581,20 +8581,157 @@
     var timeoutHit = false;
     var hotfixLog = [];
     var streamStats = {};
-    var STREAMS = [
-      { name: "Bot_Aden", partition: "aden", role: "grind" },
-      { name: "Bot_Dad", partition: "dad", role: "trade" },
-      { name: "Bot_Jamie", partition: "jamie", role: "lease" },
-      { name: "Bot_Vex", partition: "aden", role: "chest" },
-      { name: "Bot_Nova", partition: "dad", role: "chest" },
-      { name: "Bot_Rift", partition: "jamie", role: "chest" },
-      { name: "Bot_Pulse", partition: "aden", role: "campaign" },
-      { name: "Bot_Bloom", partition: "dad", role: "campaign" },
-      { name: "Bot_Flux", partition: "jamie", role: "scan" },
-      { name: "Bot_Surge", partition: "aden", role: "shop" },
-      { name: "Bot_Mist", partition: "dad", role: "blitz" },
-      { name: "Bot_Spark", partition: "jamie", role: "grind" },
+    var expansionWave = 0;
+    var continuousMode = false;
+    var idleChecks = 0;
+    var lastProgressSnapshot = null;
+    var expansionLog = [];
+    var expansionTimer = null;
+    var idleCheckEvery = 800;
+
+    function corePid(idx) {
+      var pl = PLAYERS[idx];
+      return pl ? pl.id : ('core_' + idx);
+    }
+
+    function buildCoreStreams() {
+      var labels = ['Aden', 'Dad', 'Jamie'];
+      var roles = ['grind', 'trade', 'lease'];
+      return [0, 1, 2].map(function (i) {
+        var pl = PLAYERS[i];
+        return {
+          name: 'Bot_' + (pl ? pl.label.replace(/\s+/g, '') : labels[i]),
+          partition: corePid(i),
+          role: roles[i],
+        };
+      });
+    }
+
+    var EXPANSION_WAVES = [
+      {
+        label: 'Scout Pack — chests, campaign pushes, sector scans',
+        streams: [
+          { name: 'Bot_Vex', role: 'chest', partitionIdx: 0 },
+          { name: 'Bot_Pulse', role: 'campaign', partitionIdx: 0 },
+          { name: 'Bot_Flux', role: 'scan', partitionIdx: 2 },
+        ],
+      },
+      {
+        label: 'Commerce Pack — shop sweeps, blitz buys, cross-trades',
+        streams: [
+          { name: 'Bot_Nova', role: 'chest', partitionIdx: 1 },
+          { name: 'Bot_Surge', role: 'shop', partitionIdx: 0 },
+          { name: 'Bot_Mist', role: 'blitz', partitionIdx: 1 },
+        ],
+      },
+      {
+        label: 'War Pack — heavy campaign, grind reinforcements',
+        streams: [
+          { name: 'Bot_Rift', role: 'chest', partitionIdx: 2 },
+          { name: 'Bot_Bloom', role: 'campaign', partitionIdx: 1 },
+          { name: 'Bot_Spark', role: 'grind', partitionIdx: 2 },
+        ],
+      },
+      {
+        label: 'Studio Pack — mutation essence, battle pass XP, map unlocks',
+        streams: [
+          { name: 'Bot_Orbit', role: 'scan', partitionIdx: 0 },
+          { name: 'Bot_Nebula', role: 'shop', partitionIdx: 2 },
+          { name: 'Bot_Comet', role: 'campaign', partitionIdx: 0 },
+        ],
+      },
     ];
+
+    var STREAMS = buildCoreStreams();
+
+    function captureProgress() {
+      var strainTotal = PLAYERS.reduce(function (sum, pl) {
+        var s = readPlayerSave(pl.id);
+        return sum + ((s && s.strains) ? s.strains.length : 0);
+      }, 0);
+      return {
+        earned: totalEarnedAll(),
+        trades: tradeLog.length,
+        loops: loopCount,
+        strains: strainTotal,
+        streams: STREAMS.length,
+        wave: expansionWave,
+      };
+    }
+
+    function injectStudioContent(wave) {
+      var packTypes = ['basic', 'rift', 'twin', 'boss'];
+      PLAYERS.forEach(function (pl) {
+        withBot(pl.id, function () {
+          if (!G.pendingRewards) G.pendingRewards = [];
+          G.pendingRewards.push({ kind: 'single', packType: packTypes[wave % packTypes.length] });
+          if (wave % 2 === 0) G.pendingRewards.push({ kind: 'dual', packType: 'rift-twin' });
+          if (G.cash < 150000) G.cash = (G.cash || 0) + 400000 + wave * 50000;
+          G.mutationEssence = (G.mutationEssence || 0) + 20 + wave * 15;
+          G.mutationGuaranteeCharges = (G.mutationGuaranteeCharges || 0) + (wave % 3 === 0 ? 1 : 0);
+          if (!G.mapUnlocked) {
+            if (G.cash < MAP_UNLOCK_COST) G.cash = MAP_UNLOCK_COST + 25000;
+            G.mapUnlocked = true;
+          }
+          if ((G.strains || []).length < 3 + wave) {
+            var s = genPack('basic', Date.now() + wave * 997 + Math.floor(Math.random() * 9999));
+            G.strains = mergeStrains(G.strains, s);
+          }
+          addBattlePassXp(40 + wave * 25, { silent: true });
+          addTrophyPoints(10 + wave * 5);
+          scheduleSave();
+        });
+      });
+    }
+
+    function deployExpansionWave() {
+      expansionWave++;
+      var pack = EXPANSION_WAVES[(expansionWave - 1) % EXPANSION_WAVES.length];
+      pack.streams.forEach(function (s) {
+        if (STREAMS.some(function (x) { return x.name === s.name; })) return;
+        STREAMS.push({
+          name: s.name,
+          partition: corePid(s.partitionIdx % Math.max(1, PLAYERS.length)),
+          role: s.role,
+        });
+      });
+      injectStudioContent(expansionWave);
+      activeGoal = Math.floor(activeGoal * 1.35);
+      log('STUDIO WAVE ' + expansionWave + ': ' + pack.label + ' · ' + STREAMS.length + ' bots · goal ' + fmtCash(activeGoal));
+      expansionLog.push({
+        wave: expansionWave,
+        at: Date.now(),
+        label: pack.label,
+        streams: STREAMS.length,
+        goal: activeGoal,
+      });
+      window.__SWARM_EXPANSION_LOG__ = expansionLog.slice();
+    }
+
+    function checkIdleAndExpand() {
+      if (!continuousMode || !running) return;
+      var snap = captureProgress();
+      if (!lastProgressSnapshot) {
+        lastProgressSnapshot = snap;
+        return;
+      }
+      var earnedDelta = snap.earned - lastProgressSnapshot.earned;
+      var strainDelta = snap.strains - lastProgressSnapshot.strains;
+      var tradeDelta = snap.trades - lastProgressSnapshot.trades;
+      var stagnant = earnedDelta < 75000 && strainDelta < 1 && tradeDelta < 1;
+      if (stagnant) {
+        idleChecks++;
+        if (idleChecks >= 2) {
+          deployExpansionWave();
+          idleChecks = 0;
+          lastProgressSnapshot = captureProgress();
+          return;
+        }
+      } else {
+        idleChecks = 0;
+      }
+      lastProgressSnapshot = snap;
+    }
 
     function log(msg) { console.log('%c[VoidlineSwarm]%c ' + msg, HEAD, MUTED); }
 
@@ -8700,16 +8837,19 @@
           if (!streamStats[stream.name]) streamStats[stream.name] = { partition: stream.partition, steps: 0, cash: 0, earned: 0 };
           var st = streamStats[stream.name];
           st.steps++;
-          if (stream.role === "grind" || stream.name === "Bot_Aden" || stream.name === "Bot_Spark") {
-            if (stream.name === "Bot_Aden") stepAdenCore();
+          if (stream.role === "grind" || stream.partition === corePid(0)) {
+            if (stream.partition === corePid(0) && stream.role === "grind") stepAdenCore();
             else {
               botCampaignPush(6);
               warpTick(6);
             }
-          } else if (stream.role === "trade" || stream.name === "Bot_Dad") {
-            if (loopCount % 40 === 0) stepDadCore();
-          } else if (stream.role === "lease" || stream.name === "Bot_Jamie") {
-            stepJamieCore();
+          } else if (stream.role === "trade" || stream.partition === corePid(1)) {
+            if (stream.partition === corePid(1) && stream.role === "trade") {
+              if (loopCount % 40 === 0) stepDadCore();
+            } else if (loopCount % 40 === 0) stepDadCore();
+          } else if (stream.role === "lease" || stream.partition === corePid(2)) {
+            if (stream.partition === corePid(2) && stream.role === "lease") stepJamieCore();
+            else stepJamieCore();
           } else if (stream.role === "chest") {
             botBuyOpenChests();
           } else if (stream.role === "campaign") {
@@ -8731,8 +8871,9 @@
     }
 
     function botAcceptIncomingLeases() {
+      var jamieId = corePid(2);
       (G.leaseOffers || []).slice().forEach(function (o) {
-        if (o.buyerId === 'jamie') respondLeaseOffer(o.id, true);
+        if (o.buyerId === jamieId) respondLeaseOffer(o.id, true);
       });
     }
 
@@ -8770,7 +8911,8 @@
     }
 
     function initFamilyRoom() {
-      var room = { id: 'room_' + Date.now(), host: 'aden', members: ['aden', 'dad', 'jamie'], createdAt: Date.now() };
+      var members = PLAYERS.slice(0, 3).map(function (p) { return p.id; });
+      var room = { id: 'room_' + Date.now(), host: members[0] || corePid(0), members: members, createdAt: Date.now() };
       try { sessionStorage.setItem(ROOM_KEY, JSON.stringify(room)); } catch (e) { }
       log('Family room spun up · ' + room.id);
       return room;
@@ -8798,8 +8940,8 @@
           warpTick(20);
         });
       });
-      withBot('dad', function () { sessionStorage.setItem(ROOM_KEY, JSON.stringify(room)); });
-      withBot('jamie', function () { joinFamilyRoom(); });
+      withBot(corePid(1), function () { sessionStorage.setItem(ROOM_KEY, JSON.stringify(room)); });
+      withBot(corePid(2), function () { joinFamilyRoom(); });
       return room;
     }
 
@@ -8811,7 +8953,7 @@
     }
 
     function stepAdenCore() {
-      withBot('aden', function () {
+      withBot(corePid(0), function () {
         botAcceptIncomingLeases();
         equipBestBattle();
         for (var w = 0; w < 12; w++) {
@@ -8845,7 +8987,7 @@
 
     function stepDadCore() {
       if (loopCount % 150 !== 0) return;
-      withBot('dad', function () {
+      withBot(corePid(1), function () {
         ensureStorefrontSlots();
         (G.strains || []).forEach(function (s, idx) {
           if ((s.quantity || 1) < 3) return;
@@ -8854,7 +8996,7 @@
           listStorefrontSlot(slot, s.id, 1, price);
         });
         PLAYERS.forEach(function (pl) {
-          if (pl.id === 'dad') return;
+          if (pl.id === corePid(1)) return;
           var save = readPlayerSave(pl.id);
           if (!save || !save.storefrontSlots) return;
           save.storefrontSlots.forEach(function (slot, si) {
@@ -8867,11 +9009,11 @@
     }
 
     function stepJamieCore() {
-      withBot('jamie', function () {
+      withBot(corePid(2), function () {
         botInstantScan();
         warpTick(12);
         PLAYERS.forEach(function (pl) {
-          if (pl.id === 'jamie') return;
+          if (pl.id === corePid(2)) return;
           var save = readPlayerSave(pl.id);
           if (!save || !save.ownedPlanets || !save.ownedPlanets.length) return;
           save.ownedPlanets.forEach(function (op) {
@@ -8952,12 +9094,21 @@
       SwarmBugCrusher.patrol();
       STREAMS.forEach(function (s) { runStreamStep(s); });
       checkMilestones();
+      if (loopCount % idleCheckEvery === 0) checkIdleAndExpand();
       if (loopCount % 120 === 0) renderHUD();
       if (loopCount % 5000 === 0) {
-        log("Progress earned " + fmtCash(totalEarnedAll()) + " / " + fmtCash(activeGoal) + " @ step " + loopCount);
+        log("Progress earned " + fmtCash(totalEarnedAll()) + " / " + fmtCash(activeGoal) + " @ step " + loopCount + " · bots " + STREAMS.length + " · wave " + expansionWave);
       }
-      if (swarmGoalMet()) { finish(); return; }
-      if (loopCount >= maxSteps) { finish(); return; }
+      if (swarmGoalMet()) {
+        if (continuousMode) {
+          log('Goal crushed — studio raises the bar');
+          deployExpansionWave();
+          return;
+        }
+        finish();
+        return;
+      }
+      if (!continuousMode && loopCount >= maxSteps) { finish(); return; }
     }
 
     function finish() {    }
@@ -9037,8 +9188,16 @@
       startedAt = Date.now();
       loopCount = 0;
       leaseLedger = 0;
-      milestoneFlags = { aden: false, dad: false, jamie: false };
+      milestoneFlags = {};
+      PLAYERS.forEach(function (pl) { milestoneFlags[pl.id] = false; });
       tradeLog = [];
+      STREAMS = buildCoreStreams();
+      expansionWave = 0;
+      idleChecks = 0;
+      lastProgressSnapshot = null;
+      expansionLog = [];
+      if (opts.continuous) continuousMode = true;
+      else continuousMode = false;
       setupPhase();
       running = true;
     }
@@ -9072,21 +9231,68 @@
 
     function stop() {
       running = false;
+      continuousMode = false;
       if (timer) { clearInterval(timer); timer = null; }
+      if (expansionTimer) { clearInterval(expansionTimer); expansionTimer = null; }
       if (snapshot) VoidlineEngineQA.restoreAllSaves(snapshot);
       log('Swarm halted — saves restored');
+    }
+
+    function getStatus() {
+      var snap = captureProgress();
+      return {
+        running: running,
+        continuous: continuousMode,
+        loopCount: loopCount,
+        expansionWave: expansionWave,
+        idleChecks: idleChecks,
+        activeGoal: activeGoal,
+        totalEarned: snap.earned,
+        strains: snap.strains,
+        trades: snap.trades,
+        streamCount: STREAMS.length,
+        streams: STREAMS.map(function (s) { return s.name; }),
+        players: (PLAYERS.length ? PLAYERS : STREAMS.map(function (s) { return { id: s.partition, label: s.name }; }))
+          .slice(0, 3)
+          .map(function (pl) {
+            return { id: pl.id, label: pl.label || pl.id, cash: botCash(pl.id), earned: botEarned(pl.id) };
+          }),
+        expansionLog: expansionLog.slice(-5),
+        elapsedSec: startedAt ? (Date.now() - startedAt) / 1000 : 0,
+      };
+    }
+
+    function runContinuous(opts) {
+      opts = opts || {};
+      if (running) return { ok: false, reason: 'already running' };
+      prepareSwarm(Object.assign({
+        sandbox: opts.sandbox !== false,
+        cashMult: opts.cashMult || 250,
+        goal: opts.goal || 25000000,
+        maxSteps: 999999999,
+        continuous: true,
+      }, opts));
+      window.__SWARM_SKIP_RENDER__ = true;
+      log('Continuous sim — 3 core bots, studio waves on idle · goal ' + fmtCash(activeGoal));
+      timer = setInterval(swarmLoop, opts.tickMs != null ? opts.tickMs : LOOP_MS);
+      expansionTimer = setInterval(checkIdleAndExpand, opts.idleWallMs || 25000);
+      window.__SWARM_CONTINUOUS__ = true;
+      return { ok: true, mode: 'continuous', coreBots: 3, streams: STREAMS.length };
     }
 
     return {
       GOAL: GOAL,
       start: start,
       runSync: runSync,
+      runContinuous: runContinuous,
       stop: stop,
+      getStatus: getStatus,
+      deployExpansionWave: deployExpansionWave,
       isRunning: function () { return running; },
       getBotCash: botCash,
-      Bot_Aden: { id: 'aden', step: stepAden },
-      Bot_Dad: { id: 'dad', step: stepDad },
-      Bot_Jamie: { id: 'jamie', step: stepJamie },
+      Bot_Aden: { id: corePid(0), step: stepAden },
+      Bot_Dad: { id: corePid(1), step: stepDad },
+      Bot_Jamie: { id: corePid(2), step: stepJamie },
       STREAMS: STREAMS,
       printStudioFinalLedger: printStudioFinalLedger,
       totalEarnedAll: totalEarnedAll,

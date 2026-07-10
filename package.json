@@ -9,6 +9,7 @@
     "build": "node scripts/copy-static.mjs",
     "audit": "node scripts/audit-actions.mjs",
     "swarm": "node scripts/swarm-simulator.mjs",
+    "sim:continuous": "node scripts/continuous-bot-sim.mjs",
     "preview": "npx serve dist"
   },
   "dependencies": {
