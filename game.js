@@ -563,6 +563,68 @@
 
   function planetById(id) { return (G.ownedPlanets || []).find(function (p) { return p.id === id; }); }
 
+  function resolvePlanetRef(ref) {
+    if (!ref) return null;
+    var p = planetById(ref);
+    if (p) return { planet: p, planetId: ref, ownerId: p.ownerId || activePlayerId };
+    var parts = String(ref).split(':');
+    if (parts.length === 2) {
+      var qx = parseInt(parts[0], 10);
+      var qy = parseInt(parts[1], 10);
+      if (!isNaN(qx) && !isNaN(qy)) {
+        var key = galaxyCellKey(qx, qy);
+        var claim = (G.galaxyClaims || {})[key];
+        if (claim) {
+          return {
+            planet: claim,
+            planetId: 'galaxy_' + key,
+            ownerId: claim.ownerId || activePlayerId,
+            galaxyKey: key,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function listPlanetLease(planetRef, percent, price) {
+    var ref = resolvePlanetRef(planetRef);
+    if (!ref || ref.ownerId !== activePlayerId) {
+      showBattleToast('You can only list planets you own', false);
+      return false;
+    }
+    percent = Math.min(LEASE_MAX_PERCENT, Math.max(1, Math.floor(percent)));
+    if (price <= 0) {
+      showBattleToast('Set a cash price per 5 min interval', false);
+      return false;
+    }
+    if (!G.planetLeases) G.planetLeases = { active: [], archive: [], pending: [] };
+    G.planetLeases.pending = (G.planetLeases.pending || []).concat([{
+      id: 'lpl_' + Date.now(),
+      planetId: ref.planetId,
+      planetName: ref.planet.name || planetDisplayName(ref.planet),
+      ownerId: activePlayerId,
+      percent: percent,
+      pricePerInterval: price,
+      intervalMs: LEASE_INTERVAL_MS,
+      status: 'listed',
+      createdAt: Date.now(),
+    }]);
+    showBattleToast('Lease listing posted · ' + percent + '% @ ' + fmtCash(price) + '/5m', true);
+    scheduleSave();
+    return true;
+  }
+
+  function listedStrainQty(strainId, excludeSlot) {
+    ensureStorefrontSlots();
+    var total = 0;
+    G.storefrontSlots.forEach(function (slot, i) {
+      if (i === excludeSlot || !slot || slot.strainId !== strainId) return;
+      total += slot.quantity || 1;
+    });
+    return total;
+  }
+
   function startMapScan() {
     if (UI.scanAnimating) return;
     if (G.scanPending) {
@@ -2009,6 +2071,11 @@
     var s = strainById(strainId);
     if (!s || qty < 1 || price <= 0) return false;
     if ((s.quantity || 1) < qty) return false;
+    var alreadyListed = listedStrainQty(strainId, slotIdx);
+    if (alreadyListed + qty > (s.quantity || 1)) {
+      showBattleToast('Not enough unlisted quantity for this strain', false);
+      return false;
+    }
     G.storefrontSlots = G.storefrontSlots.slice();
     G.storefrontSlots[slotIdx] = { strainId: strainId, price: price, quantity: qty };
     scheduleSave();
@@ -2070,8 +2137,9 @@
   }
 
   function submitLeaseOffer(planetId, percent, price) {
-    var planet = planetById(planetId);
-    var ownerId = planet ? (getPlanetOwner(planet) || planet.ownerId) : null;
+    var ref = resolvePlanetRef(planetId);
+    var planet = ref ? ref.planet : planetById(planetId);
+    var ownerId = ref ? ref.ownerId : (planet ? (getPlanetOwner(planet) || planet.ownerId) : null);
     if (!planet) {
       for (var pi = 0; pi < PLAYERS.length; pi++) {
         var pl = PLAYERS[pi];
@@ -2087,9 +2155,10 @@
     if (!ownerId || ownerId === activePlayerId) return false;
     percent = Math.min(LEASE_MAX_PERCENT, Math.max(1, Math.floor(percent)));
     if (price <= 0) return false;
+    var resolvedId = ref ? ref.planetId : planetId;
     var offer = {
       id: 'lo_' + Date.now(),
-      planetId: planetId,
+      planetId: resolvedId,
       planetName: planetDisplayName(planet),
       ownerId: ownerId,
       buyerId: activePlayerId,
@@ -3630,7 +3699,10 @@
     if (!parsed) return false;
     var offers = getSharedOffers(), o = offers.find(function (x) { return x.id === oid; });
     if (!o || G.cash < o.offerPrice) return false;
-    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx)) return false;
+    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx)) {
+      showBattleToast('Purchase failed — listing may be gone', false);
+      return false;
+    }
     addXp(15);
     plantSay('pack');
     scheduleSave();
@@ -3641,7 +3713,10 @@
     if (!parsed) return false;
     var offers = getSharedOffers(), o = offers.find(function (x) { return x.id === oid; }), c = G.counterPrices[oid];
     if (!o || !c || c <= 0 || G.cash < c || c < o.offerPrice * 0.85) return false;
-    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx, c)) return false;
+    if (!buyFromPlayerShop(parsed.sellerId, parsed.slotIdx, c)) {
+      showBattleToast('Counter offer failed — listing may be gone', false);
+      return false;
+    }
     addXp(10);
     plantSay('pack');
     scheduleSave();
@@ -5101,13 +5176,16 @@
     var host = playerDef(activePlayerId);
     var guest = opponentId ? playerDef(opponentId) : PLAYERS.find(function (p) { return p.id !== activePlayerId; });
     if (!guest) guest = PLAYERS[0];
+    var guestSave = readPlayerSaveForCoop(guest.id);
+    var guestEquipIds = (guestSave && guestSave.equippedBattleIds) ? guestSave.equippedBattleIds.slice(0, 4) : [];
     var enemyHp = 1200 + currentCampaignNode() * 180;
     UI.coopBattle = {
       mode: mode || 'dungeon',
       hostId: activePlayerId,
       guestId: guest.id,
       hostName: G.name || host.label,
-      guestName: guest.label,
+      guestName: (guestSave && guestSave.name) || guest.label,
+      guestEquipIds: guestEquipIds,
       enemyStrains: [
         { id: 'e1', name: 'Void Mite', hp: enemyHp, maxHp: enemyHp, rarity: 'dust' },
         { id: 'e2', name: 'Nebula Leech', hp: enemyHp * 0.85, maxHp: enemyHp * 0.85, rarity: 'haze' },
@@ -5119,6 +5197,7 @@
       guestHp: {},
     };
     (G.equippedBattleIds || []).forEach(function (sid) { UI.coopBattle.hostHp[sid] = 100; });
+    guestEquipIds.forEach(function (sid) { UI.coopBattle.guestHp[sid] = 100; });
     UI.partyOpen = false;
     render();
   }
@@ -5150,9 +5229,21 @@
     });
     h += '</div></div>';
     h += '<div class="coop-team coop-team-blue ' + SKIN_PANEL + ' p-2"><div class="coop-team-label team-blue">BLUE · ' + esc(cb.guestName) + '</div><div class="coop-team-strains coop-team-guest">';
-    h += '<div class="coop-invite-chip team-blue">GUEST</div>';
-    PLAYERS.filter(function (p) { return p.id === cb.guestId; }).forEach(function () {
-      for (var gi = 0; gi < 3; gi++) h += '<div class="coop-strain-slot coop-strain-placeholder">' + farmIcon('empty') + '</div>';
+    var guestSave = readPlayerSaveForCoop(cb.guestId);
+    var guestStrains = guestSave ? guestSave.strains || [] : [];
+    var guestIds = cb.guestEquipIds || [];
+    if (!guestIds.length) {
+      h += '<div class="coop-invite-chip team-blue">NO SQUAD</div>';
+    }
+    guestIds.forEach(function (sid) {
+      var s = guestStrains.find(function (x) { return x.id === sid; });
+      var hp = cb.guestHp[sid] != null ? cb.guestHp[sid] : 100;
+      var burnt = hp <= 0 || cb.burntIds.indexOf('g:' + sid) >= 0;
+      if (s) {
+        h += '<div class="coop-strain-slot' + (burnt ? ' burnt-strain' : '') + '" title="' + esc(s.name) + '">' + budImg(s, '2rem') + '</div>';
+      } else {
+        h += '<div class="coop-strain-slot coop-strain-placeholder">' + farmIcon('empty') + '</div>';
+      }
     });
     h += '</div></div></div>';
     h += '<div class="coop-battle-actions flex-row gap-2 mt-2">';
@@ -5496,7 +5587,7 @@
       });
     } else if (G.farmSubTab === 'control') {
       var offers = getSharedOffers();
-      h += '<div class="section-label mb-2">PLANET SHARE BOARD</div><p class="text-muted text-xs text-center mb-3">Real listings from Aden, Dad, or Jamie — set slots in Profile.</p>';
+      h += '<div class="section-label mb-2">PLANET SHARE BOARD</div><p class="text-muted text-xs text-center mb-3">Real listings from family pilots — list strains in Group → My Roadside Shop.</p>';
       if (!offers.length) h += '<div class="' + panel + ' text-center text-muted text-sm">No listings yet.</div>';
       offers.forEach(function (o) {
         h += '<div class="' + panel + '"><div class="font-mono text-muted" style="font-size:0.55rem">' + esc(o.sellerName) + '</div><div style="font-weight:600;font-size:0.875rem">' + esc(o.strainName) + '</div><div class="text-green" style="font-size:0.55rem">THC ' + o.thcPercent + '% · Yield ' + o.yield + '</div><div class="font-mono text-cyan mb-3" style="font-weight:700;font-size:0.875rem">Ask: ' + fmtCash(o.offerPrice) + '</div><input type="number" class="input-field mb-2" placeholder="Counter price" data-action="counter-input" data-id="' + o.id + '" value="' + (G.counterPrices[o.id] || '') + '"><div class="flex-row gap-2"><button type="button" class="game-btn game-btn-green game-btn-sm" style="flex:1" data-action="accept-offer" data-id="' + o.id + '"' + (G.cash < o.offerPrice ? ' disabled' : '') + '>ACCEPT</button><button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="counter-offer" data-id="' + o.id + '"' + (function () { var c = G.counterPrices[o.id]; return (!c || c <= 0 || c < o.offerPrice * 0.85 || G.cash < c) ? ' disabled' : ''; })() + '>COUNTER</button></div></div>';
@@ -5725,6 +5816,30 @@
           h += '</div>';
         }
       }
+      if ((G.mutationItems || []).length) {
+        h += '<div class="section-label mb-2 mt-2">MUTATION SHARDS</div><p class="text-muted text-xs mb-2">Equip shards on strains for bonus mutation power.</p>';
+        h += '<div class="mutation-shard-grid mb-2">';
+        (G.mutationItems || []).slice().reverse().forEach(function (m) {
+          var equippedOn = null;
+          Object.keys(G.strainMutationMap || {}).forEach(function (sid) {
+            if (G.strainMutationMap[sid] === m.id) equippedOn = sid;
+          });
+          h += '<div class="mutation-shard-card ' + SKIN_PANEL + ' p-2 mb-2">';
+          h += '<div class="flex-between mb-1"><div class="font-mono text-xs" style="color:' + rarityColor(m.tier) + '">' + esc(m.name) + '</div><div class="text-green text-xs">+' + m.power + ' PWR</div></div>';
+          if (equippedOn) {
+            var es = strainById(equippedOn);
+            h += '<div class="text-muted text-xs mb-2">On ' + esc(es ? es.name : equippedOn) + '</div>';
+          } else {
+            h += '<div class="text-muted text-xs mb-2">Tap a strain to equip:</div><div class="binder-grid mutation-pick-grid" style="max-height:18vh;overflow-y:auto">';
+            G.strains.forEach(function (s) {
+              h += '<button type="button" class="merge-pick-card" data-action="equip-mutation" data-id="' + esc(m.id) + ':' + esc(s.id) + '">' + crCardHtml(s, { noFocus: true }) + '</button>';
+            });
+            h += '</div>';
+          }
+          h += '</div>';
+        });
+        h += '</div>';
+      }
     } else {
       var err = mergeLabError();
       var preview = fusePreviewChild();
@@ -5844,9 +5959,11 @@
     h += '<div class="galaxy-hud flex-between mb-2"><div class="galaxy-hud-stat"><span class="mining-hud-label">JUNK</span><span class="mining-hud-val text-cyan">' + (G.junk || 0) + '</span></div>';
     h += '<div class="galaxy-hud-stat"><span class="mining-hud-label">RANGE</span><span class="mining-hud-val">' + (G.shipRange || 3) + '</span></div>';
     h += '<div class="galaxy-hud-stat"><span class="mining-hud-label">SHIELD</span><span class="mining-hud-val">Lv.' + (G.shipShield || 1) + '</span></div></div>';
+    var rangeCost = 120 * Math.pow(2, (G.shipRange || 3) - 3);
+    var shieldCost = 80 * Math.pow(2, (G.shipShield || 1) - 1);
     h += '<div class="galaxy-ship-upgrades flex-row gap-2 mb-2">';
-    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-range">RANGE UP</button>';
-    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-shield">SHIELD UP</button></div>';
+    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-range"' + ((G.junk || 0) < rangeCost ? ' disabled' : '') + '>RANGE · ' + rangeCost + ' J</button>';
+    h += '<button type="button" class="game-btn game-btn-sm" style="flex:1" data-action="upgrade-ship-shield"' + ((G.junk || 0) < shieldCost ? ' disabled' : '') + '>SHIELD · ' + shieldCost + ' J</button></div>';
     h += '<div class="galaxy-grid-viewport" data-galaxy-viewport><div class="galaxy-grid-world" data-galaxy-world>';
     for (var dy = -viewR; dy <= viewR; dy++) {
       for (var dx = -viewR; dx <= viewR; dx++) {
@@ -5926,6 +6043,8 @@
     var owned = filteredFleetPlanets();
     var h = '<div class="map-planet-index">';
     h += '<div class="section-label mb-2">PLANET INDEX</div>';
+    h += '<input type="search" class="input-field mb-2" placeholder="Search fleet…" data-action="fleet-search" value="' + esc(G.fleetSearch || '') + '">';
+    h += sortChipsHtml('fleet-sort', G.fleetSort || 'rarity', PLANET_SORT_CHIPS);
     if (!owned.length) h += '<div class="text-muted text-xs text-center mb-3">No claimed planets yet. Scan the galaxy or prospect sectors.</div>';
     h += '<div class="map-index-book">';
     owned.forEach(function (pl) {
@@ -7411,6 +7530,13 @@
       var tgt = cb.enemyStrains.find(function (e) { return e.id === cb.selectedTarget; });
       if (!tgt || tgt.hp <= 0) return;
       var dmg = totalBattleDps() * (0.8 + Math.random() * 0.4);
+      var guestSaveAtk = readPlayerSaveForCoop(cb.guestId);
+      var guestStrainsAtk = guestSaveAtk ? guestSaveAtk.strains || [] : [];
+      (cb.guestEquipIds || []).forEach(function (sid) {
+        if ((cb.guestHp[sid] != null ? cb.guestHp[sid] : 100) <= 0) return;
+        var gs = guestStrainsAtk.find(function (x) { return x.id === sid; });
+        if (gs) dmg += strainBattleDpsBase(gs) * 0.35;
+      });
       tgt.hp = Math.max(0, tgt.hp - dmg);
       if (tgt.hp <= 0) showBattleToast(tgt.name + ' burnt!', true);
       var retaliate = cb.enemyStrains.find(function (e) { return e.hp > 0; });
@@ -7544,7 +7670,7 @@
     }
     else if (act==='link-remove') { if (PC) PC.removeLink(val); markTabDirty(); render(); return; }
     else if (act==='lease-draft') {
-      UI.leaseDraft = { planetId: val, ownerId: activePlayerId };
+      UI.leaseDraft = { planetId: val, ownerId: activePlayerId, mode: 'list' };
       render();
       return;
     }
@@ -7579,7 +7705,7 @@
     else if (act==='index-search') G.indexSearch = val;
     else if (act==='index-sort') G.indexSort = val;
     else if (act==='fleet-search') G.fleetSearch = val;
-    else if (act==='fleet-sort') G.fleetSort = val;
+    else if (act==='fleet-sort') { G.fleetSort = val; render(); return; }
     else if (act==='map-scan') { startMapScan(); scheduleSave(); render(); return; }
     else if (act==='planet-keep') { syncPendingPlanetRename(); keepScannedPlanet(); dismissCardHero(); }
     else if (act==='planet-discard') { discardScannedPlanet(); dismissCardHero(); }
@@ -7620,8 +7746,16 @@
       var strainEl = document.getElementById('sf-pick-strain');
       var qtyEl = document.getElementById('sf-pick-qty');
       var priceEl = document.getElementById('sf-pick-price');
-      if (strainEl && qtyEl && priceEl) listStorefrontSlot(parseInt(val, 10), strainEl.value, parseInt(qtyEl.value, 10) || 1, parseFloat(priceEl.value) || 0);
+      if (strainEl && qtyEl && priceEl) {
+        if (!listStorefrontSlot(parseInt(val, 10), strainEl.value, parseInt(qtyEl.value, 10) || 1, parseFloat(priceEl.value) || 0)) {
+          showBattleToast('Could not list — check strain, qty, and price', false);
+        } else {
+          showBattleToast('Listed on slot ' + (parseInt(val, 10) + 1), true);
+        }
+      }
       UI.storefrontPickSlot = null;
+      render();
+      return;
     }
     else if (act==='sf-remove-ask') {
       UI.confirmDialog = { message: 'Remove listing and return strain to inventory?', yes: 'sf-remove:' + val };
@@ -7661,8 +7795,18 @@
       var ls = val.split(':');
       var pctEl = document.getElementById('lease-percent');
       var prEl = document.getElementById('lease-price');
-      if (pctEl && prEl) submitLeaseOffer(ls[0], parseInt(pctEl.value, 10), parseFloat(prEl.value) || 0);
+      var pct = pctEl ? parseInt(pctEl.value, 10) : 0;
+      var price = prEl ? parseFloat(prEl.value) || 0 : 0;
+      var ok = false;
+      if (UI.leaseDraft && UI.leaseDraft.mode === 'list') {
+        ok = listPlanetLease(ls[0], pct, price);
+      } else {
+        ok = submitLeaseOffer(ls[0], pct, price);
+        if (!ok) showBattleToast('Could not submit lease offer', false);
+      }
       UI.leaseDraft = null;
+      render();
+      return;
     }
     else if (act==='lease-accept') respondLeaseOffer(val, true);
     else if (act==='lease-decline') respondLeaseOffer(val, false);
@@ -7705,7 +7849,7 @@
     else if (act==='mutation-buy-guarantee') { if (spendMutationGuaranteeCharge()) { render(); return; } }
     else if (act==='toggle-fuse-guarantee') { UI.fuseGuarantee = !UI.fuseGuarantee; render(); return; }
     else if (act==='equip-mutation-pick') UI.mutationEquipPick = val;
-    else if (act==='equip-mutation') { var em = val.split(':'); equipMutationItem(em[0], em[1]); UI.mutationEquipPick = null; }
+    else if (act==='equip-mutation') { var em = val.split(':'); if (equipMutationItem(em[0], em[1])) render(); return; }
     else if (act==='equip-raid') { equipRaid(val); UI.liftedCardId = null; dismissCardHero(); }
     else if (act==='equip-best-raid') equipBestRaid();
     else if (act==='raid-equip-search') UI.raidEquipSearch = val;
@@ -7728,7 +7872,12 @@
       render();
       return;
     }
-    else if (act==='destroy-strain') destroyStrain(val);
+    else if (act==='destroy-strain') {
+      UI.confirmDialog = { message: 'Burn this strain? Traits go to your mutation pool.', yes: 'destroy-strain-confirm:' + val };
+      render();
+      return;
+    }
+    else if (act==='destroy-strain-confirm') { destroyStrain(val); render(); return; }
     else if (act==='buy-showcase') buyDailyShowcase(parseInt(val, 10));
     else if (act==='open-daily-login') { UI.dailyLoginOpen = true; render(); return; }
     else if (act==='close-daily-login') { UI.dailyLoginOpen = false; render(); return; }
@@ -7892,6 +8041,10 @@
     if (e.target.dataset.action === 'counter-input') { G.counterPrices = Object.assign({}, G.counterPrices, { [e.target.dataset.id]: Number(e.target.value) }); render(); }
     if (e.target.dataset.action === 'index-search') { G.indexSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'fleet-search') { G.fleetSearch = e.target.value; render(); }
+    if (e.target.id === 'lease-percent') {
+      var lbl = document.getElementById('lease-pct-label');
+      if (lbl) lbl.textContent = e.target.value;
+    }
     if (e.target.dataset.action === 'battle-equip-search') { UI.battleEquipSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'raid-equip-search') { UI.raidEquipSearch = e.target.value; render(); }
     if (e.target.dataset.action === 'strain-picker-search') { UI.strainPickerSearch = e.target.value; renderStrainPicker(); }
