@@ -3157,6 +3157,7 @@
     .home-bubble-quest { top: 0.65rem; left: 0.65rem; }
     .home-bubble-trophy { bottom: 0.65rem; left: 0.65rem; }
     .home-bubble-achieve { top: 3.5rem; left: 0.65rem; }
+    .home-bubble-daily { top: 3.5rem; right: 0.65rem; }
     .home-bubble.has-badge { animation: battle-hub-orb-pulse 1.8s ease-in-out infinite; }
     .home-bubble-badge {
       position: absolute; top: -0.2rem; right: -0.2rem; min-width: 1rem; height: 1rem;

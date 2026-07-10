@@ -5016,6 +5016,10 @@
     h += '<span class="home-bubble-icon">' + farmIcon('mega') + '</span></button>';
     h += '<button type="button" class="home-bubble home-bubble-achieve" data-action="open-achievements" title="Achievements">';
     h += '<span class="home-bubble-icon">' + farmIcon('check') + '</span></button>';
+    if (canClaimDailyLogin()) {
+      h += '<button type="button" class="home-bubble home-bubble-daily has-badge" data-action="open-daily-login" title="Daily Login Reward">';
+      h += '<span class="home-bubble-icon">' + farmIcon('gift') + '</span><span class="home-bubble-badge">!</span></button>';
+    }
     h += '<button type="button" class="home-bubble home-bubble-money' + (UI.idleOpen ? ' active' : '') + '" data-action="toggle-idle-capitalist" title="Idle Empire">';
     h += '<span class="home-bubble-icon">' + farmIcon('bill') + '</span></button>';
     h += '<button type="button" class="home-bubble home-bubble-rocket" data-action="open-rocket-lift" title="Planet Mines">';
