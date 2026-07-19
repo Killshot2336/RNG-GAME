@@ -39,9 +39,15 @@ try {
   await page.locator('.seat').first().click();
   await page.waitForTimeout(400);
 
+  const storyBtn = page.locator('[data-action="dismiss-story"]').first();
+  if (await storyBtn.count()) {
+    await storyBtn.click();
+    await page.waitForTimeout(200);
+  }
+
   if (!(await page.locator('.hub-stage').count())) failures.push('hub did not open after seat pick');
 
-  for (const mode of ['tree', 'forge', 'tower', 'gate', 'era']) {
+  for (const mode of ['tree', 'forge', 'tower', 'gate', 'era', 'life', 'story']) {
     const hs = page.locator('[data-action="mode"][data-id="' + mode + '"]').first();
     if (!(await hs.count())) {
       failures.push('missing hotspot ' + mode);
@@ -49,6 +55,8 @@ try {
     }
     await hs.click();
     await page.waitForTimeout(300);
+    const dismiss = page.locator('[data-action="dismiss-story"]').first();
+    if (await dismiss.count()) await dismiss.click();
     const hubBtn = page.locator('[data-action="mode"][data-id="hub"]').first();
     if (await hubBtn.count()) await hubBtn.click();
     else {
@@ -58,11 +66,18 @@ try {
     await page.waitForTimeout(200);
   }
 
+  // dismiss intro story if present
+  const intro = page.locator('[data-action="dismiss-story"]').first();
+  if (await intro.count()) await intro.click();
+
   await page.locator('[data-action="mode"][data-id="tower"]').click();
   await page.waitForTimeout(200);
   await page.locator('[data-action="start-tower"]').click();
   await page.waitForTimeout(900);
   if (!(await page.locator('.tower-arena').count())) failures.push('tower did not start');
+
+  const nodes = await page.evaluate(() => (window.ChronosData && window.ChronosData.TREE) ? window.ChronosData.TREE.length : 0);
+  if (nodes < 20) failures.push('skill tree too small: ' + nodes);
 
   if (failures.length) {
     console.error('FAILURES:\n' + failures.map((f) => ' - ' + f).join('\n'));

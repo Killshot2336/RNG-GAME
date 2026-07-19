@@ -1,99 +1,45 @@
-/* VOIDLINE: CHRONOS — private 3-seat co-op warband */
+/* VOIDLINE: CHRONOS — full warband build */
 (function () {
   'use strict';
 
-  var SAVE_PREFIX = 'voidline_chronos_v1_';
-  var WORLD_KEY = 'voidline_chronos_world_v1';
-  var SAVE_VERSION = 1;
+  var D = window.ChronosData;
+  var SAVE_PREFIX = 'voidline_chronos_v2_';
+  var WORLD_KEY = 'voidline_chronos_world_v2';
+  var ROOM = (D && D.ROOM_ID) || 'voidline-chronos';
+  var SAVE_VERSION = 2;
 
-  var WARBAND = [
-    { id: 'aden', name: 'Aden', accent: '#3de0c5', portrait: '/public/art/portraits/aden.svg', blurb: 'Rift lead' },
-    { id: 'jamie', name: 'Jamie', accent: '#ff3d5a', portrait: '/public/art/portraits/jamie.svg', blurb: 'Bulwark steel' },
-    { id: 'edward', name: 'Edward', accent: '#e8c56a', portrait: '/public/art/portraits/edward.svg', blurb: 'Warden craft' }
-  ];
-
-  var ERAS = [
-    { id: 'stone', name: 'STONE AGE', blurb: 'Bone spears. Fire rings. Survive the first night.', accent: '#c4a574', need: 0 },
-    { id: 'bronze', name: 'BRONZE AGE', blurb: 'Cast shields. Rally tribes against the swarm.', accent: '#cd7f32', need: 1 },
-    { id: 'iron', name: 'IRON AGE', blurb: 'Forged walls. Discipline under blood moons.', accent: '#9aa0a6', need: 2 },
-    { id: 'powder', name: 'GUNPOWDER', blurb: 'Thunder sticks. Smoke and siege.', accent: '#ff6a3d', need: 3 },
-    { id: 'neon', name: 'NEON AGE', blurb: 'Circuits wake. Chronolith sings.', accent: '#7cf0ff', need: 4 },
-    { id: 'void', name: 'VOID ERA', blurb: 'Time bends. The Anchor cracks open.', accent: '#e8c56a', need: 5 }
-  ];
-
-  var PLANETS = [
-    { id: 'cinder', name: 'CINDER REACH', exotic: 'ember_root', exoticName: 'Ember Root', blurb: 'Volcanic veins. Burn fuel for the forge.', accent: '#ff6a3d', eraNeed: 1 },
-    { id: 'glacier', name: 'GLACIER NYX', exotic: 'frost_bloom', exoticName: 'Frost Bloom', blurb: 'Still air. Freeze the timeline.', accent: '#7cf0ff', eraNeed: 2 },
-    { id: 'verdant', name: 'VERDANT HUSK', exotic: 'life_spine', exoticName: 'Life Spine', blurb: 'Living metal. Mend what breaks.', accent: '#9dffb0', eraNeed: 3 },
-    { id: 'oblivion', name: 'OBLIVION KEY', exotic: 'void_shard', exoticName: 'Void Shard', blurb: 'No sky. Only hunger.', accent: '#c084fc', eraNeed: 5 }
-  ];
-
-  var SHARD_DEFS = [
-    { id: 'bone', name: 'Bone', icon: '◆', rarity: 'common' },
-    { id: 'ore', name: 'Ore', icon: '◇', rarity: 'common' },
-    { id: 'spark', name: 'Spark', icon: '✦', rarity: 'rare' },
-    { id: 'ash', name: 'Ash', icon: '✧', rarity: 'rare' },
-    { id: 'core', name: 'Core', icon: '◎', rarity: 'epic' },
-    { id: 'echo', name: 'Echo', icon: '◈', rarity: 'myth' }
-  ];
-
-  var MERGE_RECIPES = [
-    { a: 'bone', b: 'ore', out: 'spark', name: 'Spark Fuse' },
-    { a: 'spark', b: 'ash', out: 'core', name: 'Core Bind' },
-    { a: 'core', b: 'echo', out: 'relic_rift', name: 'Rift Relic', relic: true },
-    { a: 'ember_root', b: 'core', out: 'relic_ember', name: 'Ember Plate', relic: true },
-    { a: 'frost_bloom', b: 'spark', out: 'relic_frost', name: 'Frost Lens', relic: true },
-    { a: 'life_spine', b: 'ash', out: 'relic_life', name: 'Life Loom', relic: true },
-    { a: 'void_shard', b: 'echo', out: 'relic_void', name: 'Void Crown', relic: true }
-  ];
-
-  var RELIC_BONUS = {
-    relic_rift: { dmg: 0.25, label: '+25% Rift damage' },
-    relic_ember: { burn: 0.15, label: 'Burn aura +15%' },
-    relic_frost: { slow: 0.2, label: 'Slow field +20%' },
-    relic_life: { heal: 0.12, label: 'Core mend +12%' },
-    relic_void: { dmg: 0.4, label: '+40% void damage' }
-  };
-
-  /* Constellation — Bulwark / Rift / Warden + keystones */
-  var TREE = [
-    { id: 'root', name: 'ANCHOR', desc: 'Awaken in deep time.', x: 180, y: 40, cost: 0, req: [], role: 'any', stats: {} },
-    { id: 'b1', name: 'IRON SKIN', desc: 'Core takes 12% less hit.', x: 70, y: 120, cost: 1, req: ['root'], role: 'bulwark', stats: { armor: 0.12 } },
-    { id: 'b2', name: 'TAUNT PULSE', desc: 'Pull swarm for 2s.', x: 40, y: 210, cost: 1, req: ['b1'], role: 'bulwark', stats: { taunt: 1 } },
-    { id: 'b3', name: 'BASTION', desc: 'Shield wall — absorb next spike.', x: 70, y: 300, cost: 2, req: ['b2'], role: 'bulwark', stats: { shield: 80 } },
-    { id: 'b4', name: 'EARTHQUAKE', desc: 'KEYSTONE: Stomp stuns all near core.', x: 40, y: 400, cost: 3, req: ['b3'], role: 'bulwark', stats: { quake: 1 }, keystone: true },
-    { id: 'r1', name: 'ARC BOLT', desc: '+18% ability damage.', x: 180, y: 120, cost: 1, req: ['root'], role: 'rift', stats: { dmg: 0.18 } },
-    { id: 'r2', name: 'CHAIN', desc: 'Bolts jump to 2 more targets.', x: 180, y: 210, cost: 1, req: ['r1'], role: 'rift', stats: { chain: 2 } },
-    { id: 'r3', name: 'OVERCHARGE', desc: 'Crit chance +20%.', x: 180, y: 300, cost: 2, req: ['r2'], role: 'rift', stats: { crit: 0.2 } },
-    { id: 'r4', name: 'TIMELINE CUT', desc: 'KEYSTONE: Freeze wave 1.5s.', x: 180, y: 400, cost: 3, req: ['r3'], role: 'rift', stats: { freeze: 1.5 }, keystone: true },
-    { id: 'w1', name: 'MEND', desc: 'Pulse heals core 8/s while held.', x: 290, y: 120, cost: 1, req: ['root'], role: 'warden', stats: { regen: 8 } },
-    { id: 'w2', name: 'CLEANSE', desc: 'Purge burn from the Chronolith.', x: 320, y: 210, cost: 1, req: ['w1'], role: 'warden', stats: { cleanse: 1 } },
-    { id: 'w3', name: 'AURA', desc: 'Allies deal +10% near core.', x: 290, y: 300, cost: 2, req: ['w2'], role: 'warden', stats: { aura: 0.1 } },
-    { id: 'w4', name: 'PHOENIX LINK', desc: 'KEYSTONE: Once per run, core refuses death.', x: 320, y: 400, cost: 3, req: ['w3'], role: 'warden', stats: { phoenix: 1 }, keystone: true },
-    { id: 'x1', name: 'FUSION SIGHT', desc: 'Merge costs −1 shard luck.', x: 110, y: 470, cost: 2, req: ['b3', 'r3'], role: 'any', stats: { mergeLuck: 1 } },
-    { id: 'x2', name: 'GATE WALKER', desc: 'Planet extract +25% yield.', x: 250, y: 470, cost: 2, req: ['r3', 'w3'], role: 'any', stats: { extract: 0.25 } }
-  ];
-
-  var TOWER_UPS = [
-    { id: 'damage', name: 'STRIKE', base: 25 },
-    { id: 'rate', name: 'CADENCE', base: 40 },
-    { id: 'core', name: 'CORE HP', base: 35 },
-    { id: 'range', name: 'REACH', base: 45 }
-  ];
+  var WARBAND = D.WARBAND;
+  var ERAS = D.ERAS;
+  var PLANETS = D.PLANETS;
+  var SHARD_DEFS = D.SHARDS;
+  var MERGE_RECIPES = D.RECIPES;
+  var RELIC_BONUS = D.RELICS;
+  var TREE = D.TREE;
+  var TOWER_UPS = D.TOWER_UPS;
+  var STORY = D.STORY;
+  var FISH = D.FISH;
 
   var UI = {
-    mode: 'who', // who | hub | tree | forge | tower | gate | era
+    mode: 'who',
     selectedNode: null,
     forgeSlots: [null, null],
     tower: null,
-    toastTimer: null
+    fishCast: false,
+    gardenFlash: 0,
+    storyOpen: null,
+    shake: 0,
+    syncLabel: 'LOCAL',
+    extract: null
   };
 
-  var P = null; // active player save
+  var P = null;
   var activeId = null;
   var WORLD = null;
+  var remoteVersion = 0;
+  var syncTimer = null;
   var raf = null;
   var lastTs = 0;
+  var bc = null;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -111,30 +57,48 @@
     el.className = 'toast' + (kind ? ' ' + kind : '');
     el.textContent = msg;
     layer.appendChild(el);
-    setTimeout(function () { el.remove(); }, 2200);
+    setTimeout(function () { el.remove(); }, 2400);
+  }
+
+  function shake(ms) {
+    UI.shake = ms || 280;
+    var app = document.getElementById('chronos-app');
+    if (app) {
+      app.classList.add('shaking');
+      setTimeout(function () { app.classList.remove('shaking'); }, UI.shake);
+    }
+  }
+
+  function daySeed() {
+    return Math.floor(Date.now() / 86400000);
   }
 
   function freshPlayer(id) {
     var shards = {};
     SHARD_DEFS.forEach(function (s) { shards[s.id] = 0; });
-    shards.bone = 6;
-    shards.ore = 4;
+    shards.bone = 8;
+    shards.ore = 6;
     return {
       v: SAVE_VERSION,
       id: id,
-      chrono: 120,
+      chrono: 160,
       essence: 0,
-      skillPoints: 3,
+      skillPoints: 4,
       unlocked: ['root'],
-      loadout: 'rift',
-      loadouts: { bulwark: [], rift: ['root', 'r1'], warden: [] },
+      loadout: id === 'jamie' ? 'bulwark' : id === 'edward' ? 'warden' : 'rift',
+      loadouts: { bulwark: [], rift: [], warden: [] },
       relics: [],
       shards: shards,
       exotics: {},
-      towerUp: { damage: 0, rate: 0, core: 0, range: 0 },
+      towerUp: { damage: 0, rate: 0, core: 0, range: 0, luck: 0 },
       wavesBest: 0,
       bossesKilled: 0,
       totalMerged: 0,
+      fishCaught: 0,
+      garden: [0, 0, 0, 0],
+      gardenPlanted: [0, 0, 0, 0],
+      dailyClaimed: 0,
+      streak: 0,
       lastSeen: Date.now()
     };
   }
@@ -147,43 +111,51 @@
       planetsUnlocked: ['cinder'],
       sharedBank: {},
       presence: {},
-      bossBeaten: {},
+      storyChapter: 0,
+      dailySeed: daySeed(),
+      coop: null,
+      quest: { id: 'hold5', name: 'Hold wave 5', prog: 0, target: 5, reward: 40 },
+      log: [],
       updatedAt: Date.now()
     };
   }
 
-  function loadWorld() {
-    try {
-      var raw = localStorage.getItem(WORLD_KEY);
-      if (raw) {
-        WORLD = Object.assign(freshWorld(), JSON.parse(raw));
-        return;
-      }
-    } catch (e) {}
-    WORLD = freshWorld();
+  function migratePlayer(data, id) {
+    var base = freshPlayer(id);
+    var p = Object.assign(base, data || {});
+    p.shards = Object.assign(base.shards, (data && data.shards) || {});
+    p.towerUp = Object.assign(base.towerUp, (data && data.towerUp) || {});
+    p.exotics = Object.assign({}, (data && data.exotics) || {});
+    p.garden = (data && data.garden) || base.garden;
+    p.gardenPlanted = (data && data.gardenPlanted) || base.gardenPlanted;
+    return p;
   }
 
-  function saveWorld() {
+  /* ── Persistence + sync ── */
+  function loadWorldLocal() {
+    try {
+      var raw = localStorage.getItem(WORLD_KEY);
+      if (raw) return Object.assign(freshWorld(), JSON.parse(raw));
+    } catch (e) {}
+    return freshWorld();
+  }
+
+  function saveWorldLocal() {
     if (!WORLD) return;
     WORLD.updatedAt = Date.now();
-    if (activeId) {
-      WORLD.presence[activeId] = Date.now();
-    }
     try { localStorage.setItem(WORLD_KEY, JSON.stringify(WORLD)); } catch (e) {}
+    if (bc) {
+      try { bc.postMessage({ type: 'world', world: WORLD, version: remoteVersion }); } catch (e) {}
+    }
   }
 
   function loadPlayer(id) {
     try {
       var raw = localStorage.getItem(SAVE_PREFIX + id);
-      if (raw) {
-        var data = JSON.parse(raw);
-        var base = freshPlayer(id);
-        P = Object.assign(base, data);
-        P.shards = Object.assign(base.shards, data.shards || {});
-        P.towerUp = Object.assign(base.towerUp, data.towerUp || {});
-        P.exotics = Object.assign({}, data.exotics || {});
-        return;
-      }
+      if (raw) { P = migratePlayer(JSON.parse(raw), id); return; }
+      // migrate v1
+      raw = localStorage.getItem('voidline_chronos_v1_' + id);
+      if (raw) { P = migratePlayer(JSON.parse(raw), id); return; }
     } catch (e) {}
     P = freshPlayer(id);
   }
@@ -192,8 +164,19 @@
     if (!P || !activeId) return;
     P.lastSeen = Date.now();
     try { localStorage.setItem(SAVE_PREFIX + activeId, JSON.stringify(P)); } catch (e) {}
-    saveWorld();
-    // Optional cloud flush
+    if (WORLD) {
+      if (!WORLD._players) WORLD._players = {};
+      WORLD._players[activeId] = {
+        loadout: P.loadout,
+        wavesBest: P.wavesBest,
+        unlocked: P.unlocked.length,
+        relics: P.relics.slice(),
+        lastSeen: P.lastSeen
+      };
+      WORLD.presence[activeId] = Date.now();
+      saveWorldLocal();
+    }
+    queueRemoteSync();
     if (window.VoidlineCloud && window.VoidlineCloud.flushSave) {
       try {
         window.VoidlineCloud.flushSave(activeId, { chronos: P, chronosWorld: WORLD });
@@ -201,38 +184,170 @@
     }
   }
 
+  function packRemoteState() {
+    return {
+      kind: 'chronos',
+      world: WORLD,
+      players: (function () {
+        var out = {};
+        WARBAND.forEach(function (w) {
+          try {
+            var raw = localStorage.getItem(SAVE_PREFIX + w.id);
+            if (raw) out[w.id] = JSON.parse(raw);
+          } catch (e) {}
+        });
+        if (P && activeId) out[activeId] = P;
+        return out;
+      })()
+    };
+  }
+
+  function applyRemoteState(state, version) {
+    if (!state || !state.world) return;
+    var incoming = state.world;
+    if (!WORLD || (incoming.updatedAt || 0) >= (WORLD.updatedAt || 0)) {
+      WORLD = Object.assign(freshWorld(), incoming);
+    }
+    if (state.players && activeId && state.players[activeId]) {
+      var remoteP = state.players[activeId];
+      if ((remoteP.lastSeen || 0) > (P.lastSeen || 0)) {
+        P = migratePlayer(remoteP, activeId);
+        try { localStorage.setItem(SAVE_PREFIX + activeId, JSON.stringify(P)); } catch (e) {}
+      }
+    }
+    // merge other players into local cache for co-op ghosts
+    if (state.players) {
+      Object.keys(state.players).forEach(function (pid) {
+        if (pid === activeId) return;
+        try {
+          var local = localStorage.getItem(SAVE_PREFIX + pid);
+          var lp = local ? JSON.parse(local) : null;
+          if (!lp || (state.players[pid].lastSeen || 0) > (lp.lastSeen || 0)) {
+            localStorage.setItem(SAVE_PREFIX + pid, JSON.stringify(state.players[pid]));
+          }
+        } catch (e) {}
+      });
+    }
+    remoteVersion = version || remoteVersion;
+    UI.syncLabel = 'CLOUD';
+  }
+
+  var syncQueued = false;
+  function queueRemoteSync() {
+    if (syncQueued) return;
+    syncQueued = true;
+    setTimeout(function () {
+      syncQueued = false;
+      pushRemote();
+    }, 600);
+  }
+
+  async function pullRemote() {
+    try {
+      var res = await fetch('/api/chronos/' + encodeURIComponent(ROOM));
+      if (!res.ok) { UI.syncLabel = 'LOCAL'; return; }
+      var data = await res.json();
+      if (data.localOnly) { UI.syncLabel = 'LOCAL'; return; }
+      if (!data.state) {
+        await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'init', state: packRemoteState() })
+        });
+        remoteVersion = 1;
+        UI.syncLabel = 'CLOUD';
+        return;
+      }
+      applyRemoteState(data.state, data.version);
+      remoteVersion = data.version || 0;
+      if (data.presence) {
+        Object.keys(data.presence).forEach(function (k) {
+          WORLD.presence[k.toLowerCase()] = data.presence[k];
+        });
+      }
+    } catch (e) {
+      UI.syncLabel = 'LOCAL';
+    }
+  }
+
+  async function pushRemote() {
+    if (!WORLD) return;
+    try {
+      var res = await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync',
+          version: remoteVersion,
+          player: activeId,
+          state: packRemoteState()
+        })
+      });
+      var data = await res.json();
+      if (res.status === 409 && data.state) {
+        applyRemoteState(data.state, data.version);
+        remoteVersion = data.version;
+        // retry once
+        res = await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'sync',
+            version: remoteVersion,
+            player: activeId,
+            state: packRemoteState()
+          })
+        });
+        data = await res.json();
+      }
+      if (data.version) remoteVersion = data.version;
+      if (!data.localOnly && res.ok) UI.syncLabel = 'CLOUD';
+    } catch (e) {
+      UI.syncLabel = 'LOCAL';
+    }
+  }
+
   function selectPlayer(id) {
     activeId = id;
     loadPlayer(id);
-    loadWorld();
+    WORLD = loadWorldLocal();
+    claimDailyIfNeeded();
     WORLD.presence[id] = Date.now();
-    saveWorld();
+    saveWorldLocal();
     UI.mode = 'hub';
+    if (WORLD.storyChapter === 0 && !(P._introSeen)) {
+      UI.storyOpen = 0;
+      P._introSeen = true;
+    }
     toast(warband(id).name.toUpperCase() + ' ONLINE', 'good');
+    pullRemote().then(function () { render(); });
+    savePlayer();
     render();
   }
 
-  function nodeById(id) {
-    return TREE.find(function (n) { return n.id === id; });
+  function claimDailyIfNeeded() {
+    var d = daySeed();
+    if (P.dailyClaimed === d) return;
+    if (P.dailyClaimed === d - 1) P.streak = (P.streak || 0) + 1;
+    else P.streak = 1;
+    P.dailyClaimed = d;
+    var bonus = 40 + P.streak * 8;
+    P.chrono += bonus;
+    P.skillPoints += 1;
+    toast('DAILY +' + bonus + ' · STREAK ' + P.streak, 'good');
   }
 
-  function hasNode(id) {
-    return P && P.unlocked.indexOf(id) >= 0;
-  }
-
+  function nodeById(id) { return TREE.find(function (n) { return n.id === id; }); }
+  function hasNode(id) { return P && P.unlocked.indexOf(id) >= 0; }
   function canUnlock(node) {
-    if (!P || !node) return false;
-    if (hasNode(node.id)) return false;
+    if (!P || !node || hasNode(node.id)) return false;
     if (P.skillPoints < node.cost) return false;
     return node.req.every(function (r) { return hasNode(r); });
   }
 
   function unlockNode(id) {
     var node = nodeById(id);
-    if (!canUnlock(node)) {
-      toast('LOCKED', 'bad');
-      return;
-    }
+    if (!canUnlock(node)) { toast('LOCKED', 'bad'); return; }
     P.skillPoints -= node.cost;
     P.unlocked.push(id);
     if (node.role && node.role !== 'any') {
@@ -240,21 +355,21 @@
       if (P.loadouts[node.role].indexOf(id) < 0) P.loadouts[node.role].push(id);
     }
     savePlayer();
-    toast(node.name + ' UNLOCKED', 'good');
+    toast(node.name, 'good');
+    shake(160);
     render();
   }
 
-  function aggregateStats() {
-    var stats = { armor: 0, dmg: 0, crit: 0, regen: 0, chain: 0, taunt: 0, shield: 0, quake: 0, freeze: 0, phoenix: 0, aura: 0, cleanse: 0, burn: 0, slow: 0, mergeLuck: 0, extract: 0 };
-    if (!P) return stats;
-    P.unlocked.forEach(function (id) {
+  function aggregateStats(player) {
+    var pl = player || P;
+    var stats = { armor: 0, dmg: 0, crit: 0, regen: 0, chain: 0, taunt: 0, shield: 0, quake: 0, freeze: 0, phoenix: 0, aura: 0, cleanse: 0, burn: 0, slow: 0, mergeLuck: 0, extract: 0, bossDmg: 0, nova: 0, heal: 0, chronoGain: 0, lifeYield: 0, coopPower: 0, coreMult: 0, gateBreak: 0 };
+    if (!pl) return stats;
+    (pl.unlocked || []).forEach(function (id) {
       var n = nodeById(id);
       if (!n || !n.stats) return;
-      Object.keys(n.stats).forEach(function (k) {
-        stats[k] = (stats[k] || 0) + n.stats[k];
-      });
+      Object.keys(n.stats).forEach(function (k) { stats[k] = (stats[k] || 0) + n.stats[k]; });
     });
-    (P.relics || []).forEach(function (rid) {
+    (pl.relics || []).forEach(function (rid) {
       var b = RELIC_BONUS[rid];
       if (!b) return;
       Object.keys(b).forEach(function (k) {
@@ -265,6 +380,35 @@
     return stats;
   }
 
+  function partyRolesOnline() {
+    var now = Date.now();
+    var roles = {};
+    WARBAND.forEach(function (w) {
+      var on = WORLD.presence[w.id] && (now - WORLD.presence[w.id] < 5 * 60 * 1000);
+      if (!on) return;
+      try {
+        var raw = localStorage.getItem(SAVE_PREFIX + w.id);
+        var pl = raw ? JSON.parse(raw) : null;
+        if (pl) roles[w.id] = pl.loadout || 'rift';
+      } catch (e) { roles[w.id] = 'rift'; }
+    });
+    if (P) roles[activeId] = P.loadout;
+    return roles;
+  }
+
+  function roleCoverage() {
+    var roles = partyRolesOnline();
+    var set = { bulwark: false, rift: false, warden: false };
+    Object.keys(roles).forEach(function (id) { set[roles[id]] = true; });
+    // solo: AI fills gaps
+    var online = Object.keys(roles).length;
+    if (online <= 1) {
+      set.bulwark = set.rift = set.warden = true;
+    }
+    return set;
+  }
+
+  /* ── Forge ── */
   function addShard(id, n) {
     if (!P.shards[id]) P.shards[id] = 0;
     P.shards[id] += n;
@@ -273,38 +417,32 @@
   function tryMerge() {
     var a = UI.forgeSlots[0];
     var b = UI.forgeSlots[1];
-    if (!a || !b) { toast('NEED TWO SHARDS', 'bad'); return; }
+    if (!a || !b) { toast('NEED TWO', 'bad'); return; }
     var recipe = MERGE_RECIPES.find(function (r) {
       return (r.a === a && r.b === b) || (r.a === b && r.b === a);
     });
-    if (!recipe) {
-      // salvage
-      UI.forgeSlots = [null, null];
-      P.chrono += 8;
-      toast('SCRAP · +8 CHRONO');
-      savePlayer();
-      render();
-      return;
-    }
-    function hasMat(id) {
-      return (P.shards[id] || 0) >= 1 || (P.exotics[id] || 0) >= 1;
-    }
+    function hasMat(id) { return (P.shards[id] || 0) >= 1 || (P.exotics[id] || 0) >= 1; }
     function takeMat(id) {
-      if ((P.shards[id] || 0) >= 1) { P.shards[id]--; return; }
-      if ((P.exotics[id] || 0) >= 1) { P.exotics[id]--; }
+      if ((P.shards[id] || 0) >= 1) P.shards[id]--;
+      else if ((P.exotics[id] || 0) >= 1) P.exotics[id]--;
     }
-    if (!hasMat(a) || !hasMat(b)) {
-      toast('MISSING SHARDS', 'bad');
-      return;
+    if (!hasMat(a) || !hasMat(b)) { toast('MISSING', 'bad'); return; }
+    takeMat(a); takeMat(b);
+    if (!recipe) {
+      UI.forgeSlots = [null, null];
+      P.chrono += 10;
+      toast('SCRAP +10');
+      savePlayer(); render(); return;
     }
-    takeMat(a);
-    takeMat(b);
+    var s = aggregateStats();
     if (recipe.relic) {
       if (P.relics.indexOf(recipe.out) < 0) P.relics.push(recipe.out);
       toast(recipe.name.toUpperCase(), 'good');
+      shake(220);
     } else {
-      addShard(recipe.out, 1);
-      toast('FORGED ' + recipe.name.toUpperCase(), 'good');
+      var bonus = s.mergeLuck && Math.random() < 0.35 ? 1 : 0;
+      addShard(recipe.out, 1 + bonus);
+      toast('FORGED ' + recipe.name + (bonus ? ' x2' : ''), 'good');
     }
     P.totalMerged++;
     P.essence += 1;
@@ -315,50 +453,37 @@
   }
 
   function putForgeShard(id) {
-    if ((P.shards[id] || 0) < 1 && id.indexOf('relic_') !== 0) {
-      // allow exotic keys stored in exotics
-      if (!(P.exotics[id] > 0)) { toast('NONE LEFT', 'bad'); return; }
-    }
     var slot = UI.forgeSlots[0] ? (UI.forgeSlots[1] ? -1 : 1) : 0;
-    if (slot < 0) { toast('SLOTS FULL', 'bad'); return; }
-    // spend from exotics bag if needed
-    if (SHARD_DEFS.some(function (s) { return s.id === id; })) {
-      if ((P.shards[id] || 0) < 1) { toast('NONE LEFT', 'bad'); return; }
-    } else if (P.exotics[id] > 0) {
-      // exotic used as fuse material — don't decrement until merge
-    } else if (['ember_root', 'frost_bloom', 'life_spine', 'void_shard'].indexOf(id) >= 0) {
-      if (!(P.exotics[id] > 0)) { toast('NONE LEFT', 'bad'); return; }
-    }
+    if (slot < 0) { toast('FULL', 'bad'); return; }
+    var ok = (P.shards[id] || 0) >= 1 || (P.exotics[id] || 0) >= 1;
+    if (!ok) { toast('NONE', 'bad'); return; }
     UI.forgeSlots[slot] = id;
     render();
   }
 
-  /* ── Tower combat ── */
+  /* ── Tower / co-op boss ── */
   function towerDps() {
     var s = aggregateStats();
     var up = P.towerUp.damage || 0;
-    var base = 14 + up * 4;
-    return base * (1 + s.dmg) * (P.loadout === 'rift' ? 1.15 : 1);
+    var base = 16 + up * 5;
+    var role = P.loadout === 'rift' ? 1.2 : P.loadout === 'bulwark' ? 0.85 : 0.9;
+    var party = 1 + (s.coopPower || 0) + (s.aura || 0) * 0.5;
+    return base * (1 + s.dmg) * role * party;
   }
 
-  function towerFireRate() {
-    var up = P.towerUp.rate || 0;
-    return Math.max(0.18, 0.55 - up * 0.03);
-  }
-
-  function towerRange() {
-    return 120 + (P.towerUp.range || 0) * 12;
-  }
-
+  function towerFireRate() { return Math.max(0.16, 0.52 - (P.towerUp.rate || 0) * 0.028); }
+  function towerRange() { return 120 + (P.towerUp.range || 0) * 12; }
   function towerMaxHp() {
     var s = aggregateStats();
-    return Math.floor((220 + (P.towerUp.core || 0) * 40) * (1 + s.armor));
+    return Math.floor((260 + (P.towerUp.core || 0) * 45) * (1 + s.armor) * (1 + (s.coreMult || 0)));
   }
 
-  function startTower() {
+  function startTower(coopBoss) {
     var s = aggregateStats();
+    var cov = roleCoverage();
     UI.tower = {
       running: true,
+      coopBoss: !!coopBoss,
       t: 0,
       wave: 1,
       spawnAcc: 0,
@@ -372,8 +497,21 @@
       phoenixUsed: false,
       kills: 0,
       chronoEarned: 0,
-      shield: s.shield || 0
+      shield: s.shield || 0,
+      gates: { bulwark: 0, rift: 0, warden: 0 },
+      coverage: cov,
+      combo: 0
     };
+    if (coopBoss) {
+      WORLD.coop = {
+        host: activeId,
+        started: Date.now(),
+        wave: 1,
+        roles: partyRolesOnline()
+      };
+      saveWorldLocal();
+      queueRemoteSync();
+    }
     UI.mode = 'tower';
     lastTs = performance.now();
     if (raf) cancelAnimationFrame(raf);
@@ -381,73 +519,96 @@
     render();
   }
 
+  function bumpQuest(wave) {
+    if (!WORLD.quest) return;
+    if (WORLD.quest.id === 'hold5') WORLD.quest.prog = Math.max(WORLD.quest.prog, wave);
+    if (WORLD.quest.prog >= WORLD.quest.target && !WORLD.quest.done) {
+      WORLD.quest.done = true;
+      P.chrono += WORLD.quest.reward;
+      toast('QUEST CLEAR +' + WORLD.quest.reward, 'good');
+    }
+  }
+
   function endTower(won) {
     if (!UI.tower) return;
     var t = UI.tower;
     t.running = false;
     if (raf) { cancelAnimationFrame(raf); raf = null; }
-    P.chrono += t.chronoEarned;
+    var s = aggregateStats();
+    var gain = Math.floor(t.chronoEarned * (1 + (s.chronoGain || 0)));
+    P.chrono += gain;
     P.essence += Math.floor(t.wave / 2);
     if (t.wave > P.wavesBest) P.wavesBest = t.wave;
-    if (t.wave >= 5) {
+    bumpQuest(t.wave);
+    if (t.wave >= 6) {
       var era = ERAS[WORLD.eraIndex];
-      if (era && WORLD.erasCleared.indexOf(era.id) < 0 && t.wave >= 6) {
-        WORLD.erasCleared.push(era.id);
-        if (WORLD.eraIndex < ERAS.length - 1) WORLD.eraIndex++;
-        P.skillPoints += 2;
-        toast('ERA STABILIZED', 'good');
-        // unlock planet
-        PLANETS.forEach(function (pl) {
-          if (pl.eraNeed <= WORLD.eraIndex && WORLD.planetsUnlocked.indexOf(pl.id) < 0) {
-            WORLD.planetsUnlocked.push(pl.id);
+      if (era && WORLD.erasCleared.indexOf(era.id) < 0) {
+        // role gate for era bosses on wave 6+
+        var need = Math.max(1, 2 - (s.gateBreak || 0));
+        var filled = ['bulwark', 'rift', 'warden'].filter(function (r) { return t.gates[r] > 0 || t.coverage[r]; }).length;
+        if (t.coopBoss || filled >= need || t.wave >= 8) {
+          WORLD.erasCleared.push(era.id);
+          if (WORLD.eraIndex < ERAS.length - 1) {
+            WORLD.eraIndex++;
+            WORLD.storyChapter = Math.min(STORY.length - 1, WORLD.eraIndex + 1);
+            UI.storyOpen = WORLD.storyChapter;
           }
-        });
+          P.skillPoints += 2;
+          toast('ERA STABILIZED', 'good');
+          PLANETS.forEach(function (pl) {
+            if (pl.eraNeed <= WORLD.eraIndex && WORLD.planetsUnlocked.indexOf(pl.id) < 0) {
+              WORLD.planetsUnlocked.push(pl.id);
+            }
+          });
+        } else {
+          toast('NEED ROLE GATES — taunt / arc / mend', 'bad');
+        }
       }
     }
-    if (won) toast('WAVE HOLD · +' + t.chronoEarned + ' CHRONO', 'good');
-    else toast('CORE BREACHED · +' + t.chronoEarned + ' CHRONO', 'bad');
-    // loot shards
+    toast((won ? 'HOLD' : 'BREACH') + ' · +' + gain + ' CHRONO', won ? 'good' : 'bad');
     addShard('bone', 2 + Math.floor(t.wave / 2));
     if (t.wave >= 3) addShard('spark', 1);
     if (t.kills >= 20) addShard('ash', 1);
+    if ((P.towerUp.luck || 0) > 0 && Math.random() < 0.2) addShard('echo', 1);
+    WORLD.coop = null;
     UI.tower = null;
     savePlayer();
     UI.mode = 'hub';
     render();
   }
 
-  function spawnEnemy(wave) {
+  function spawnEnemy(wave, forceBoss) {
     var roll = Math.random();
     var type = 'swarm';
-    if (wave >= 4 && roll > 0.82) type = 'brute';
-    else if (wave >= 3 && roll > 0.65) type = 'flyer';
-    if (wave % 5 === 0 && UI.tower.enemies.filter(function (e) { return e.type === 'boss'; }).length === 0) {
-      type = 'boss';
-    }
+    if (forceBoss || (wave % 5 === 0 && !UI.tower.enemies.some(function (e) { return e.type === 'boss'; }))) type = 'boss';
+    else if (wave >= 4 && roll > 0.8) type = 'brute';
+    else if (wave >= 3 && roll > 0.62) type = 'flyer';
     var side = Math.floor(Math.random() * 4);
     var x = 50, y = 50;
-    if (side === 0) { x = Math.random() * 100; y = -5; }
-    if (side === 1) { x = 105; y = Math.random() * 100; }
-    if (side === 2) { x = Math.random() * 100; y = 105; }
-    if (side === 3) { x = -5; y = Math.random() * 100; }
-    var hp = type === 'boss' ? 180 + wave * 40 : type === 'brute' ? 55 + wave * 10 : type === 'flyer' ? 22 + wave * 4 : 16 + wave * 5;
-    var spd = type === 'flyer' ? 18 + wave : type === 'brute' ? 8 + wave * 0.3 : type === 'boss' ? 6 : 12 + wave * 0.5;
-    UI.tower.enemies.push({ id: Math.random().toString(36).slice(2), type: type, x: x, y: y, hp: hp, max: hp, spd: spd });
+    if (side === 0) { x = Math.random() * 100; y = -6; }
+    if (side === 1) { x = 106; y = Math.random() * 100; }
+    if (side === 2) { x = Math.random() * 100; y = 106; }
+    if (side === 3) { x = -6; y = Math.random() * 100; }
+    var hp = type === 'boss' ? 220 + wave * 55 : type === 'brute' ? 60 + wave * 12 : type === 'flyer' ? 24 + wave * 5 : 18 + wave * 6;
+    var spd = type === 'flyer' ? 20 + wave : type === 'brute' ? 8 + wave * 0.35 : type === 'boss' ? 5.5 : 13 + wave * 0.55;
+    // era-colored elites
+    var eraTint = ERAS[WORLD.eraIndex] ? ERAS[WORLD.eraIndex].accent : '#ff6a3d';
+    UI.tower.enemies.push({ id: Math.random().toString(36).slice(2, 8), type: type, x: x, y: y, hp: hp, max: hp, spd: spd, tint: eraTint });
   }
 
-  function damageEnemy(e, amt) {
+  function damageEnemy(e, amt, tag) {
     var s = aggregateStats();
     var dmg = amt;
+    if (e.type === 'boss') dmg *= 1 + (s.bossDmg || 0);
     if (Math.random() < (s.crit || 0)) dmg *= 2;
     e.hp -= dmg;
-    UI.tower.fx.push({ x: e.x, y: e.y, life: 0.35 });
+    UI.tower.fx.push({ x: e.x, y: e.y, life: 0.3 });
+    UI.tower.combo++;
+    if (tag) UI.tower.gates[tag] = (UI.tower.gates[tag] || 0) + 1;
     if (e.hp <= 0) {
       UI.tower.kills++;
-      UI.tower.chronoEarned += e.type === 'boss' ? 40 : e.type === 'brute' ? 8 : 3;
-      if (e.type === 'boss') {
-        P.bossesKilled++;
-        P.skillPoints += 1;
-      }
+      UI.tower.chronoEarned += e.type === 'boss' ? 50 : e.type === 'brute' ? 9 : 3;
+      if (e.type === 'boss') { P.bossesKilled++; P.skillPoints += 1; shake(320); }
       return true;
     }
     return false;
@@ -455,25 +616,24 @@
 
   function fireAtNearest() {
     var t = UI.tower;
-    if (!t || !t.enemies.length) return;
+    if (!t.enemies.length) return;
     var cx = 50, cy = 78;
     var rangePct = towerRange() / 3.2;
-    var best = null;
-    var bestD = 1e9;
+    var best = null, bestD = 1e9;
     t.enemies.forEach(function (e) {
       var d = Math.hypot(e.x - cx, e.y - cy);
       if (d < bestD && d <= rangePct) { bestD = d; best = e; }
     });
     if (!best) return;
-    var dmg = towerDps() * 0.35;
-    var dead = damageEnemy(best, dmg);
+    var dmg = towerDps() * 0.38;
+    damageEnemy(best, dmg, P.loadout === 'rift' ? 'rift' : null);
     var s = aggregateStats();
     if (s.chain > 0) {
       var chained = 0;
       t.enemies.forEach(function (e) {
         if (e === best || chained >= s.chain) return;
-        if (Math.hypot(e.x - best.x, e.y - best.y) < 22) {
-          if (damageEnemy(e, dmg * 0.6)) { /* marked dead below */ }
+        if (Math.hypot(e.x - best.x, e.y - best.y) < 24) {
+          damageEnemy(e, dmg * 0.55, 'rift');
           chained++;
         }
       });
@@ -487,50 +647,64 @@
     var s = aggregateStats();
     if (slot === 'primary') {
       if (t.cds.primary > 0) return;
-      t.cds.primary = 2.2;
-      // role primary
-      if (P.loadout === 'bulwark' || s.taunt) {
+      t.cds.primary = 2.0;
+      if (P.loadout === 'bulwark') {
         t.enemies.forEach(function (e) {
-          e.x += (50 - e.x) * 0.35;
-          e.y += (78 - e.y) * 0.35;
+          e.x += (50 - e.x) * 0.4;
+          e.y += (78 - e.y) * 0.4;
         });
+        t.gates.bulwark++;
         toast('TAUNT', 'good');
       } else if (P.loadout === 'warden') {
-        t.coreHp = Math.min(t.coreMax, t.coreHp + 35 + s.regen);
+        var heal = 40 + (s.heal || 0) * 80 + s.regen;
+        t.coreHp = Math.min(t.coreMax, t.coreHp + heal);
+        t.gates.warden++;
         toast('MEND', 'good');
       } else {
-        t.enemies.forEach(function (e) { damageEnemy(e, towerDps() * 0.9); });
+        t.enemies.forEach(function (e) { damageEnemy(e, towerDps(), 'rift'); });
         t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
         toast('ARC', 'good');
       }
     } else if (slot === 'secondary') {
       if (t.cds.secondary > 0) return;
       t.cds.secondary = 5;
-      if (s.quake) {
+      if (s.quake || P.loadout === 'bulwark') {
         t.enemies.forEach(function (e) {
-          if (Math.hypot(e.x - 50, e.y - 78) < 40) {
-            e.spd *= 0.2;
-            damageEnemy(e, 40);
+          if (Math.hypot(e.x - 50, e.y - 78) < 42) {
+            e.spd *= 0.15;
+            damageEnemy(e, 50, 'bulwark');
           }
         });
         t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
+        shake(200);
         toast('QUAKE');
-      } else if (s.freeze) {
-        t.frozen = s.freeze;
+      } else if (s.freeze || P.loadout === 'rift') {
+        t.frozen = s.freeze || 1.2;
+        t.gates.rift++;
         toast('TIMELINE CUT');
       } else {
-        t.shield += 40;
+        t.shield += 55;
+        t.gates.warden++;
         toast('WARD');
       }
     } else if (slot === 'ultimate') {
       if (t.cds.ultimate > 0) return;
-      t.cds.ultimate = 14;
-      if (s.phoenix && !t.phoenixUsed) {
-        t.phoenixReady = true;
-        toast('PHOENIX ARMED', 'good');
+      t.cds.ultimate = 12;
+      var ult = towerDps() * 2.4;
+      if (s.nova) {
+        t.enemies.forEach(function (e) { damageEnemy(e, ult, 'rift'); });
+      } else {
+        t.enemies.slice(0, 6).forEach(function (e) { damageEnemy(e, ult, P.loadout); });
       }
-      t.enemies.forEach(function (e) { damageEnemy(e, towerDps() * 2.2); });
       t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
+      // ghost allies contribute
+      var roles = partyRolesOnline();
+      Object.keys(roles).forEach(function (pid) {
+        if (pid === activeId) return;
+        t.coreHp = Math.min(t.coreMax, t.coreHp + 12);
+        t.chronoEarned += 2;
+      });
+      shake(260);
       toast('OVERLOAD');
     }
     syncTowerDom();
@@ -541,34 +715,32 @@
     var dt = Math.min(0.05, (ts - lastTs) / 1000);
     lastTs = ts;
     var t = UI.tower;
+    var s = aggregateStats();
     t.t += dt;
     if (t.frozen > 0) t.frozen -= dt;
-
     Object.keys(t.cds).forEach(function (k) {
       if (t.cds[k] > 0) t.cds[k] = Math.max(0, t.cds[k] - dt);
     });
 
-    // wave pacing
     t.spawnAcc += dt;
-    var interval = Math.max(0.45, 1.4 - t.wave * 0.06);
+    var interval = Math.max(0.4, 1.35 - t.wave * 0.055);
     if (t.spawnAcc >= interval) {
       t.spawnAcc = 0;
-      spawnEnemy(t.wave);
+      spawnEnemy(t.wave, t.coopBoss && t.wave % 5 === 0);
     }
-    if (t.t > t.wave * 12) {
+    if (t.t > t.wave * 11.5) {
       t.wave++;
       t.t = 0;
-      P.chrono += 5;
-      t.chronoEarned += 5;
+      t.chronoEarned += 6;
       toast('WAVE ' + t.wave);
-      if (t.wave > 12) {
-        endTower(true);
-        return;
-      }
+      if (t.wave > 14) { endTower(true); return; }
     }
 
-    var s = aggregateStats();
-    if (s.regen > 0) t.coreHp = Math.min(t.coreMax, t.coreHp + s.regen * dt * 0.25);
+    if (s.regen > 0) t.coreHp = Math.min(t.coreMax, t.coreHp + s.regen * dt * 0.3);
+    // AI ghost heals if warden missing but solo coverage
+    if (t.coverage.warden && P.loadout !== 'warden') {
+      t.coreHp = Math.min(t.coreMax, t.coreHp + 3 * dt);
+    }
 
     t.fireAcc += dt;
     if (t.fireAcc >= towerFireRate()) {
@@ -576,44 +748,38 @@
       fireAtNearest();
     }
 
-    var slow = 1 - Math.min(0.5, s.slow || 0);
-    if (t.frozen > 0) slow *= 0.15;
-
+    var slow = 1 - Math.min(0.55, s.slow || 0);
+    if (t.frozen > 0) slow *= 0.12;
     var cx = 50, cy = 78;
     t.enemies.forEach(function (e) {
-      var dx = cx - e.x;
-      var dy = cy - e.y;
+      var dx = cx - e.x, dy = cy - e.y;
       var len = Math.hypot(dx, dy) || 1;
       e.x += (dx / len) * e.spd * slow * dt;
       e.y += (dy / len) * e.spd * slow * dt;
-      if (Math.hypot(e.x - cx, e.y - cy) < 4) {
-        var hit = e.type === 'boss' ? 28 : e.type === 'brute' ? 14 : 7;
-        hit *= (1 - Math.min(0.5, s.armor || 0));
+      if (Math.hypot(e.x - cx, e.y - cy) < 4.2) {
+        var hit = e.type === 'boss' ? 32 : e.type === 'brute' ? 15 : 8;
+        hit *= (1 - Math.min(0.55, s.armor || 0));
         if (t.shield > 0) {
           t.shield -= hit;
           if (t.shield < 0) { t.coreHp += t.shield; t.shield = 0; }
-        } else {
-          t.coreHp -= hit;
-        }
+        } else t.coreHp -= hit;
         e.hp = 0;
-        if (s.burn) { /* flavor */ }
+        shake(120);
       }
     });
     t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
-
     t.fx = t.fx.map(function (f) { f.life -= dt; return f; }).filter(function (f) { return f.life > 0; });
 
     if (t.coreHp <= 0) {
-      if (s.phoenix && !t.phoenixUsed) {
+      if ((s.phoenix || 0) && !t.phoenixUsed) {
         t.phoenixUsed = true;
-        t.coreHp = t.coreMax * 0.4;
+        t.coreHp = t.coreMax * 0.45;
         toast('PHOENIX', 'good');
       } else {
         endTower(false);
         return;
       }
     }
-
     syncTowerDom();
     raf = requestAnimationFrame(towerLoop);
   }
@@ -625,13 +791,19 @@
     var hpEl = root.querySelector('.tower-core-hp > i');
     if (hpEl) hpEl.style.width = Math.max(0, t.coreHp / t.coreMax * 100) + '%';
     var waveEl = root.querySelector('[data-wave]');
-    if (waveEl) waveEl.textContent = 'WAVE ' + t.wave;
+    if (waveEl) waveEl.textContent = (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave;
     var hpTxt = root.querySelector('[data-hp]');
     if (hpTxt) hpTxt.textContent = Math.ceil(t.coreHp) + ' / ' + t.coreMax;
+    var combo = root.querySelector('[data-combo]');
+    if (combo) combo.textContent = t.combo > 4 ? t.combo + ' COMBO' : '';
+    var gates = root.querySelector('[data-gates]');
+    if (gates) {
+      gates.textContent = 'B' + t.gates.bulwark + ' R' + t.gates.rift + ' W' + t.gates.warden;
+    }
     var layer = root.querySelector('.enemy-layer');
     if (layer) {
       layer.innerHTML = t.enemies.map(function (e) {
-        return '<div class="enemy ' + e.type + '" style="left:' + e.x + '%;top:' + e.y + '%"></div>';
+        return '<div class="enemy ' + e.type + '" style="left:' + e.x + '%;top:' + e.y + '%;color:' + (e.tint || '') + '"></div>';
       }).join('') + t.fx.map(function (f) {
         return '<div class="fx-hit" style="left:' + f.x + '%;top:' + f.y + '%"></div>';
       }).join('');
@@ -639,10 +811,9 @@
     ['primary', 'secondary', 'ultimate'].forEach(function (k) {
       var btn = root.querySelector('[data-ability="' + k + '"]');
       if (!btn) return;
-      var cd = t.cds[k];
-      btn.disabled = cd > 0;
+      btn.disabled = t.cds[k] > 0;
       var cdEl = btn.querySelector('.cd');
-      if (cdEl) cdEl.textContent = cd > 0 ? cd.toFixed(1) : 'READY';
+      if (cdEl) cdEl.textContent = t.cds[k] > 0 ? t.cds[k].toFixed(1) : 'READY';
     });
   }
 
@@ -650,55 +821,128 @@
     var def = TOWER_UPS.find(function (u) { return u.id === id; });
     if (!def) return;
     var lv = P.towerUp[id] || 0;
-    var cost = Math.floor(def.base * Math.pow(1.35, lv));
+    var cost = Math.floor(def.base * Math.pow(1.38, lv));
     if (P.chrono < cost) { toast('NEED CHRONO', 'bad'); return; }
     P.chrono -= cost;
     P.towerUp[id] = lv + 1;
     savePlayer();
-    toast(def.name + ' → ' + (lv + 1), 'good');
+    toast(def.name + ' ' + (lv + 1), 'good');
     render();
   }
 
-  function extractPlanet(pid) {
+  /* ── Planets extract mini ── */
+  function startExtract(pid) {
     var pl = PLANETS.find(function (p) { return p.id === pid; });
-    if (!pl) return;
-    if (WORLD.planetsUnlocked.indexOf(pid) < 0) { toast('LOCKED', 'bad'); return; }
-    var cost = 40;
-    if (P.chrono < cost) { toast('NEED 40 CHRONO', 'bad'); return; }
-    P.chrono -= cost;
-    var s = aggregateStats();
-    var n = 1 + (Math.random() < (0.25 + s.extract) ? 1 : 0);
-    P.exotics[pl.exotic] = (P.exotics[pl.exotic] || 0) + n;
-    WORLD.sharedBank[pl.exotic] = (WORLD.sharedBank[pl.exotic] || 0) + 0; // personal keep
-    addShard('echo', Math.random() < 0.3 ? 1 : 0);
+    if (!pl || WORLD.planetsUnlocked.indexOf(pid) < 0) { toast('LOCKED', 'bad'); return; }
+    if (P.chrono < 35) { toast('NEED 35 CHRONO', 'bad'); return; }
+    P.chrono -= 35;
+    UI.extract = { planet: pl, t: 0, progress: 0, hazards: 0 };
+    UI.mode = 'extract';
     savePlayer();
-    toast(pl.exoticName.toUpperCase() + ' x' + n, 'good');
+    render();
+    var iv = setInterval(function () {
+      if (!UI.extract) { clearInterval(iv); return; }
+      UI.extract.t += 0.25;
+      UI.extract.progress += 8 + (aggregateStats().extract || 0) * 10;
+      if (Math.random() < 0.25) UI.extract.hazards++;
+      if (UI.extract.progress >= 100) {
+        clearInterval(iv);
+        finishExtract(true);
+      } else if (UI.extract.hazards > 4) {
+        clearInterval(iv);
+        finishExtract(false);
+      } else {
+        var bar = document.querySelector('.extract-bar > i');
+        if (bar) bar.style.width = UI.extract.progress + '%';
+      }
+    }, 250);
+  }
+
+  function finishExtract(ok) {
+    var pl = UI.extract && UI.extract.planet;
+    UI.extract = null;
+    if (!pl) { UI.mode = 'gate'; render(); return; }
+    if (ok) {
+      var s = aggregateStats();
+      var n = 1 + (Math.random() < 0.3 + (s.extract || 0) ? 1 : 0);
+      P.exotics[pl.exotic] = (P.exotics[pl.exotic] || 0) + n;
+      WORLD.sharedBank[pl.exotic] = (WORLD.sharedBank[pl.exotic] || 0) + n;
+      if (Math.random() < 0.35) addShard('echo', 1);
+      toast(pl.exoticName.toUpperCase() + ' x' + n, 'good');
+      shake(180);
+    } else {
+      P.chrono += 10;
+      toast('EXTRACT FAILED — scrap returned', 'bad');
+    }
+    savePlayer();
+    UI.mode = 'gate';
     render();
   }
 
-  function presenceCount() {
+  /* ── Minigames ── */
+  function castFish() {
+    if (UI.fishCast) return;
+    UI.fishCast = true;
+    render();
+    setTimeout(function () {
+      UI.fishCast = false;
+      var s = aggregateStats();
+      var pool = [];
+      FISH.forEach(function (f) {
+        var w = f.weight * (1 + (s.lifeYield || 0));
+        for (var i = 0; i < w; i++) pool.push(f);
+      });
+      var catch_ = pool[Math.floor(Math.random() * pool.length)];
+      if (catch_.chrono) P.chrono += catch_.chrono;
+      if (catch_.essence) P.essence += catch_.essence;
+      if (catch_.shard) addShard(catch_.shard, 1);
+      P.fishCaught++;
+      toast(catch_.name.toUpperCase(), 'good');
+      savePlayer();
+      render();
+    }, 900);
+  }
+
+  function tendGarden(i) {
     var now = Date.now();
-    var n = 0;
-    Object.keys(WORLD.presence || {}).forEach(function (id) {
-      if (now - WORLD.presence[id] < 5 * 60 * 1000) n++;
-    });
-    return n;
+    if (!P.gardenPlanted[i]) {
+      if (P.chrono < 15) { toast('NEED 15', 'bad'); return; }
+      P.chrono -= 15;
+      P.gardenPlanted[i] = now;
+      P.garden[i] = 0;
+      toast('PLANTED');
+      savePlayer(); render(); return;
+    }
+    var age = now - P.gardenPlanted[i];
+    if (age < 45000) {
+      toast('GROWING ' + Math.ceil((45000 - age) / 1000) + 's', 'bad');
+      return;
+    }
+    var s = aggregateStats();
+    var yieldN = 1 + (Math.random() < (s.lifeYield || 0) ? 1 : 0);
+    addShard(Math.random() < 0.5 ? 'ore' : 'bone', yieldN);
+    if (Math.random() < 0.2) addShard('spark', 1);
+    P.chrono += 12;
+    P.gardenPlanted[i] = 0;
+    toast('HARVEST x' + yieldN, 'good');
+    savePlayer();
+    render();
   }
 
   /* ── Render ── */
   function renderWho() {
     var h = '<div class="who-screen">';
     h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1>';
-    h += '<p>Three seats. One timeline. Pick your warband.</p></div>';
+    h += '<p>Three seats. One timeline. Syncs across your devices.</p></div>';
     h += '<div class="who-seats">';
     WARBAND.forEach(function (w) {
       var raw = null;
-      try { raw = localStorage.getItem(SAVE_PREFIX + w.id); } catch (e) {}
+      try { raw = localStorage.getItem(SAVE_PREFIX + w.id) || localStorage.getItem('voidline_chronos_v1_' + w.id); } catch (e) {}
       var meta = 'NEW';
       if (raw) {
         try {
           var d = JSON.parse(raw);
-          meta = 'W' + (d.wavesBest || 0) + ' · ' + (d.unlocked ? d.unlocked.length : 0) + ' NODES';
+          meta = 'W' + (d.wavesBest || 0) + ' · ' + ((d.unlocked && d.unlocked.length) || 0) + ' NODES';
         } catch (e) { meta = 'SAVED'; }
       }
       h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + '">';
@@ -707,8 +951,13 @@
       h += '<div class="seat-role">' + esc(w.blurb) + '</div></div>';
       h += '<div class="seat-meta">' + esc(meta) + '</div></div></button>';
     });
-    h += '</div><div class="who-foot">CLOUD SYNC · PHONE ↔ PC</div></div>';
+    h += '</div><div class="who-foot">ROOM ' + esc(ROOM) + ' · ' + esc(UI.syncLabel) + ' SYNC</div></div>';
     return h;
+  }
+
+  function hotspot(cls, action, glyph, label) {
+    return '<button type="button" class="hotspot ' + cls + '" data-action="mode" data-id="' + action + '">' +
+      '<span class="hotspot-glyph">' + glyph + '</span><span class="hotspot-label">' + label + '</span></button>';
   }
 
   function renderHub() {
@@ -719,63 +968,62 @@
     h += '<button type="button" class="hub-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
     h += '<img src="' + w.portrait + '" alt=""><div><div class="hub-pilot-name">' + esc(w.name.toUpperCase()) + '</div>';
     h += '<div class="hub-pilot-sub">' + esc(P.loadout.toUpperCase()) + ' · SP ' + P.skillPoints + '</div></div></button>';
-    h += '<div class="hub-wallet">' + P.chrono + ' CHRONO<span>' + P.essence + ' ESSENCE</span></div></div>';
-    h += '<div class="hub-stage">';
+    h += '<div class="hub-wallet">' + P.chrono + ' CHRONO<span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
+    h += '<div class="hub-stage era-' + era.id + '">';
     h += '<div class="hub-party">';
     WARBAND.forEach(function (p) {
       var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
-      h += '<div class="party-pip' + (on ? ' on' : '') + '" title="' + p.name + '"></div>';
+      h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '" title="' + p.name + '"></div>';
     });
     h += '</div>';
     h += '<div class="hub-era-tag">' + esc(era.name) + '</div>';
-    h += '<div class="hub-ground"></div><div class="hub-chronolith"></div>';
+    h += '<div class="hub-aurora"></div><div class="hub-ground"></div><div class="hub-chronolith"></div>';
+    h += '<div class="hub-embers" aria-hidden="true"></div>';
     h += hotspot('hs-forge', 'forge', '⚒', 'FORGE');
     h += hotspot('hs-tower', 'tower', '▲', 'TOWER');
     h += hotspot('hs-tree', 'tree', '✦', 'TREE');
     h += hotspot('hs-gate', 'gate', '◎', 'GATE');
     h += hotspot('hs-era', 'era', '▣', 'ERAS');
-    h += '</div></div>';
+    h += hotspot('hs-life', 'life', '🎣', 'LIFE');
+    h += hotspot('hs-story', 'story', '📜', 'LORE');
+    h += '</div>';
+    if (WORLD.quest && !WORLD.quest.done) {
+      h += '<div class="hub-quest">QUEST · ' + esc(WORLD.quest.name) + ' · ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
+    }
+    h += '</div>';
     return h;
-  }
-
-  function hotspot(cls, action, glyph, label) {
-    return '<button type="button" class="hotspot ' + cls + '" data-action="mode" data-id="' + action + '">' +
-      '<span class="hotspot-glyph">' + glyph + '</span><span class="hotspot-label">' + label + '</span></button>';
   }
 
   function renderTree() {
     var sel = UI.selectedNode ? nodeById(UI.selectedNode) : nodeById('root');
     var h = '<div class="mode-screen"><div class="mode-head"><div>';
-    h += '<h2 class="mode-title">CONSTELLATION</h2><p class="mode-sub">SP ' + P.skillPoints + ' · BUILD ' + P.loadout.toUpperCase() + '</p></div>';
+    h += '<h2 class="mode-title">CONSTELLATION</h2><p class="mode-sub">SP ' + P.skillPoints + ' · ' + P.unlocked.length + ' NODES · ' + P.loadout.toUpperCase() + '</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
     h += '<div class="role-banner">';
     ['bulwark', 'rift', 'warden'].forEach(function (r) {
       h += '<button type="button" class="loadout-chip' + (P.loadout === r ? ' active' : '') + ' role-tag ' + r + '" data-action="loadout" data-id="' + r + '">' + r.toUpperCase() + '</button>';
     });
-    h += '</div>';
-    h += '<div class="panel-scroll"><div class="tree-canvas-wrap"><svg class="tree-svg" viewBox="0 0 360 520">';
-    // edges
+    h += '</div><div class="panel-scroll"><div class="tree-canvas-wrap"><svg class="tree-svg" viewBox="0 0 600 620">';
     TREE.forEach(function (n) {
       n.req.forEach(function (r) {
         var p = nodeById(r);
         if (!p) return;
-        h += '<line x1="' + p.x + '" y1="' + p.y + '" x2="' + n.x + '" y2="' + n.y + '" stroke="rgba(232,197,106,0.25)" stroke-width="2"/>';
+        h += '<line x1="' + p.x + '" y1="' + p.y + '" x2="' + n.x + '" y2="' + n.y + '" stroke="rgba(232,197,106,0.22)" stroke-width="2"/>';
       });
     });
     TREE.forEach(function (n) {
       var owned = hasNode(n.id);
       var can = canUnlock(n);
       var cls = 'tree-node' + (owned ? ' owned' : '') + (can ? ' can' : (!owned ? ' locked' : ''));
-      var fill = n.keystone ? 'rgba(255,106,61,0.35)' : 'rgba(20,16,28,0.9)';
+      var fill = n.keystone ? 'rgba(255,106,61,0.4)' : 'rgba(20,16,28,0.92)';
       h += '<g class="' + cls + '" data-action="select-node" data-id="' + n.id + '">';
-      h += '<circle cx="' + n.x + '" cy="' + n.y + '" r="' + (n.keystone ? 18 : 14) + '" fill="' + fill + '" stroke="rgba(244,239,230,0.35)" stroke-width="2"/>';
-      h += '<text x="' + n.x + '" y="' + (n.y + 32) + '" text-anchor="middle" fill="#f4efe6" font-size="7" font-family="Share Tech Mono">' + esc(n.name) + '</text></g>';
+      h += '<circle cx="' + n.x + '" cy="' + n.y + '" r="' + (n.keystone ? 17 : 13) + '" fill="' + fill + '" stroke="rgba(244,239,230,0.35)" stroke-width="2"/>';
+      h += '<text x="' + n.x + '" y="' + (n.y + 28) + '" text-anchor="middle" fill="#f4efe6" font-size="7" font-family="Share Tech Mono">' + esc(n.name) + '</text></g>';
     });
     h += '</svg></div>';
     if (sel) {
       h += '<div class="tree-detail"><h3>' + esc(sel.name) + (sel.keystone ? ' · KEYSTONE' : '') + '</h3>';
-      h += '<p>' + esc(sel.desc) + '</p>';
-      h += '<div class="tree-actions">';
+      h += '<p>' + esc(sel.desc) + '</p><div class="tree-actions">';
       if (hasNode(sel.id)) h += '<span class="badge">OWNED</span>';
       else h += '<button type="button" class="stone-btn" data-action="unlock" data-id="' + sel.id + '"' + (canUnlock(sel) ? '' : ' disabled') + '>UNLOCK · ' + sel.cost + ' SP</button>';
       h += '</div></div>';
@@ -798,7 +1046,7 @@
     SHARD_DEFS.forEach(function (sh) {
       var q = P.shards[sh.id] || 0;
       if (!q) return;
-      h += '<button type="button" class="shard-tile r-' + sh.rarity + '" data-action="forge-add" data-id="' + sh.id + '" title="' + esc(sh.name) + '">' + sh.icon + '<span class="qty">' + q + '</span></button>';
+      h += '<button type="button" class="shard-tile r-' + sh.rarity + '" data-action="forge-add" data-id="' + sh.id + '">' + sh.icon + '<span class="qty">' + q + '</span></button>';
     });
     Object.keys(P.exotics || {}).forEach(function (ex) {
       if (!(P.exotics[ex] > 0)) return;
@@ -813,7 +1061,6 @@
       });
       h += '</div>';
     }
-    h += '<p class="empty-note" style="padding:0.75rem 0 0;font-size:0.8rem">Bone+Ore → Spark · Spark+Ash → Core · Core+Echo → Rift Relic. Planet exotics unlock myth plates.</p>';
     h += '</div></div>';
     return h;
   }
@@ -821,28 +1068,30 @@
   function renderTower() {
     var t = UI.tower;
     if (!t) {
+      var cov = roleCoverage();
       var h0 = '<div class="mode-screen"><div class="mode-head"><div>';
-      h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">HOLD THE CORE · INFINITE UPGRADES</p></div>';
+      h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">ROLES · INFINITE UPS · CO-OP BOSS</p></div>';
       h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
       h0 += '<div class="role-banner"><span class="role-tag ' + P.loadout + '">' + P.loadout.toUpperCase() + '</span>';
-      h0 += '<span class="badge">BEST WAVE ' + P.wavesBest + '</span></div>';
+      h0 += '<span class="badge">BEST ' + P.wavesBest + '</span>';
+      h0 += '<span class="badge">' + (cov.bulwark ? 'B' : '·') + (cov.rift ? 'R' : '·') + (cov.warden ? 'W' : '·') + '</span></div>';
       h0 += '<div class="upgrade-row">';
       TOWER_UPS.forEach(function (u) {
         var lv = P.towerUp[u.id] || 0;
-        var cost = Math.floor(u.base * Math.pow(1.35, lv));
+        var cost = Math.floor(u.base * Math.pow(1.38, lv));
         h0 += '<button type="button" class="up-chip" data-action="tower-up" data-id="' + u.id + '">' + u.name + ' ' + lv + ' · ' + cost + '</button>';
       });
-      h0 += '</div>';
-      h0 += '<div style="flex:1;display:flex;align-items:center;justify-content:center;margin-top:1.5rem">';
-      h0 += '<button type="button" class="stone-btn" style="min-width:12rem;font-size:0.72rem;padding:1rem 1.4rem" data-action="start-tower">DEPLOY</button></div>';
-      h0 += '<p class="empty-note">Bulwark holds. Rift deletes. Warden mends. Bring roles.</p></div>';
+      h0 += '</div><div class="tower-deploy">';
+      h0 += '<button type="button" class="stone-btn" data-action="start-tower">SOLO DEPLOY</button>';
+      h0 += '<button type="button" class="stone-btn alt" data-action="start-coop">CO-OP BOSS</button></div>';
+      h0 += '<p class="empty-note">Co-op boss checks taunt / arc / mend gates. Solo fills missing roles with ghost allies.</p></div>';
       return h0;
     }
     var h = '<div class="mode-screen" id="tower-live"><div class="mode-head"><div>';
-    h += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub" data-wave>WAVE ' + t.wave + '</p></div>';
+    h += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub" data-wave>' + (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave + '</p></div>';
     h += '<button type="button" class="back-stone" data-action="flee-tower">✕</button></div>';
     h += '<div class="tower-arena"><div class="tower-hud"><span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
-    h += '<span>' + t.kills + ' KILLS</span></div>';
+    h += '<span data-gates>B0 R0 W0</span><span data-combo></span></div>';
     h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
     h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
     h += '<div class="ability-bar">';
@@ -855,24 +1104,37 @@
 
   function renderGate() {
     var h = '<div class="mode-screen"><div class="mode-head"><div>';
-    h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">EXTRACT EXOTICS · BRING THEM HOME</p></div>';
+    h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">RUN THE EXTRACT · BRING EXOTICS HOME</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
     h += '<div class="panel-scroll planet-grid">';
     PLANETS.forEach(function (pl) {
       var open = WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
       h += '<button type="button" class="planet-card' + (open ? ' unlocked' : ' locked') + '" style="--accent:' + pl.accent + '" data-action="extract" data-id="' + pl.id + '"' + (open ? '' : ' disabled') + '>';
       h += '<h3>' + esc(pl.name) + '</h3><p>' + esc(pl.blurb) + '</p>';
-      h += '<div class="badge">' + (open ? ('EXTRACT · ' + pl.exoticName) : ('ERA ' + pl.eraNeed)) + '</div>';
+      h += '<div class="badge">' + (open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed) + '</div>';
       if (P.exotics[pl.exotic]) h += '<div class="badge">OWNED x' + P.exotics[pl.exotic] + '</div>';
+      var bank = WORLD.sharedBank[pl.exotic] || 0;
+      if (bank) h += '<div class="badge">BANK x' + bank + '</div>';
       h += '</button>';
     });
     h += '</div></div>';
     return h;
   }
 
+  function renderExtract() {
+    var pl = UI.extract.planet;
+    var h = '<div class="mode-screen extract-screen" style="--accent:' + pl.accent + '">';
+    h += '<h2 class="mode-title">' + esc(pl.name) + '</h2>';
+    h += '<p class="mode-sub">' + esc(pl.verb) + ' — survive the hazard</p>';
+    h += '<div class="extract-viz"></div>';
+    h += '<div class="extract-bar"><i style="width:' + UI.extract.progress + '%"></i></div>';
+    h += '<p class="empty-note">Hazards ' + UI.extract.hazards + '/4</p></div>';
+    return h;
+  }
+
   function renderEra() {
     var h = '<div class="mode-screen"><div class="mode-head"><div>';
-    h += '<h2 class="mode-title">TIMELINE</h2><p class="mode-sub">STONE → VOID · STABILIZE ERAS IN TOWER</p></div>';
+    h += '<h2 class="mode-title">TIMELINE</h2><p class="mode-sub">STABILIZE IN TOWER · ROLE GATES ON BOSSES</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
     h += '<div class="panel-scroll era-track">';
     ERAS.forEach(function (era, i) {
@@ -881,11 +1143,52 @@
       var locked = i > WORLD.eraIndex;
       h += '<div class="era-card' + (current ? ' current' : '') + (locked ? ' locked' : '') + '" style="--accent:' + era.accent + '">';
       h += '<h3>' + esc(era.name) + '</h3><p>' + esc(era.blurb) + '</p>';
+      if (era.story) h += '<p class="era-story">' + esc(era.story) + '</p>';
       h += '<div class="badge">' + (cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED') + '</div></div>';
     });
-    h += '<p class="empty-note">Clear wave 6+ in Chronolith to push the timeline. Planets unlock with eras.</p>';
     h += '</div></div>';
     return h;
+  }
+
+  function renderLife() {
+    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    h += '<h2 class="mode-title">SLOW LIFE</h2><p class="mode-sub">FISH · GARDEN · BREATHE</p></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<div class="panel-scroll">';
+    h += '<div class="life-card fish-card"><div class="life-art fish-art' + (UI.fishCast ? ' casting' : '') + '"></div>';
+    h += '<button type="button" class="stone-btn" data-action="fish"' + (UI.fishCast ? ' disabled' : '') + '>' + (UI.fishCast ? 'WAITING…' : 'CAST LINE') + '</button>';
+    h += '<p class="mode-sub">Caught ' + P.fishCaught + '</p></div>';
+    h += '<div class="life-card"><p class="mode-sub">GARDEN PLOTS</p><div class="garden-grid">';
+    for (var i = 0; i < 4; i++) {
+      var planted = P.gardenPlanted[i];
+      var ready = planted && (Date.now() - planted >= 45000);
+      var label = !planted ? 'PLANT 15' : ready ? 'HARVEST' : '…';
+      h += '<button type="button" class="garden-plot' + (planted ? ' grown' : '') + (ready ? ' ready' : '') + '" data-action="garden" data-id="' + i + '">' + label + '</button>';
+    }
+    h += '</div></div></div></div>';
+    return h;
+  }
+
+  function renderStory() {
+    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    h += '<h2 class="mode-title">LORE</h2><p class="mode-sub">CHAPTER ' + WORLD.storyChapter + '</p></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<div class="panel-scroll">';
+    STORY.forEach(function (ch) {
+      var locked = ch.id > WORLD.storyChapter;
+      h += '<div class="story-card' + (locked ? ' locked' : '') + '"><h3>' + esc(ch.title) + '</h3>';
+      h += '<p>' + (locked ? 'Sealed until the timeline opens.' : esc(ch.body)) + '</p></div>';
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  function renderStoryModal() {
+    if (UI.storyOpen == null) return '';
+    var ch = STORY[UI.storyOpen] || STORY[0];
+    return '<div class="story-modal"><div class="story-panel">' +
+      '<div class="mark">TRANSMISSION</div><h2>' + esc(ch.title) + '</h2><p>' + esc(ch.body) + '</p>' +
+      '<button type="button" class="stone-btn" data-action="dismiss-story">CONTINUE</button></div></div>';
   }
 
   function render() {
@@ -898,38 +1201,34 @@
     else if (UI.mode === 'forge') html = renderForge();
     else if (UI.mode === 'tower') html = renderTower();
     else if (UI.mode === 'gate') html = renderGate();
+    else if (UI.mode === 'extract') html = renderExtract();
     else if (UI.mode === 'era') html = renderEra();
+    else if (UI.mode === 'life') html = renderLife();
+    else if (UI.mode === 'story') html = renderStory();
     else html = renderHub();
+    html += renderStoryModal();
     root.innerHTML = html;
   }
 
-  function onAction(act, id, el) {
+  function onAction(act, id) {
     if (act === 'pick') { selectPlayer(id); return; }
-    if (act === 'who') {
-      savePlayer();
-      UI.mode = 'who';
-      P = null;
-      activeId = null;
-      render();
-      return;
-    }
-    if (act === 'mode') {
-      if (id === 'tower' && !UI.tower) { UI.mode = 'tower'; render(); return; }
-      UI.mode = id;
-      render();
-      return;
-    }
+    if (act === 'who') { savePlayer(); UI.mode = 'who'; P = null; activeId = null; render(); return; }
+    if (act === 'mode') { UI.mode = id; render(); return; }
     if (act === 'select-node') { UI.selectedNode = id; render(); return; }
     if (act === 'unlock') { unlockNode(id); return; }
-    if (act === 'loadout') { P.loadout = id; savePlayer(); toast(id.toUpperCase() + ' LOADOUT'); render(); return; }
+    if (act === 'loadout') { P.loadout = id; savePlayer(); toast(id.toUpperCase()); render(); return; }
     if (act === 'forge-add') { putForgeShard(id); return; }
     if (act === 'clear-forge') { UI.forgeSlots[+id] = null; render(); return; }
     if (act === 'merge') { tryMerge(); return; }
-    if (act === 'start-tower') { startTower(); return; }
+    if (act === 'start-tower') { startTower(false); return; }
+    if (act === 'start-coop') { startTower(true); return; }
     if (act === 'flee-tower') { endTower(false); return; }
     if (act === 'ability') { useAbility(id); return; }
     if (act === 'tower-up') { buyTowerUp(id); return; }
-    if (act === 'extract') { extractPlanet(id); return; }
+    if (act === 'extract') { startExtract(id); return; }
+    if (act === 'fish') { castFish(); return; }
+    if (act === 'garden') { tendGarden(+id); return; }
+    if (act === 'dismiss-story') { UI.storyOpen = null; savePlayer(); render(); return; }
   }
 
   function bind() {
@@ -939,20 +1238,48 @@
     app.addEventListener('click', function (e) {
       var t = e.target.closest('[data-action]');
       if (!t) return;
-      onAction(t.getAttribute('data-action'), t.getAttribute('data-id'), t);
+      onAction(t.getAttribute('data-action'), t.getAttribute('data-id'));
     });
   }
 
   function boot() {
-    loadWorld();
+    WORLD = loadWorldLocal();
     bind();
-    // heartbeat presence
+    try {
+      bc = new BroadcastChannel('voidline-chronos');
+      bc.onmessage = function (ev) {
+        if (!ev.data) return;
+        if (ev.data.type === 'world' && ev.data.world) {
+          if ((ev.data.world.updatedAt || 0) > (WORLD.updatedAt || 0)) {
+            WORLD = Object.assign(freshWorld(), ev.data.world);
+            if (UI.mode !== 'who') render();
+          }
+        }
+      };
+    } catch (e) { bc = null; }
+    window.addEventListener('storage', function (e) {
+      if (e.key === WORLD_KEY && e.newValue) {
+        try {
+          var w = JSON.parse(e.newValue);
+          if ((w.updatedAt || 0) > (WORLD.updatedAt || 0)) {
+            WORLD = Object.assign(freshWorld(), w);
+            if (UI.mode !== 'who') render();
+          }
+        } catch (err) {}
+      }
+    });
     setInterval(function () {
       if (activeId && WORLD) {
         WORLD.presence[activeId] = Date.now();
-        saveWorld();
+        saveWorldLocal();
+        fetch('/api/chronos/' + encodeURIComponent(ROOM), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'presence', player: activeId })
+        }).catch(function () {});
       }
-    }, 20000);
+    }, 15000);
+    setInterval(function () { if (activeId) pullRemote().then(function () { if (UI.mode === 'hub') render(); }); }, 20000);
     render();
   }
 
@@ -962,6 +1289,7 @@
   window.VoidlineChronos = {
     getPlayer: function () { return P; },
     getWorld: function () { return WORLD; },
+    sync: pullRemote,
     render: render
   };
 })();

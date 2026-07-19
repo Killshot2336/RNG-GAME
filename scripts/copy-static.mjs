@@ -24,7 +24,7 @@ function cpDir(srcDir, destDir) {
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
-for (const f of ['index.html', 'chronos.css', 'chronos.js', 'cloud-auth.js', 'player-core.js']) {
+for (const f of ['index.html', 'chronos.css', 'chronos.js', 'chronos-data.js', 'cloud-auth.js', 'player-core.js']) {
   const src = path.join(root, f);
   if (fs.existsSync(src)) cp(src, path.join(dist, f));
 }

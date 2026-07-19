@@ -3,27 +3,25 @@
 Private 3-player co-op warband — Aden, Jamie, Edward.
 
 ## Fantasy
-Thrown into deep time. Stabilize eras. Merge relics. Spec a skill constellation. Hold the Chronolith tower. Raid planets for exotics that unlock builds back home.
+Thrown into deep time. Stabilize eras. Merge relics. Spec the constellation. Hold the Chronolith. Raid planets for exotics. Fish and garden between wars.
 
-## Inspired / tuned
-| Source | Steal | Our take |
-|--------|-------|----------|
-| Deep Rock / L4D | Role synergy | Bulwark / Rift / Warden loadouts |
-| PoE / Last Epoch | Skill tree identity | One constellation, crazy keystones |
-| Vampire Survivors | Wave dopamine | Chronolith tower runs |
-| Stardew / isekai slow-life | Hub activities | Diegetic art hotspots, no nav chrome |
-| No Man's Sky | Planet loot | Exotic bridge recipes |
+## Systems
+| System | Notes |
+|--------|--------|
+| Seats | Aden / Jamie / Edward — per-seat saves `voidline_chronos_v2_*` |
+| Sync | Local + BroadcastChannel + `/api/chronos/voidline-chronos` (Supabase room) |
+| Hub | Diegetic art hotspots — no nav chrome |
+| Constellation | 25+ nodes, Bulwark / Rift / Warden + cross keystones |
+| Forge | Shard merge + exotic myth relics |
+| Chronolith | Waves, infinite ups, role abilities, co-op boss gates |
+| Stargate | Timed extract runs per planet |
+| Slow life | Fishing + garden plots |
+| Lore | Story chapters unlock with eras |
+| Daily | Streak chrono + SP on login |
 
-## Modes
-1. **Who** — pick warband seat (cloud sync per profile)
-2. **Hub** — art diorama (Tower / Forge / Tree / Gate / Era)
-3. **Constellation** — skill tree + save loadouts
-4. **Forge** — merge shards → relics
-5. **Chronolith** — tower waves, infinite upgrades
-6. **Gate** — planets + exotic extraction
-7. **Party** — shared world unlocks + presence
-
-## Sync
-- Per-player save: `voidline_chronos_v1_<id>`
-- Shared world: `voidline_chronos_world_v1`
-- Optional Supabase room when cloud auth present
+## Co-op
+- Presence pips (5 min window)
+- Shared world bank + era unlocks
+- Co-op boss mode tracks role gates (taunt / arc / mend)
+- Solo fills missing roles with ghost allies
+- Cloud sync when `SUPABASE_URL` + service role are set on Vercel
