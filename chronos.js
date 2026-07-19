@@ -1,144 +1,202 @@
-/* VOIDLINE: CHRONOS — full warband build */
+/* VOIDLINE CHRONOS — canvas game client */
 (function () {
   'use strict';
 
   var D = window.ChronosData;
+  if (!D) {
+    console.error('ChronosData missing');
+    return;
+  }
+
   var SAVE_PREFIX = 'voidline_chronos_v2_';
   var WORLD_KEY = 'voidline_chronos_world_v2';
-  var ROOM = (D && D.ROOM_ID) || 'voidline-chronos';
+  var ROOM = D.ROOM_ID || 'voidline-chronos';
   var SAVE_VERSION = 2;
 
   var WARBAND = D.WARBAND;
   var ERAS = D.ERAS;
   var PLANETS = D.PLANETS;
-  var SHARD_DEFS = D.SHARDS;
-  var MERGE_RECIPES = D.RECIPES;
-  var RELIC_BONUS = D.RELICS;
+  var SHARDS = D.SHARDS;
+  var RECIPES = D.RECIPES;
+  var RELICS = D.RELICS;
   var TREE = D.TREE;
   var TOWER_UPS = D.TOWER_UPS;
   var STORY = D.STORY;
   var FISH = D.FISH;
+  var ART = D.ART || {};
 
-  var UI = {
-    mode: 'who',
-    selectedNode: null,
-    forgeSlots: [null, null],
-    tower: null,
-    fishCast: false,
-    gardenFlash: 0,
-    storyOpen: null,
+  /* ── Game state ── */
+  var G = {
+    scene: 'boot',
+    activeId: null,
+    P: null,
+    WORLD: null,
+    toast: '',
+    toastT: 0,
     shake: 0,
     syncLabel: 'LOCAL',
-    extract: null
+    hits: [],
+    particles: [],
+    flash: 0,
+    storyOpen: null,
+    forge: [null, null],
+    selNode: 'root',
+    tower: null,
+    extract: null,
+    fishCast: false,
+    time: 0,
+    pointer: { x: 0, y: 0, down: false },
+    remoteVersion: 0
   };
 
-  var P = null;
-  var activeId = null;
-  var WORLD = null;
-  var remoteVersion = 0;
-  var syncTimer = null;
-  var raf = null;
+  var canvas, ctx, W = 390, H = 844, dpr = 1;
+  var images = {};
   var lastTs = 0;
   var bc = null;
+  var audioCtx = null;
 
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
+  /* ── Utils ── */
+  function daySeed() { return Math.floor(Date.now() / 86400000); }
 
   function warband(id) {
     return WARBAND.find(function (w) { return w.id === id; }) || WARBAND[0];
   }
 
-  function toast(msg, kind) {
-    var layer = document.getElementById('toast-layer');
-    if (!layer) return;
-    var el = document.createElement('div');
-    el.className = 'toast' + (kind ? ' ' + kind : '');
-    el.textContent = msg;
-    layer.appendChild(el);
-    setTimeout(function () { el.remove(); }, 1500);
+  function toast(msg) {
+    G.toast = String(msg || '');
+    G.toastT = 1.4;
   }
 
-  function shake(ms) {
-    UI.shake = ms || 280;
-    var app = document.getElementById('chronos-app');
-    if (app) {
-      app.classList.add('shaking');
-      setTimeout(function () { app.classList.remove('shaking'); }, UI.shake);
-    }
+  function buzz(p) {
+    try { if (navigator.vibrate) navigator.vibrate(p == null ? 16 : p); } catch (e) {}
   }
 
-  function buzz(pattern) {
+  function beep(freq, dur, type) {
     try {
-      if (navigator.vibrate) navigator.vibrate(pattern == null ? 18 : pattern);
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var o = audioCtx.createOscillator();
+      var g = audioCtx.createGain();
+      o.type = type || 'square';
+      o.frequency.value = freq;
+      g.gain.value = 0.04;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (dur || 0.08));
+      o.stop(audioCtx.currentTime + (dur || 0.08));
     } catch (e) {}
   }
 
-  function flashOverlay(cls) {
-    var app = document.getElementById('chronos-app');
-    if (!app) return;
-    var el = document.createElement('div');
-    el.className = cls || 'merge-flash';
-    app.appendChild(el);
-    setTimeout(function () { el.remove(); }, 650);
+  function shake(ms) { G.shake = Math.max(G.shake, (ms || 200) / 1000); }
+
+  function spawnParts(x, y, n, color) {
+    for (var i = 0; i < n; i++) {
+      G.particles.push({
+        x: x, y: y,
+        vx: (Math.random() - 0.5) * 220,
+        vy: (Math.random() - 0.5) * 220 - 40,
+        life: 0.35 + Math.random() * 0.35,
+        max: 0.7,
+        color: color || '#ffd36a',
+        r: 2 + Math.random() * 3
+      });
+    }
   }
 
-  function markScreenEnter() {
-    var root = document.getElementById('screen-root');
-    if (!root) return;
-    var first = root.firstElementChild;
-    if (!first) return;
-    first.classList.add('screen-in');
+  function hit(id, x, y, w, h, data) {
+    G.hits.push({ id: id, x: x, y: y, w: w, h: h, data: data || null });
   }
 
-  function daySeed() {
-    return Math.floor(Date.now() / 86400000);
+  function hitAt(x, y) {
+    for (var i = G.hits.length - 1; i >= 0; i--) {
+      var h = G.hits[i];
+      if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) return h;
+    }
+    return null;
   }
 
+  function img(key) { return images[key] || null; }
+
+  function drawImg(key, x, y, w, h, alpha) {
+    var im = img(key);
+    if (!im || !im.complete || !im.naturalWidth) {
+      ctx.fillStyle = 'rgba(20,16,14,0.9)';
+      ctx.fillRect(x, y, w, h);
+      return;
+    }
+    ctx.save();
+    if (alpha != null) ctx.globalAlpha = alpha;
+    ctx.drawImage(im, x, y, w, h);
+    ctx.restore();
+  }
+
+  function coverImg(key, x, y, w, h, ox, oy) {
+    var im = img(key);
+    if (!im || !im.complete || !im.naturalWidth) {
+      ctx.fillStyle = '#08060a';
+      ctx.fillRect(x, y, w, h);
+      return;
+    }
+    ox = ox == null ? 0.5 : ox;
+    oy = oy == null ? 0.4 : oy;
+    var ir = im.naturalWidth / im.naturalHeight;
+    var rr = w / h;
+    var dw, dh, dx, dy;
+    if (ir > rr) { dh = h; dw = h * ir; } else { dw = w; dh = w / ir; }
+    dx = x + (w - dw) * ox;
+    dy = y + (h - dh) * oy;
+    ctx.drawImage(im, dx, dy, dw, dh);
+  }
+
+  function text(str, x, y, opts) {
+    opts = opts || {};
+    ctx.save();
+    ctx.font = (opts.weight || '700') + ' ' + (opts.size || 18) + 'px "Arial Black", Impact, sans-serif';
+    ctx.fillStyle = opts.color || '#f4ead4';
+    ctx.textAlign = opts.align || 'left';
+    ctx.textBaseline = opts.base || 'alphabetic';
+    if (opts.shadow !== false) {
+      ctx.shadowColor = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur = opts.blur != null ? opts.blur : 8;
+      ctx.shadowOffsetY = 2;
+    }
+    ctx.fillText(str, x, y);
+    ctx.restore();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r || 8, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* ── Save / player ── */
   function freshPlayer(id) {
     var shards = {};
-    SHARD_DEFS.forEach(function (s) { shards[s.id] = 0; });
-    shards.bone = 8;
-    shards.ore = 6;
+    SHARDS.forEach(function (s) { shards[s.id] = 0; });
+    shards.bone = 8; shards.ore = 6;
     return {
-      v: SAVE_VERSION,
-      id: id,
-      chrono: 160,
-      essence: 0,
-      skillPoints: 4,
+      v: SAVE_VERSION, id: id, chrono: 160, essence: 0, skillPoints: 4,
       unlocked: ['root'],
       loadout: id === 'jamie' ? 'bulwark' : id === 'edward' ? 'warden' : 'rift',
-      loadouts: { bulwark: [], rift: [], warden: [] },
-      relics: [],
-      shards: shards,
-      exotics: {},
+      relics: [], shards: shards, exotics: {},
       towerUp: { damage: 0, rate: 0, core: 0, range: 0, luck: 0 },
-      wavesBest: 0,
-      bossesKilled: 0,
-      totalMerged: 0,
-      fishCaught: 0,
-      garden: [0, 0, 0, 0],
-      gardenPlanted: [0, 0, 0, 0],
-      dailyClaimed: 0,
-      streak: 0,
-      lastSeen: Date.now()
+      wavesBest: 0, bossesKilled: 0, totalMerged: 0, fishCaught: 0,
+      garden: [0, 0, 0, 0], gardenPlanted: [0, 0, 0, 0],
+      dailyClaimed: 0, streak: 0, lastSeen: Date.now(), _introSeen: false
     };
   }
 
   function freshWorld() {
     return {
-      v: SAVE_VERSION,
-      eraIndex: 0,
-      erasCleared: [],
-      planetsUnlocked: ['cinder'],
-      sharedBank: {},
-      presence: {},
-      storyChapter: 0,
-      dailySeed: daySeed(),
+      v: SAVE_VERSION, eraIndex: 0, erasCleared: [], planetsUnlocked: ['cinder'],
+      sharedBank: {}, presence: {}, storyChapter: 0, dailySeed: daySeed(),
       coop: null,
       quest: { id: 'hold5', name: 'Hold wave 5', prog: 0, target: 5, reward: 40 },
-      log: [],
       updatedAt: Date.now()
     };
   }
@@ -149,13 +207,10 @@
     p.shards = Object.assign(base.shards, (data && data.shards) || {});
     p.towerUp = Object.assign(base.towerUp, (data && data.towerUp) || {});
     p.exotics = Object.assign({}, (data && data.exotics) || {});
-    p.garden = (data && data.garden) || base.garden;
-    p.gardenPlanted = (data && data.gardenPlanted) || base.gardenPlanted;
     return p;
   }
 
-  /* ── Persistence + sync ── */
-  function loadWorldLocal() {
+  function loadWorld() {
     try {
       var raw = localStorage.getItem(WORLD_KEY);
       if (raw) return Object.assign(freshWorld(), JSON.parse(raw));
@@ -163,237 +218,60 @@
     return freshWorld();
   }
 
-  function saveWorldLocal() {
-    if (!WORLD) return;
-    WORLD.updatedAt = Date.now();
-    try { localStorage.setItem(WORLD_KEY, JSON.stringify(WORLD)); } catch (e) {}
+  function saveWorld() {
+    if (!G.WORLD) return;
+    G.WORLD.updatedAt = Date.now();
+    try { localStorage.setItem(WORLD_KEY, JSON.stringify(G.WORLD)); } catch (e) {}
     if (bc) {
-      try { bc.postMessage({ type: 'world', world: WORLD, version: remoteVersion }); } catch (e) {}
+      try { bc.postMessage({ type: 'world', world: G.WORLD }); } catch (e) {}
     }
   }
 
   function loadPlayer(id) {
     try {
-      var raw = localStorage.getItem(SAVE_PREFIX + id);
-      if (raw) { P = migratePlayer(JSON.parse(raw), id); return; }
-      // migrate v1
-      raw = localStorage.getItem('voidline_chronos_v1_' + id);
-      if (raw) { P = migratePlayer(JSON.parse(raw), id); return; }
+      var raw = localStorage.getItem(SAVE_PREFIX + id) || localStorage.getItem('voidline_chronos_v1_' + id);
+      if (raw) { G.P = migratePlayer(JSON.parse(raw), id); return; }
     } catch (e) {}
-    P = freshPlayer(id);
+    G.P = freshPlayer(id);
   }
 
   function savePlayer() {
-    if (!P || !activeId) return;
-    P.lastSeen = Date.now();
-    try { localStorage.setItem(SAVE_PREFIX + activeId, JSON.stringify(P)); } catch (e) {}
-    if (WORLD) {
-      if (!WORLD._players) WORLD._players = {};
-      WORLD._players[activeId] = {
-        loadout: P.loadout,
-        wavesBest: P.wavesBest,
-        unlocked: P.unlocked.length,
-        relics: P.relics.slice(),
-        lastSeen: P.lastSeen
-      };
-      WORLD.presence[activeId] = Date.now();
-      saveWorldLocal();
-    }
-    queueRemoteSync();
-    if (window.VoidlineCloud && window.VoidlineCloud.flushSave) {
-      try {
-        window.VoidlineCloud.flushSave(activeId, { chronos: P, chronosWorld: WORLD });
-      } catch (e) {}
+    if (!G.P || !G.activeId) return;
+    G.P.lastSeen = Date.now();
+    try { localStorage.setItem(SAVE_PREFIX + G.activeId, JSON.stringify(G.P)); } catch (e) {}
+    if (G.WORLD) {
+      G.WORLD.presence[G.activeId] = Date.now();
+      saveWorld();
     }
   }
 
-  function packRemoteState() {
-    return {
-      kind: 'chronos',
-      world: WORLD,
-      players: (function () {
-        var out = {};
-        WARBAND.forEach(function (w) {
-          try {
-            var raw = localStorage.getItem(SAVE_PREFIX + w.id);
-            if (raw) out[w.id] = JSON.parse(raw);
-          } catch (e) {}
-        });
-        if (P && activeId) out[activeId] = P;
-        return out;
-      })()
-    };
-  }
-
-  function applyRemoteState(state, version) {
-    if (!state || !state.world) return;
-    var incoming = state.world;
-    if (!WORLD || (incoming.updatedAt || 0) >= (WORLD.updatedAt || 0)) {
-      WORLD = Object.assign(freshWorld(), incoming);
-    }
-    if (state.players && activeId && state.players[activeId]) {
-      var remoteP = state.players[activeId];
-      if ((remoteP.lastSeen || 0) > (P.lastSeen || 0)) {
-        P = migratePlayer(remoteP, activeId);
-        try { localStorage.setItem(SAVE_PREFIX + activeId, JSON.stringify(P)); } catch (e) {}
-      }
-    }
-    // merge other players into local cache for co-op ghosts
-    if (state.players) {
-      Object.keys(state.players).forEach(function (pid) {
-        if (pid === activeId) return;
-        try {
-          var local = localStorage.getItem(SAVE_PREFIX + pid);
-          var lp = local ? JSON.parse(local) : null;
-          if (!lp || (state.players[pid].lastSeen || 0) > (lp.lastSeen || 0)) {
-            localStorage.setItem(SAVE_PREFIX + pid, JSON.stringify(state.players[pid]));
-          }
-        } catch (e) {}
-      });
-    }
-    remoteVersion = version || remoteVersion;
-    UI.syncLabel = 'CLOUD';
-  }
-
-  var syncQueued = false;
-  function queueRemoteSync() {
-    if (syncQueued) return;
-    syncQueued = true;
-    setTimeout(function () {
-      syncQueued = false;
-      pushRemote();
-    }, 600);
-  }
-
-  async function pullRemote() {
-    try {
-      var res = await fetch('/api/chronos/' + encodeURIComponent(ROOM));
-      if (!res.ok) { UI.syncLabel = 'LOCAL'; return; }
-      var data = await res.json();
-      if (data.localOnly) { UI.syncLabel = 'LOCAL'; return; }
-      if (!data.state) {
-        await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'init', state: packRemoteState() })
-        });
-        remoteVersion = 1;
-        UI.syncLabel = 'CLOUD';
-        return;
-      }
-      applyRemoteState(data.state, data.version);
-      remoteVersion = data.version || 0;
-      if (data.presence) {
-        Object.keys(data.presence).forEach(function (k) {
-          WORLD.presence[k.toLowerCase()] = data.presence[k];
-        });
-      }
-    } catch (e) {
-      UI.syncLabel = 'LOCAL';
-    }
-  }
-
-  async function pushRemote() {
-    if (!WORLD) return;
-    try {
-      var res = await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'sync',
-          version: remoteVersion,
-          player: activeId,
-          state: packRemoteState()
-        })
-      });
-      var data = await res.json();
-      if (res.status === 409 && data.state) {
-        applyRemoteState(data.state, data.version);
-        remoteVersion = data.version;
-        // retry once
-        res = await fetch('/api/chronos/' + encodeURIComponent(ROOM), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'sync',
-            version: remoteVersion,
-            player: activeId,
-            state: packRemoteState()
-          })
-        });
-        data = await res.json();
-      }
-      if (data.version) remoteVersion = data.version;
-      if (!data.localOnly && res.ok) UI.syncLabel = 'CLOUD';
-    } catch (e) {
-      UI.syncLabel = 'LOCAL';
-    }
-  }
-
-  function selectPlayer(id) {
-    activeId = id;
-    loadPlayer(id);
-    WORLD = loadWorldLocal();
-    claimDailyIfNeeded();
-    WORLD.presence[id] = Date.now();
-    saveWorldLocal();
-    UI.mode = 'hub';
-    if (WORLD.storyChapter === 0 && !(P._introSeen)) {
-      UI.storyOpen = 0;
-      P._introSeen = true;
-    }
-    buzz([16, 24, 16]);
-    pullRemote().then(function () { render(); });
-    savePlayer();
-    render();
-  }
-
-  function claimDailyIfNeeded() {
+  function claimDaily() {
     var d = daySeed();
-    if (P.dailyClaimed === d) return;
-    if (P.dailyClaimed === d - 1) P.streak = (P.streak || 0) + 1;
-    else P.streak = 1;
-    P.dailyClaimed = d;
-    var bonus = 40 + P.streak * 8;
-    P.chrono += bonus;
-    P.skillPoints += 1;
-    /* silent grant — avoid web-toast spam on boot */
+    if (G.P.dailyClaimed === d) return;
+    if (G.P.dailyClaimed === d - 1) G.P.streak = (G.P.streak || 0) + 1;
+    else G.P.streak = 1;
+    G.P.dailyClaimed = d;
+    G.P.chrono += 40 + G.P.streak * 8;
+    G.P.skillPoints += 1;
   }
 
+  function hasNode(id) { return G.P && G.P.unlocked.indexOf(id) >= 0; }
   function nodeById(id) { return TREE.find(function (n) { return n.id === id; }); }
-  function hasNode(id) { return P && P.unlocked.indexOf(id) >= 0; }
   function canUnlock(node) {
-    if (!P || !node || hasNode(node.id)) return false;
-    if (P.skillPoints < node.cost) return false;
+    if (!G.P || !node || hasNode(node.id)) return false;
+    if (G.P.skillPoints < node.cost) return false;
     return node.req.every(function (r) { return hasNode(r); });
   }
 
-  function unlockNode(id) {
-    var node = nodeById(id);
-    if (!canUnlock(node)) { toast('LOCKED', 'bad'); return; }
-    P.skillPoints -= node.cost;
-    P.unlocked.push(id);
-    if (node.role && node.role !== 'any') {
-      if (!P.loadouts[node.role]) P.loadouts[node.role] = [];
-      if (P.loadouts[node.role].indexOf(id) < 0) P.loadouts[node.role].push(id);
-    }
-    savePlayer();
-    toast(node.name, 'good');
-    shake(160);
-    render();
-  }
-
-  function aggregateStats(player) {
-    var pl = player || P;
-    var stats = { armor: 0, dmg: 0, crit: 0, regen: 0, chain: 0, taunt: 0, shield: 0, quake: 0, freeze: 0, phoenix: 0, aura: 0, cleanse: 0, burn: 0, slow: 0, mergeLuck: 0, extract: 0, bossDmg: 0, nova: 0, heal: 0, chronoGain: 0, lifeYield: 0, coopPower: 0, coreMult: 0, gateBreak: 0 };
-    if (!pl) return stats;
-    (pl.unlocked || []).forEach(function (id) {
+  function aggregateStats() {
+    var stats = { dmg: 0, armor: 0, crit: 0, chain: 0, regen: 0, shield: 0, slow: 0, heal: 0, bossDmg: 0, mergeLuck: 0, extract: 0, chronoGain: 0, lifeYield: 0, aura: 0, coopPower: 0, coreMult: 0, phoenix: 0, quake: 0, freeze: 0, nova: 0, gateBreak: 0 };
+    (G.P.unlocked || []).forEach(function (id) {
       var n = nodeById(id);
       if (!n || !n.stats) return;
       Object.keys(n.stats).forEach(function (k) { stats[k] = (stats[k] || 0) + n.stats[k]; });
     });
-    (pl.relics || []).forEach(function (rid) {
-      var b = RELIC_BONUS[rid];
+    (G.P.relics || []).forEach(function (rid) {
+      var b = RELICS[rid];
       if (!b) return;
       Object.keys(b).forEach(function (k) {
         if (k === 'label') return;
@@ -403,225 +281,97 @@
     return stats;
   }
 
-  function partyRolesOnline() {
-    var now = Date.now();
-    var roles = {};
-    WARBAND.forEach(function (w) {
-      var on = WORLD.presence[w.id] && (now - WORLD.presence[w.id] < 5 * 60 * 1000);
-      if (!on) return;
-      try {
-        var raw = localStorage.getItem(SAVE_PREFIX + w.id);
-        var pl = raw ? JSON.parse(raw) : null;
-        if (pl) roles[w.id] = pl.loadout || 'rift';
-      } catch (e) { roles[w.id] = 'rift'; }
-    });
-    if (P) roles[activeId] = P.loadout;
-    return roles;
-  }
-
-  function roleCoverage() {
-    var roles = partyRolesOnline();
-    var set = { bulwark: false, rift: false, warden: false };
-    Object.keys(roles).forEach(function (id) { set[roles[id]] = true; });
-    // solo: AI fills gaps
-    var online = Object.keys(roles).length;
-    if (online <= 1) {
-      set.bulwark = set.rift = set.warden = true;
-    }
-    return set;
-  }
-
-  /* ── Forge ── */
-  function addShard(id, n) {
-    if (!P.shards[id]) P.shards[id] = 0;
-    P.shards[id] += n;
-  }
-
-  function tryMerge() {
-    var a = UI.forgeSlots[0];
-    var b = UI.forgeSlots[1];
-    if (!a || !b) { toast('NEED TWO', 'bad'); return; }
-    var recipe = MERGE_RECIPES.find(function (r) {
-      return (r.a === a && r.b === b) || (r.a === b && r.b === a);
-    });
-    function hasMat(id) { return (P.shards[id] || 0) >= 1 || (P.exotics[id] || 0) >= 1; }
-    function takeMat(id) {
-      if ((P.shards[id] || 0) >= 1) P.shards[id]--;
-      else if ((P.exotics[id] || 0) >= 1) P.exotics[id]--;
-    }
-    if (!hasMat(a) || !hasMat(b)) { toast('MISSING', 'bad'); return; }
-    takeMat(a); takeMat(b);
-    if (!recipe) {
-      UI.forgeSlots = [null, null];
-      P.chrono += 10;
-      toast('SCRAP +10');
-      buzz(12);
-      savePlayer(); render(); return;
-    }
-    var s = aggregateStats();
-    if (recipe.relic) {
-      if (P.relics.indexOf(recipe.out) < 0) P.relics.push(recipe.out);
-      toast(recipe.name.toUpperCase(), 'good');
-      shake(220);
-    } else {
-      var bonus = s.mergeLuck && Math.random() < 0.35 ? 1 : 0;
-      addShard(recipe.out, 1 + bonus);
-      toast('FORGED ' + recipe.name + (bonus ? ' x2' : ''), 'good');
-    }
-    P.totalMerged++;
-    P.essence += 1;
-    if (P.totalMerged % 3 === 0) P.skillPoints += 1;
-    UI.forgeSlots = [null, null];
-    buzz([22, 30, 22]);
-    flashOverlay('merge-flash');
-    savePlayer();
-    render();
-  }
-
-  function putForgeShard(id) {
-    var slot = UI.forgeSlots[0] ? (UI.forgeSlots[1] ? -1 : 1) : 0;
-    if (slot < 0) { toast('FULL', 'bad'); return; }
-    var ok = (P.shards[id] || 0) >= 1 || (P.exotics[id] || 0) >= 1;
-    if (!ok) { toast('NONE', 'bad'); return; }
-    UI.forgeSlots[slot] = id;
-    render();
-  }
-
-  /* ── Tower / co-op boss ── */
+  /* ── Tower combat (canvas) ── */
   function towerDps() {
     var s = aggregateStats();
-    var up = P.towerUp.damage || 0;
+    var up = G.P.towerUp.damage || 0;
     var base = 16 + up * 5;
-    var role = P.loadout === 'rift' ? 1.2 : P.loadout === 'bulwark' ? 0.85 : 0.9;
-    var party = 1 + (s.coopPower || 0) + (s.aura || 0) * 0.5;
-    return base * (1 + s.dmg) * role * party;
+    var role = G.P.loadout === 'rift' ? 1.2 : G.P.loadout === 'bulwark' ? 0.85 : 0.9;
+    return base * (1 + s.dmg) * role * (1 + (s.coopPower || 0));
   }
-
-  function towerFireRate() { return Math.max(0.16, 0.52 - (P.towerUp.rate || 0) * 0.028); }
-  function towerRange() { return 120 + (P.towerUp.range || 0) * 12; }
+  function towerFireRate() { return Math.max(0.16, 0.52 - (G.P.towerUp.rate || 0) * 0.028); }
   function towerMaxHp() {
     var s = aggregateStats();
-    return Math.floor((260 + (P.towerUp.core || 0) * 45) * (1 + s.armor) * (1 + (s.coreMult || 0)));
+    return Math.floor((260 + (G.P.towerUp.core || 0) * 45) * (1 + s.armor) * (1 + (s.coreMult || 0)));
   }
 
-  function startTower(coopBoss) {
+  function startTower(coop) {
     var s = aggregateStats();
-    var cov = roleCoverage();
-    UI.tower = {
-      running: true,
-      coopBoss: !!coopBoss,
-      t: 0,
-      wave: 1,
-      spawnAcc: 0,
-      fireAcc: 0,
-      coreHp: towerMaxHp(),
-      coreMax: towerMaxHp(),
-      enemies: [],
-      fx: [],
+    G.tower = {
+      running: true, coop: !!coop, t: 0, wave: 1, spawnAcc: 0, fireAcc: 0,
+      coreHp: towerMaxHp(), coreMax: towerMaxHp(),
+      enemies: [], fx: [],
       cds: { primary: 0, secondary: 0, ultimate: 0 },
-      frozen: 0,
-      phoenixUsed: false,
-      kills: 0,
-      chronoEarned: 0,
+      frozen: 0, phoenixUsed: false, kills: 0, chronoEarned: 0,
       shield: s.shield || 0,
       gates: { bulwark: 0, rift: 0, warden: 0 },
-      coverage: cov,
       combo: 0
     };
-    if (coopBoss) {
-      WORLD.coop = {
-        host: activeId,
-        started: Date.now(),
-        wave: 1,
-        roles: partyRolesOnline()
-      };
-      saveWorldLocal();
-      queueRemoteSync();
-    }
-    UI.mode = 'tower';
-    lastTs = performance.now();
-    if (raf) cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(towerLoop);
-    render();
-  }
-
-  function bumpQuest(wave) {
-    if (!WORLD.quest) return;
-    if (WORLD.quest.id === 'hold5') WORLD.quest.prog = Math.max(WORLD.quest.prog, wave);
-    if (WORLD.quest.prog >= WORLD.quest.target && !WORLD.quest.done) {
-      WORLD.quest.done = true;
-      P.chrono += WORLD.quest.reward;
-      toast('QUEST CLEAR +' + WORLD.quest.reward, 'good');
-    }
+    G.scene = 'tower';
+    beep(220, 0.1);
+    buzz(20);
   }
 
   function endTower(won) {
-    if (!UI.tower) return;
-    var t = UI.tower;
-    t.running = false;
-    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    if (!G.tower) return;
+    var t = G.tower;
     var s = aggregateStats();
     var gain = Math.floor(t.chronoEarned * (1 + (s.chronoGain || 0)));
-    P.chrono += gain;
-    P.essence += Math.floor(t.wave / 2);
-    if (t.wave > P.wavesBest) P.wavesBest = t.wave;
-    bumpQuest(t.wave);
-    if (t.wave >= 6) {
-      var era = ERAS[WORLD.eraIndex];
-      if (era && WORLD.erasCleared.indexOf(era.id) < 0) {
-        // role gate for era bosses on wave 6+
-        var need = Math.max(1, 2 - (s.gateBreak || 0));
-        var filled = ['bulwark', 'rift', 'warden'].filter(function (r) { return t.gates[r] > 0 || t.coverage[r]; }).length;
-        if (t.coopBoss || filled >= need || t.wave >= 8) {
-          WORLD.erasCleared.push(era.id);
-          if (WORLD.eraIndex < ERAS.length - 1) {
-            WORLD.eraIndex++;
-            WORLD.storyChapter = Math.min(STORY.length - 1, WORLD.eraIndex + 1);
-            UI.storyOpen = WORLD.storyChapter;
-          }
-          P.skillPoints += 2;
-          toast('ERA STABILIZED', 'good');
-          PLANETS.forEach(function (pl) {
-            if (pl.eraNeed <= WORLD.eraIndex && WORLD.planetsUnlocked.indexOf(pl.id) < 0) {
-              WORLD.planetsUnlocked.push(pl.id);
-            }
-          });
-        } else {
-          toast('NEED ROLE GATES — taunt / arc / mend', 'bad');
-        }
+    G.P.chrono += gain;
+    G.P.essence += Math.floor(t.wave / 2);
+    if (t.wave > G.P.wavesBest) G.P.wavesBest = t.wave;
+    if (G.WORLD.quest && G.WORLD.quest.id === 'hold5') {
+      G.WORLD.quest.prog = Math.max(G.WORLD.quest.prog || 0, t.wave);
+      if (G.WORLD.quest.prog >= G.WORLD.quest.target && !G.WORLD.quest.done) {
+        G.WORLD.quest.done = true;
+        G.P.chrono += G.WORLD.quest.reward;
+        toast('QUEST CLEAR');
       }
     }
-    toast((won ? 'HOLD' : 'BREACH') + ' · +' + gain + ' CHRONO', won ? 'mega' : 'bad');
-    if (won) { flashOverlay('victory-burst'); buzz([20, 40, 20, 40, 35]); }
-    else buzz([40, 80]);
-    addShard('bone', 2 + Math.floor(t.wave / 2));
-    if (t.wave >= 3) addShard('spark', 1);
-    if (t.kills >= 20) addShard('ash', 1);
-    if ((P.towerUp.luck || 0) > 0 && Math.random() < 0.2) addShard('echo', 1);
-    WORLD.coop = null;
-    UI.tower = null;
+    if (t.wave >= 6) {
+      var era = ERAS[G.WORLD.eraIndex];
+      if (era && G.WORLD.erasCleared.indexOf(era.id) < 0) {
+        G.WORLD.erasCleared.push(era.id);
+        if (G.WORLD.eraIndex < ERAS.length - 1) {
+          G.WORLD.eraIndex++;
+          G.WORLD.storyChapter = Math.min(STORY.length - 1, G.WORLD.eraIndex + 1);
+          G.storyOpen = G.WORLD.storyChapter;
+        }
+        G.P.skillPoints += 2;
+        toast('ERA STABILIZED');
+        PLANETS.forEach(function (pl) {
+          if (pl.eraNeed <= G.WORLD.eraIndex && G.WORLD.planetsUnlocked.indexOf(pl.id) < 0) {
+            G.WORLD.planetsUnlocked.push(pl.id);
+          }
+        });
+      }
+    }
+    toast((won ? 'HOLD' : 'BREACH') + ' +' + gain);
+    beep(won ? 520 : 120, 0.15);
+    G.tower = null;
+    G.scene = 'hub';
     savePlayer();
-    UI.mode = 'hub';
-    render();
   }
 
-  function spawnEnemy(wave, forceBoss) {
+  function spawnEnemy(wave) {
     var roll = Math.random();
     var type = 'swarm';
-    if (forceBoss || (wave % 5 === 0 && !UI.tower.enemies.some(function (e) { return e.type === 'boss'; }))) type = 'boss';
+    if (wave % 5 === 0) type = 'boss';
     else if (wave >= 4 && roll > 0.8) type = 'brute';
     else if (wave >= 3 && roll > 0.62) type = 'flyer';
     var side = Math.floor(Math.random() * 4);
-    var x = 50, y = 50;
-    if (side === 0) { x = Math.random() * 100; y = -6; }
-    if (side === 1) { x = 106; y = Math.random() * 100; }
-    if (side === 2) { x = Math.random() * 100; y = 106; }
-    if (side === 3) { x = -6; y = Math.random() * 100; }
+    var x = W * 0.5, y = H * 0.35;
+    if (side === 0) { x = Math.random() * W; y = -20; }
+    if (side === 1) { x = W + 20; y = Math.random() * H * 0.7; }
+    if (side === 2) { x = Math.random() * W; y = H * 0.75; }
+    if (side === 3) { x = -20; y = Math.random() * H * 0.7; }
     var hp = type === 'boss' ? 220 + wave * 55 : type === 'brute' ? 60 + wave * 12 : type === 'flyer' ? 24 + wave * 5 : 18 + wave * 6;
-    var spd = type === 'flyer' ? 20 + wave : type === 'brute' ? 8 + wave * 0.35 : type === 'boss' ? 5.5 : 13 + wave * 0.55;
-    // era-colored elites
-    var eraTint = ERAS[WORLD.eraIndex] ? ERAS[WORLD.eraIndex].accent : '#ff6a3d';
-    UI.tower.enemies.push({ id: Math.random().toString(36).slice(2, 8), type: type, x: x, y: y, hp: hp, max: hp, spd: spd, tint: eraTint });
+    var spd = type === 'flyer' ? 90 + wave * 4 : type === 'brute' ? 36 + wave : type === 'boss' ? 28 : 55 + wave * 2;
+    var accent = (ERAS[G.WORLD.eraIndex] && ERAS[G.WORLD.eraIndex].accent) || '#ff6a3d';
+    G.tower.enemies.push({
+      id: Math.random().toString(36).slice(2, 7),
+      type: type, x: x, y: y, hp: hp, max: hp, spd: spd, tint: accent, hit: 0
+    });
   }
 
   function damageEnemy(e, amt, tag) {
@@ -632,54 +382,41 @@
     if (crit) dmg *= 2;
     dmg = Math.max(1, Math.floor(dmg));
     e.hp -= dmg;
-    e.hitFlash = 0.12;
-    UI.tower.fx.push({ kind: 'hit', x: e.x, y: e.y, life: 0.32 });
-    UI.tower.fx.push({
-      kind: 'dmg',
-      x: e.x + (Math.random() * 6 - 3),
-      y: e.y - 4,
-      life: 0.7,
-      text: String(dmg),
-      crit: crit
-    });
-    UI.tower.combo++;
-    if (tag) UI.tower.gates[tag] = (UI.tower.gates[tag] || 0) + 1;
+    e.hit = 0.12;
+    G.tower.fx.push({ kind: 'dmg', x: e.x, y: e.y - 16, life: 0.7, text: String(dmg), crit: crit });
+    G.tower.fx.push({ kind: 'spark', x: e.x, y: e.y, life: 0.25 });
+    G.tower.combo++;
+    if (tag) G.tower.gates[tag] = (G.tower.gates[tag] || 0) + 1;
     if (e.hp <= 0) {
-      UI.tower.kills++;
-      UI.tower.chronoEarned += e.type === 'boss' ? 50 : e.type === 'brute' ? 9 : 3;
-      UI.tower.fx.push({ kind: 'burst', x: e.x, y: e.y, life: 0.45 });
-      if (e.type === 'boss') {
-        P.bossesKilled++;
-        P.skillPoints += 1;
-        shake(320);
-        buzz([40, 60, 40]);
-        flashOverlay('victory-burst');
-      }
+      G.tower.kills++;
+      G.tower.chronoEarned += e.type === 'boss' ? 50 : e.type === 'brute' ? 9 : 3;
+      spawnParts(e.x, e.y, e.type === 'boss' ? 18 : 8, e.tint);
+      if (e.type === 'boss') { G.P.bossesKilled++; G.P.skillPoints += 1; shake(320); beep(180, 0.2, 'sawtooth'); }
       return true;
     }
     return false;
   }
 
   function fireAtNearest() {
-    var t = UI.tower;
+    var t = G.tower;
     if (!t.enemies.length) return;
-    var cx = 50, cy = 78;
-    var rangePct = towerRange() / 3.2;
+    var cx = W * 0.5, cy = H * 0.52;
+    var range = 120 + (G.P.towerUp.range || 0) * 14;
     var best = null, bestD = 1e9;
     t.enemies.forEach(function (e) {
       var d = Math.hypot(e.x - cx, e.y - cy);
-      if (d < bestD && d <= rangePct) { bestD = d; best = e; }
+      if (d < bestD && d <= range) { bestD = d; best = e; }
     });
     if (!best) return;
     var dmg = towerDps() * 0.38;
-    UI.tower.fx.push({ kind: 'beam', x1: cx, y1: cy, x2: best.x, y2: best.y, life: 0.12 });
-    damageEnemy(best, dmg, P.loadout === 'rift' ? 'rift' : null);
+    t.fx.push({ kind: 'beam', x1: cx, y1: cy, x2: best.x, y2: best.y, life: 0.1 });
+    damageEnemy(best, dmg, G.P.loadout === 'rift' ? 'rift' : null);
     var s = aggregateStats();
     if (s.chain > 0) {
       var chained = 0;
       t.enemies.forEach(function (e) {
         if (e === best || chained >= s.chain) return;
-        if (Math.hypot(e.x - best.x, e.y - best.y) < 24) {
+        if (Math.hypot(e.x - best.x, e.y - best.y) < 90) {
           damageEnemy(e, dmg * 0.55, 'rift');
           chained++;
         }
@@ -689,673 +426,911 @@
   }
 
   function useAbility(slot) {
-    var t = UI.tower;
+    var t = G.tower;
     if (!t || !t.running) return;
     var s = aggregateStats();
     if (slot === 'primary') {
       if (t.cds.primary > 0) return;
-      t.cds.primary = 2.0;
-      if (P.loadout === 'bulwark') {
+      t.cds.primary = 2;
+      if (G.P.loadout === 'bulwark') {
         t.enemies.forEach(function (e) {
-          e.x += (50 - e.x) * 0.4;
-          e.y += (78 - e.y) * 0.4;
+          e.x += (W * 0.5 - e.x) * 0.4;
+          e.y += (H * 0.52 - e.y) * 0.4;
         });
         t.gates.bulwark++;
-        toast('TAUNT', 'good');
-      } else if (P.loadout === 'warden') {
-        var heal = 40 + (s.heal || 0) * 80 + s.regen;
-        t.coreHp = Math.min(t.coreMax, t.coreHp + heal);
+        toast('TAUNT');
+      } else if (G.P.loadout === 'warden') {
+        t.coreHp = Math.min(t.coreMax, t.coreHp + 40 + (s.heal || 0) * 80);
         t.gates.warden++;
-        toast('MEND', 'good');
+        toast('MEND');
       } else {
         t.enemies.forEach(function (e) { damageEnemy(e, towerDps(), 'rift'); });
         t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
-        toast('ARC', 'good');
+        toast('ARC');
       }
+      beep(440, 0.08); buzz(12);
     } else if (slot === 'secondary') {
       if (t.cds.secondary > 0) return;
       t.cds.secondary = 5;
-      if (s.quake || P.loadout === 'bulwark') {
+      if (s.quake || G.P.loadout === 'bulwark') {
         t.enemies.forEach(function (e) {
-          if (Math.hypot(e.x - 50, e.y - 78) < 42) {
+          if (Math.hypot(e.x - W * 0.5, e.y - H * 0.52) < 160) {
             e.spd *= 0.15;
             damageEnemy(e, 50, 'bulwark');
           }
         });
         t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
-        shake(200);
-        toast('QUAKE');
-      } else if (s.freeze || P.loadout === 'rift') {
+        shake(200); toast('QUAKE');
+      } else if (s.freeze || G.P.loadout === 'rift') {
         t.frozen = s.freeze || 1.2;
         t.gates.rift++;
-        toast('TIMELINE CUT');
+        toast('TIMELINE');
       } else {
         t.shield += 55;
         t.gates.warden++;
         toast('WARD');
       }
+      beep(320, 0.1); buzz(18);
     } else if (slot === 'ultimate') {
       if (t.cds.ultimate > 0) return;
       t.cds.ultimate = 12;
       var ult = towerDps() * 2.4;
-      if (s.nova) {
-        t.enemies.forEach(function (e) { damageEnemy(e, ult, 'rift'); });
-      } else {
-        t.enemies.slice(0, 6).forEach(function (e) { damageEnemy(e, ult, P.loadout); });
-      }
+      if (s.nova) t.enemies.forEach(function (e) { damageEnemy(e, ult, 'rift'); });
+      else t.enemies.slice(0, 6).forEach(function (e) { damageEnemy(e, ult, G.P.loadout); });
       t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
-      // ghost allies contribute
-      var roles = partyRolesOnline();
-      Object.keys(roles).forEach(function (pid) {
-        if (pid === activeId) return;
-        t.coreHp = Math.min(t.coreMax, t.coreHp + 12);
-        t.chronoEarned += 2;
-      });
-      shake(260);
+      G.flash = 0.35;
+      shake(280);
+      toast('OVERLOAD');
+      beep(160, 0.18, 'sawtooth');
       buzz([30, 40, 30]);
-      flashOverlay('merge-flash');
-      toast('OVERLOAD', 'mega');
     }
-    buzz(14);
-    syncTowerDom();
   }
 
-  function towerLoop(ts) {
-    if (!UI.tower || !UI.tower.running) return;
-    var dt = Math.min(0.05, (ts - lastTs) / 1000);
-    lastTs = ts;
-    var t = UI.tower;
+  function updateTower(dt) {
+    var t = G.tower;
+    if (!t || !t.running) return;
     var s = aggregateStats();
     t.t += dt;
     if (t.frozen > 0) t.frozen -= dt;
     Object.keys(t.cds).forEach(function (k) {
       if (t.cds[k] > 0) t.cds[k] = Math.max(0, t.cds[k] - dt);
     });
-
     t.spawnAcc += dt;
-    var interval = Math.max(0.4, 1.35 - t.wave * 0.055);
-    if (t.spawnAcc >= interval) {
+    if (t.spawnAcc >= Math.max(0.4, 1.35 - t.wave * 0.055)) {
       t.spawnAcc = 0;
-      spawnEnemy(t.wave, t.coopBoss && t.wave % 5 === 0);
+      spawnEnemy(t.wave);
     }
     if (t.t > t.wave * 11.5) {
-      t.wave++;
-      t.t = 0;
-      t.chronoEarned += 6;
+      t.wave++; t.t = 0; t.chronoEarned += 6;
       toast('WAVE ' + t.wave);
+      beep(500, 0.1);
       if (t.wave > 14) { endTower(true); return; }
     }
-
     if (s.regen > 0) t.coreHp = Math.min(t.coreMax, t.coreHp + s.regen * dt * 0.3);
-    // AI ghost heals if warden missing but solo coverage
-    if (t.coverage.warden && P.loadout !== 'warden') {
-      t.coreHp = Math.min(t.coreMax, t.coreHp + 3 * dt);
-    }
-
     t.fireAcc += dt;
-    if (t.fireAcc >= towerFireRate()) {
-      t.fireAcc = 0;
-      fireAtNearest();
-    }
-
+    if (t.fireAcc >= towerFireRate()) { t.fireAcc = 0; fireAtNearest(); }
     var slow = 1 - Math.min(0.55, s.slow || 0);
     if (t.frozen > 0) slow *= 0.12;
-    var cx = 50, cy = 78;
+    var cx = W * 0.5, cy = H * 0.52;
     t.enemies.forEach(function (e) {
+      if (e.hit > 0) e.hit -= dt;
       var dx = cx - e.x, dy = cy - e.y;
       var len = Math.hypot(dx, dy) || 1;
       e.x += (dx / len) * e.spd * slow * dt;
       e.y += (dy / len) * e.spd * slow * dt;
-      if (Math.hypot(e.x - cx, e.y - cy) < 4.2) {
-        var hit = e.type === 'boss' ? 32 : e.type === 'brute' ? 15 : 8;
-        hit *= (1 - Math.min(0.55, s.armor || 0));
+      if (Math.hypot(e.x - cx, e.y - cy) < 28) {
+        var hitAmt = e.type === 'boss' ? 32 : e.type === 'brute' ? 15 : 8;
+        hitAmt *= (1 - Math.min(0.55, s.armor || 0));
         if (t.shield > 0) {
-          t.shield -= hit;
+          t.shield -= hitAmt;
           if (t.shield < 0) { t.coreHp += t.shield; t.shield = 0; }
-        } else t.coreHp -= hit;
+        } else t.coreHp -= hitAmt;
         e.hp = 0;
-        shake(120);
-        buzz(25);
+        shake(120); buzz(25);
       }
-    });
-    t.enemies.forEach(function (e) {
-      if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
     });
     t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
     t.fx = t.fx.map(function (f) { f.life -= dt; return f; }).filter(function (f) { return f.life > 0; });
-
     if (t.coreHp <= 0) {
       if ((s.phoenix || 0) && !t.phoenixUsed) {
         t.phoenixUsed = true;
         t.coreHp = t.coreMax * 0.45;
-        toast('PHOENIX', 'good');
-      } else {
-        endTower(false);
-        return;
-      }
+        toast('PHOENIX');
+      } else endTower(false);
     }
-    syncTowerDom();
-    raf = requestAnimationFrame(towerLoop);
   }
 
-  function syncTowerDom() {
-    var root = document.getElementById('tower-live');
-    if (!root || !UI.tower) return;
-    var t = UI.tower;
-    var hpEl = root.querySelector('.tower-core-hp > i');
-    if (hpEl) hpEl.style.width = Math.max(0, t.coreHp / t.coreMax * 100) + '%';
-    var waveEl = root.querySelector('[data-wave]');
-    if (waveEl) waveEl.textContent = (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave;
-    var hpTxt = root.querySelector('[data-hp]');
-    if (hpTxt) hpTxt.textContent = Math.ceil(t.coreHp) + ' / ' + t.coreMax;
-    var combo = root.querySelector('[data-combo]');
-    if (combo) combo.textContent = t.combo > 4 ? t.combo + ' COMBO' : '';
-    var gates = root.querySelector('[data-gates]');
-    if (gates) {
-      gates.textContent = 'B' + t.gates.bulwark + ' R' + t.gates.rift + ' W' + t.gates.warden;
+  /* ── Scene actions ── */
+  function pickPlayer(id) {
+    G.activeId = id;
+    loadPlayer(id);
+    G.WORLD = loadWorld();
+    claimDaily();
+    G.WORLD.presence[id] = Date.now();
+    saveWorld();
+    if (G.WORLD.storyChapter === 0 && !G.P._introSeen) {
+      G.storyOpen = 0;
+      G.P._introSeen = true;
     }
-    var layer = root.querySelector('.enemy-layer');
-    if (layer) {
-      var bits = t.enemies.map(function (e) {
-        var pct = Math.max(0, Math.min(100, (e.hp / e.max) * 100));
-        var hit = e.hitFlash > 0 ? ' is-hit' : '';
-        return '<div class="enemy ' + e.type + hit + '" style="left:' + e.x + '%;top:' + e.y + '%;--tint:' + (e.tint || '#ff6a3d') + '">' +
-          '<i class="enemy-hp"><b style="width:' + pct + '%"></b></i></div>';
-      });
-      t.fx.forEach(function (f) {
-        if (f.kind === 'beam') {
-          var dx = f.x2 - f.x1, dy = f.y2 - f.y1;
-          var len = Math.hypot(dx, dy);
-          var ang = Math.atan2(dy, dx) * 180 / Math.PI;
-          bits.push('<div class="fx-beam" style="left:' + f.x1 + '%;top:' + f.y1 + '%;width:' + len + '%;transform:rotate(' + ang + 'deg)"></div>');
-        } else if (f.kind === 'dmg') {
-          bits.push('<div class="dmg-float' + (f.crit ? ' crit' : '') + '" style="left:' + f.x + '%;top:' + f.y + '%">' + f.text + (f.crit ? '!' : '') + '</div>');
-        } else if (f.kind === 'burst') {
-          bits.push('<div class="fx-burst" style="left:' + f.x + '%;top:' + f.y + '%"></div>');
-        } else {
-          bits.push('<div class="fx-hit" style="left:' + (f.x || 0) + '%;top:' + (f.y || 0) + '%"></div>');
-        }
-      });
-      layer.innerHTML = bits.join('');
+    G.scene = 'hub';
+    beep(360, 0.1);
+    buzz([16, 24, 16]);
+    spawnParts(W * 0.5, H * 0.5, 16, warband(id).accent);
+    savePlayer();
+  }
+
+  function go(scene) {
+    if (scene === 'hub' && G.tower) endTower(false);
+    G.scene = scene;
+    G.forge = [null, null];
+    beep(280, 0.05);
+  }
+
+  function tryMerge() {
+    var a = G.forge[0], b = G.forge[1];
+    if (!a || !b) { toast('NEED TWO'); return; }
+    function hasMat(id) { return (G.P.shards[id] || 0) >= 1 || (G.P.exotics[id] || 0) >= 1; }
+    function take(id) {
+      if ((G.P.shards[id] || 0) >= 1) G.P.shards[id]--;
+      else if ((G.P.exotics[id] || 0) >= 1) G.P.exotics[id]--;
     }
-    ['primary', 'secondary', 'ultimate'].forEach(function (k) {
-      var btn = root.querySelector('[data-ability="' + k + '"]');
-      if (!btn) return;
-      btn.disabled = t.cds[k] > 0;
-      var cdEl = btn.querySelector('.cd');
-      if (cdEl) cdEl.textContent = t.cds[k] > 0 ? t.cds[k].toFixed(1) : 'READY';
+    if (!hasMat(a) || !hasMat(b)) { toast('MISSING'); return; }
+    take(a); take(b);
+    var recipe = RECIPES.find(function (r) {
+      return (r.a === a && r.b === b) || (r.a === b && r.b === a);
+    });
+    if (!recipe) {
+      G.P.chrono += 10;
+      toast('SCRAP +10');
+    } else if (recipe.relic) {
+      if (G.P.relics.indexOf(recipe.out) < 0) G.P.relics.push(recipe.out);
+      toast(recipe.name.toUpperCase());
+      shake(220);
+    } else {
+      G.P.shards[recipe.out] = (G.P.shards[recipe.out] || 0) + 1;
+      toast('FORGED ' + recipe.name);
+    }
+    G.P.totalMerged++;
+    G.P.essence += 1;
+    if (G.P.totalMerged % 3 === 0) G.P.skillPoints += 1;
+    G.forge = [null, null];
+    G.flash = 0.4;
+    beep(200, 0.12, 'triangle');
+    savePlayer();
+  }
+
+  /* ── Draw scenes ── */
+  function drawBoot() {
+    ctx.fillStyle = '#050308';
+    ctx.fillRect(0, 0, W, H);
+    text('VOIDLINE', W / 2, H * 0.42, { align: 'center', size: 16, color: '#e85a2a' });
+    text('CHRONOS', W / 2, H * 0.48, { align: 'center', size: 48 });
+    text('LOADING…', W / 2, H * 0.56, { align: 'center', size: 14, color: '#8a8070' });
+  }
+
+  function drawWho() {
+    var t = G.time;
+    coverImg('who', 0, 0, W, H, 0.5, 0.35 + Math.sin(t * 0.2) * 0.02);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, H * 0.18);
+    text('VOIDLINE', W / 2, 36 + Math.min(24, safeTop()), { align: 'center', size: 14, color: '#e85a2a' });
+    text('CHRONOS', W / 2, 78 + Math.min(24, safeTop()), { align: 'center', size: 52 });
+
+    var colW = W / 3;
+    WARBAND.forEach(function (w, i) {
+      var x = i * colW;
+      var key = 'portrait-' + w.id;
+      coverImg(key, x, H * 0.16, colW, H * 0.84, 0.5, 0.2);
+      var g = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.92)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x, H * 0.55, colW, H * 0.45);
+      if (i > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(x, H * 0.16, 1, H * 0.84);
+      }
+      text(w.name.toUpperCase(), x + colW / 2, H - 48 - safeBottom(), {
+        align: 'center', size: 22, color: '#fff'
+      });
+      // accent underline
+      ctx.fillStyle = w.accent;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(x + colW * 0.28, H - 40 - safeBottom(), colW * 0.44, 3);
+      ctx.globalAlpha = 1;
+      hit('pick', x, H * 0.16, colW, H * 0.84, w.id);
     });
   }
 
-  function buyTowerUp(id) {
-    var def = TOWER_UPS.find(function (u) { return u.id === id; });
-    if (!def) return;
-    var lv = P.towerUp[id] || 0;
-    var cost = Math.floor(def.base * Math.pow(1.38, lv));
-    if (P.chrono < cost) { toast('NEED CHRONO', 'bad'); return; }
-    P.chrono -= cost;
-    P.towerUp[id] = lv + 1;
-    savePlayer();
-    toast(def.name + ' ' + (lv + 1), 'good');
-    render();
+  function safeTop() { return 0; }
+  function safeBottom() { return 0; }
+
+  function drawHub() {
+    var era = ERAS[G.WORLD.eraIndex] || ERAS[0];
+    var w = warband(G.activeId);
+    var breathe = 1 + Math.sin(G.time * 0.35) * 0.015;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(breathe, breathe);
+    ctx.translate(-W / 2, -H / 2);
+    coverImg('hub', 0, 0, W, H, 0.5, 0.38);
+    ctx.restore();
+
+    var veil = ctx.createLinearGradient(0, 0, 0, H);
+    veil.addColorStop(0, 'rgba(0,0,0,0.5)');
+    veil.addColorStop(0.35, 'rgba(0,0,0,0)');
+    veil.addColorStop(0.7, 'rgba(0,0,0,0.15)');
+    veil.addColorStop(1, 'rgba(0,0,0,0.78)');
+    ctx.fillStyle = veil;
+    ctx.fillRect(0, 0, W, H);
+
+    // floating pilot
+    var px = 18, py = 18;
+    var pr = 28;
+    coverImg('portrait-' + w.id, px, py, pr * 2, pr * 2, 0.5, 0.15);
+    ctx.beginPath();
+    ctx.arc(px + pr, py + pr, pr + 2, 0, Math.PI * 2);
+    ctx.strokeStyle = w.accent;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    hit('who', px, py, pr * 2, pr * 2);
+
+    text(String(G.P.chrono), W - 18, 48, { align: 'right', size: 34, color: '#ffe7a0' });
+
+    text(era.name, W / 2, H * 0.62, { align: 'center', size: 40 });
+
+    // ENTER battle button
+    var bw = Math.min(W * 0.82, 320), bh = 72;
+    var bx = (W - bw) / 2, by = H * 0.68;
+    drawImg('uiBtn', bx, by, bw, bh);
+    text('ENTER', W / 2, by + bh * 0.58, { align: 'center', size: 28, color: '#1a1008', shadow: false });
+    hit('enter', bx, by, bw, bh);
+
+    // dock medallions
+    var mods = [
+      ['tower', 'tower'], ['forge', 'forge'], ['tree', 'tree'], ['gate', 'gate'],
+      ['era', 'era'], ['life', 'life'], ['story', 'story']
+    ];
+    var dockY = H - 70;
+    var cell = W / mods.length;
+    mods.forEach(function (m, i) {
+      var cx = cell * i + cell / 2;
+      var s = m[0] === 'tower' ? 52 : 44;
+      drawMedallion(m[1], cx - s / 2, dockY - s / 2, s);
+      hit('mode', cx - s / 2, dockY - s / 2, s, s, m[0]);
+    });
+
+    if (G.storyOpen != null) drawStoryModal();
   }
 
-  /* ── Planets extract mini ── */
-  function startExtract(pid) {
-    var pl = PLANETS.find(function (p) { return p.id === pid; });
-    if (!pl || WORLD.planetsUnlocked.indexOf(pid) < 0) { toast('LOCKED', 'bad'); return; }
-    if (P.chrono < 35) { toast('NEED 35 CHRONO', 'bad'); return; }
-    P.chrono -= 35;
-    UI.extract = { planet: pl, t: 0, progress: 0, hazards: 0 };
-    UI.mode = 'extract';
-    savePlayer();
-    render();
-    var iv = setInterval(function () {
-      if (!UI.extract) { clearInterval(iv); return; }
-      UI.extract.t += 0.25;
-      UI.extract.progress += 8 + (aggregateStats().extract || 0) * 10;
-      if (Math.random() < 0.25) UI.extract.hazards++;
-      if (UI.extract.progress >= 100) {
-        clearInterval(iv);
-        finishExtract(true);
-      } else if (UI.extract.hazards > 4) {
-        clearInterval(iv);
-        finishExtract(false);
-      } else {
-        var bar = document.querySelector('.extract-bar > i');
-        if (bar) bar.style.width = UI.extract.progress + '%';
-      }
-    }, 250);
-  }
-
-  function finishExtract(ok) {
-    var pl = UI.extract && UI.extract.planet;
-    UI.extract = null;
-    if (!pl) { UI.mode = 'gate'; render(); return; }
-    if (ok) {
-      var s = aggregateStats();
-      var n = 1 + (Math.random() < 0.3 + (s.extract || 0) ? 1 : 0);
-      P.exotics[pl.exotic] = (P.exotics[pl.exotic] || 0) + n;
-      WORLD.sharedBank[pl.exotic] = (WORLD.sharedBank[pl.exotic] || 0) + n;
-      if (Math.random() < 0.35) addShard('echo', 1);
-      toast(pl.exoticName.toUpperCase() + ' x' + n, 'good');
-      shake(180);
-    } else {
-      P.chrono += 10;
-      toast('EXTRACT FAILED — scrap returned', 'bad');
-    }
-    savePlayer();
-    UI.mode = 'gate';
-    render();
-  }
-
-  /* ── Minigames ── */
-  function castFish() {
-    if (UI.fishCast) return;
-    UI.fishCast = true;
-    render();
-    setTimeout(function () {
-      UI.fishCast = false;
-      var s = aggregateStats();
-      var pool = [];
-      FISH.forEach(function (f) {
-        var w = f.weight * (1 + (s.lifeYield || 0));
-        for (var i = 0; i < w; i++) pool.push(f);
-      });
-      var catch_ = pool[Math.floor(Math.random() * pool.length)];
-      if (catch_.chrono) P.chrono += catch_.chrono;
-      if (catch_.essence) P.essence += catch_.essence;
-      if (catch_.shard) addShard(catch_.shard, 1);
-      P.fishCaught++;
-      toast(catch_.name.toUpperCase(), 'good');
-      savePlayer();
-      render();
-    }, 900);
-  }
-
-  function tendGarden(i) {
-    var now = Date.now();
-    if (!P.gardenPlanted[i]) {
-      if (P.chrono < 15) { toast('NEED 15', 'bad'); return; }
-      P.chrono -= 15;
-      P.gardenPlanted[i] = now;
-      P.garden[i] = 0;
-      toast('PLANTED');
-      savePlayer(); render(); return;
-    }
-    var age = now - P.gardenPlanted[i];
-    if (age < 45000) {
-      toast('GROWING ' + Math.ceil((45000 - age) / 1000) + 's', 'bad');
+  function drawMedallion(med, x, y, s) {
+    var im = img('dock');
+    if (!im || !im.complete) {
+      ctx.fillStyle = '#2a2218';
+      ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, s / 2, 0, Math.PI * 2); ctx.fill();
       return;
     }
-    var s = aggregateStats();
-    var yieldN = 1 + (Math.random() < (s.lifeYield || 0) ? 1 : 0);
-    addShard(Math.random() < 0.5 ? 'ore' : 'bone', yieldN);
-    if (Math.random() < 0.2) addShard('spark', 1);
-    P.chrono += 12;
-    P.gardenPlanted[i] = 0;
-    toast('HARVEST x' + yieldN, 'good');
-    savePlayer();
-    render();
+    var map = { forge: [0, 0], tree: [1, 0], tower: [2, 0], era: [0, 1], life: [1, 1], story: [2, 1], gate: [2, 0] };
+    var p = map[med] || [0, 0];
+    var sw = im.naturalWidth / 3, sh = im.naturalHeight / 2;
+    ctx.save();
+    if (med === 'gate') ctx.filter = 'hue-rotate(95deg) saturate(1.15)';
+    ctx.drawImage(im, p[0] * sw, p[1] * sh, sw, sh, x, y, s, s);
+    ctx.restore();
   }
 
-  /* ── Render ── */
-  function artUrl(key) {
-    return (D.ART && D.ART[key]) || '';
+  function drawStoryModal() {
+    var ch = STORY[G.storyOpen] || STORY[0];
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(0, 0, W, H);
+    var pw = W * 0.86, ph = 260;
+    var px = (W - pw) / 2, py = (H - ph) / 2;
+    ctx.fillStyle = '#1a1410';
+    roundRect(px, py, pw, ph, 10); ctx.fill();
+    ctx.strokeStyle = '#6a5420'; ctx.lineWidth = 2; ctx.stroke();
+    text('TRANSMISSION', W / 2, py + 36, { align: 'center', size: 14, color: '#e85a2a' });
+    text(ch.title, W / 2, py + 72, { align: 'center', size: 26 });
+    wrapText(ch.body, W / 2, py + 110, pw - 40, 16, '#c8bca8');
+    var bx = W / 2 - 70, by = py + ph - 58;
+    drawBtn(bx, by, 140, 40, 'CONTINUE');
+    hit('dismiss-story', bx, by, 140, 40);
   }
 
-  function renderWho() {
-    var h = '<div class="who-screen skin-console">';
-    h += '<div class="screen-art" style="background-image:url(\'' + artUrl('who') + '\')"></div>';
-    h += '<div class="who-title"><span>VOIDLINE</span><strong>CHRONOS</strong></div>';
-    h += '<div class="who-seats">';
-    WARBAND.forEach(function (w) {
-      h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + ';--seat-art:url(\'' + w.portrait + '\')">';
-      h += '<span class="seat-wash"></span>';
-      h += '<span class="seat-name">' + esc(w.name.toUpperCase()) + '</span>';
-      h += '</button>';
+  function wrapText(str, cx, y, maxW, size, color) {
+    ctx.save();
+    ctx.font = '600 ' + size + 'px "Trebuchet MS", sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    var words = String(str).split(' ');
+    var line = '';
+    var yy = y;
+    words.forEach(function (word) {
+      var test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxW) {
+        ctx.fillText(line, cx, yy);
+        line = word;
+        yy += size + 6;
+      } else line = test;
     });
-    h += '</div></div>';
-    return h;
+    if (line) ctx.fillText(line, cx, yy);
+    ctx.restore();
   }
 
-  function dockBtn(action, med, label) {
-    return '<button type="button" class="dock-btn dock-' + action + '" data-action="mode" data-id="' + action + '" aria-label="' + label + '">' +
-      '<span class="dock-glyph medallion med-' + med + '"></span></button>';
+  function drawBtn(x, y, w, h, label) {
+    var g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, '#ffe7a8');
+    g.addColorStop(0.45, '#d4b45a');
+    g.addColorStop(1, '#9a7020');
+    ctx.fillStyle = g;
+    roundRect(x, y, w, h, 6); ctx.fill();
+    text(label, x + w / 2, y + h * 0.65, { align: 'center', size: 18, color: '#1a1008', shadow: false });
   }
 
-  function renderHub() {
-    var w = warband(activeId);
-    var era = ERAS[WORLD.eraIndex] || ERAS[0];
-    var h = '<div class="hub-screen skin-console">';
-    h += '<img class="hub-fill" src="' + artUrl('hub') + '" alt="" draggable="false">';
-    h += '<button type="button" class="float-pilot" data-action="who" style="--seat-accent:' + w.accent + '" aria-label="Switch">';
-    h += '<img src="' + w.portrait + '" alt=""></button>';
-    h += '<div class="float-chrono"><b>' + P.chrono + '</b></div>';
-    h += '<div class="float-center hub-stage">';
-    h += '<div class="float-era">' + esc(era.name) + '</div>';
-    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')"><span>ENTER</span></button>';
-    h += '</div>';
-    h += '<nav class="float-dock hub-dock" aria-label="Actions">';
-    h += dockBtn('tower', 'tower', 'Tower');
-    h += dockBtn('forge', 'forge', 'Forge');
-    h += dockBtn('tree', 'tree', 'Tree');
-    h += dockBtn('gate', 'gate', 'Gate');
-    h += dockBtn('era', 'era', 'Eras');
-    h += dockBtn('life', 'life', 'Life');
-    h += dockBtn('story', 'story', 'Lore');
-    h += '</nav></div>';
-    return h;
-  }
+  function drawTower() {
+    coverImg('tower', 0, 0, W, H, 0.5, 0.45);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, W, H);
 
-  function renderTree() {
-    var sel = UI.selectedNode ? nodeById(UI.selectedNode) : nodeById('root');
-    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">CONSTELLATION</h2><p class="mode-sub">SP ' + P.skillPoints + ' · ' + P.unlocked.length + ' NODES · ' + P.loadout.toUpperCase() + '</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="role-banner">';
-    ['bulwark', 'rift', 'warden'].forEach(function (r) {
-      h += '<button type="button" class="loadout-chip' + (P.loadout === r ? ' active' : '') + ' role-tag ' + r + '" data-action="loadout" data-id="' + r + '">' + r.toUpperCase() + '</button>';
+    var t = G.tower;
+    if (!t) {
+      // deploy screen
+      text('CHRONOLITH', W / 2, 56, { align: 'center', size: 28 });
+      text('BEST WAVE ' + G.P.wavesBest, W / 2, 88, { align: 'center', size: 14, color: '#8a8070' });
+      var y = 140;
+      TOWER_UPS.forEach(function (u, i) {
+        var lv = G.P.towerUp[u.id] || 0;
+        var cost = Math.floor(u.base * Math.pow(1.38, lv));
+        var bx = 20 + (i % 2) * (W / 2 - 20), by = y + Math.floor(i / 2) * 54;
+        ctx.fillStyle = 'rgba(20,16,14,0.85)';
+        roundRect(bx, by, W / 2 - 30, 44, 6); ctx.fill();
+        text(u.name + ' ' + lv, bx + 12, by + 28, { size: 14 });
+        text(String(cost), bx + (W / 2 - 42), by + 28, { align: 'right', size: 14, color: '#ffe7a0' });
+        hit('tower-up', bx, by, W / 2 - 30, 44, u.id);
+      });
+      var bw = Math.min(W * 0.8, 300), bh = 64;
+      var bx = (W - bw) / 2, by = H - 200;
+      drawImg('uiBtn', bx, by, bw, bh);
+      text('SOLO DEPLOY', W / 2, by + 40, { align: 'center', size: 22, color: '#1a1008', shadow: false });
+      hit('start-tower', bx, by, bw, bh);
+      drawBtn((W - 200) / 2, by + 80, 200, 44, 'CO-OP BOSS');
+      hit('start-coop', (W - 200) / 2, by + 80, 200, 44);
+      drawBtn(W - 56, 18, 40, 40, 'X');
+      hit('hub', W - 56, 18, 40, 40);
+      return;
+    }
+
+    // live combat
+    text('WAVE ' + t.wave, 18, 40, { size: 18 });
+    text(Math.ceil(t.coreHp) + ' / ' + t.coreMax, W / 2, 40, { align: 'center', size: 20, color: '#ffe7a0' });
+    if (t.combo > 4) text(t.combo + ' COMBO', W - 18, 40, { align: 'right', size: 16, color: '#3de0c5' });
+    drawBtn(W - 52, 14, 36, 36, 'X');
+    hit('flee', W - 52, 14, 36, 36);
+
+    // core
+    var cx = W * 0.5, cy = H * 0.52;
+    var pulse = 1 + Math.sin(G.time * 3) * 0.06;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(pulse, pulse);
+    var grd = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
+    grd.addColorStop(0, '#7cf0ff');
+    grd.addColorStop(0.5, '#2ec4a8');
+    grd.addColorStop(1, 'rgba(10,40,40,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // hp bar
+    var barW = W * 0.55, barH = 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    roundRect(cx - barW / 2, cy + 48, barW, barH, 3); ctx.fill();
+    ctx.fillStyle = '#e85a2a';
+    roundRect(cx - barW / 2, cy + 48, barW * Math.max(0, t.coreHp / t.coreMax), barH, 3); ctx.fill();
+
+    // enemies
+    t.enemies.forEach(function (e) {
+      var sz = e.type === 'boss' ? 36 : e.type === 'brute' ? 26 : e.type === 'flyer' ? 18 : 16;
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      if (e.hit > 0) { ctx.scale(0.88, 0.88); ctx.filter = 'brightness(2)'; }
+      ctx.fillStyle = e.tint || '#ff6a3d';
+      if (e.type === 'flyer') { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.fillRect(-sz / 2, -sz / 2, sz, sz); }
+      ctx.filter = 'none';
+      // hp
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(-sz / 2, sz / 2 + 3, sz, 3);
+      ctx.fillStyle = '#f0d078';
+      ctx.fillRect(-sz / 2, sz / 2 + 3, sz * (e.hp / e.max), 3);
+      ctx.restore();
     });
-    h += '</div><div class="panel-scroll"><div class="tree-canvas-wrap" style="background-image:url(\'' + artUrl('tree') + '\')"><svg class="tree-svg" viewBox="0 0 600 620">';
+
+    // fx
+    t.fx.forEach(function (f) {
+      if (f.kind === 'beam') {
+        ctx.strokeStyle = 'rgba(124,240,255,' + Math.min(1, f.life * 8) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+      } else if (f.kind === 'dmg') {
+        text((f.crit ? f.text + '!' : f.text), f.x, f.y - (0.7 - f.life) * 40, {
+          align: 'center', size: f.crit ? 22 : 16, color: f.crit ? '#ffd36a' : '#fff'
+        });
+      } else if (f.kind === 'spark') {
+        ctx.fillStyle = 'rgba(255,255,255,' + (f.life * 3) + ')';
+        ctx.beginPath(); ctx.arc(f.x, f.y, 4 + (0.25 - f.life) * 20, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+
+    // abilities
+    var abl = G.P.loadout === 'bulwark'
+      ? ['TAUNT', 'QUAKE', 'OVERLOAD']
+      : G.P.loadout === 'warden'
+        ? ['MEND', 'WARD', 'OVERLOAD']
+        : ['ARC', 'TIMELINE', 'OVERLOAD'];
+    var keys = ['primary', 'secondary', 'ultimate'];
+    var aw = 72, gap = 18;
+    var total = aw * 3 + gap * 2;
+    var ax0 = (W - total) / 2;
+    var ay = H - 110;
+    keys.forEach(function (k, i) {
+      var ax = ax0 + i * (aw + gap);
+      drawAbilityIcon(i, ax, ay, aw);
+      var cd = t.cds[k];
+      text(abl[i], ax + aw / 2, ay + aw + 16, { align: 'center', size: 12 });
+      text(cd > 0 ? cd.toFixed(1) : 'READY', ax + aw / 2, ay + aw + 32, {
+        align: 'center', size: 12, color: cd > 0 ? '#8a8070' : '#3de0c5'
+      });
+      if (cd > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.beginPath(); ctx.arc(ax + aw / 2, ay + aw / 2, aw / 2, 0, Math.PI * 2); ctx.fill();
+      }
+      hit('ability', ax, ay, aw, aw + 36, k);
+    });
+  }
+
+  function drawAbilityIcon(index, x, y, s) {
+    var im = img('abilities');
+    if (!im || !im.complete) {
+      ctx.fillStyle = '#2a2218';
+      roundRect(x, y, s, s, 8); ctx.fill();
+      return;
+    }
+    var sw = im.naturalWidth / 3;
+    ctx.drawImage(im, index * sw, 0, sw, im.naturalHeight, x, y, s, s);
+  }
+
+  function drawMenuShell(title, sub) {
+    coverImg(G.scene === 'forge' ? 'forge' : G.scene === 'tree' ? 'tree' : G.scene === 'gate' || G.scene === 'extract' ? 'gate' : G.scene === 'life' ? 'life' : 'hub', 0, 0, W, H, 0.5, 0.4);
+    ctx.fillStyle = 'rgba(5,4,8,0.72)';
+    ctx.fillRect(0, 0, W, H);
+    text(title, 20, 48, { size: 26 });
+    if (sub) text(sub, 20, 72, { size: 13, color: '#8a8070' });
+    drawBtn(W - 52, 16, 36, 36, 'X');
+    hit('hub', W - 52, 16, 36, 36);
+  }
+
+  function drawForge() {
+    drawMenuShell('FORGE', 'MERGE · RELICS');
+    var slotY = 140;
+    for (var i = 0; i < 2; i++) {
+      var sx = W / 2 - 100 + i * 120, sy = slotY;
+      ctx.strokeStyle = G.forge[i] ? '#e85a2a' : '#5a4630';
+      ctx.lineWidth = 2;
+      roundRect(sx, sy, 80, 80, 10); ctx.stroke();
+      text(G.forge[i] ? G.forge[i] : 'SLOT', sx + 40, sy + 48, { align: 'center', size: 12, color: '#8a8070' });
+      hit('clear-forge', sx, sy, 80, 80, String(i));
+    }
+    drawBtn((W - 180) / 2, 250, 180, 48, 'FUSE');
+    hit('merge', (W - 180) / 2, 250, 180, 48);
+    var y = 330;
+    SHARDS.forEach(function (sh) {
+      var q = G.P.shards[sh.id] || 0;
+      if (!q) return;
+      ctx.fillStyle = 'rgba(20,16,14,0.9)';
+      roundRect(24, y, W - 48, 40, 6); ctx.fill();
+      text(sh.icon + ' ' + sh.name.toUpperCase() + '  x' + q, 40, y + 26, { size: 14 });
+      hit('forge-add', 24, y, W - 48, 40, sh.id);
+      y += 48;
+    });
+  }
+
+  function drawTree() {
+    drawMenuShell('CONSTELLATION', 'SP ' + G.P.skillPoints);
+    ['bulwark', 'rift', 'warden'].forEach(function (r, i) {
+      var bx = 20 + i * 110;
+      ctx.fillStyle = G.P.loadout === r ? 'rgba(61,224,197,0.25)' : 'rgba(20,16,14,0.85)';
+      roundRect(bx, 90, 100, 32, 6); ctx.fill();
+      text(r.toUpperCase(), bx + 50, 112, { align: 'center', size: 12 });
+      hit('loadout', bx, 90, 100, 32, r);
+    });
+    ctx.save();
+    ctx.translate(20, 140);
+    ctx.scale(0.55, 0.55);
     TREE.forEach(function (n) {
       n.req.forEach(function (r) {
         var p = nodeById(r);
         if (!p) return;
-        h += '<line x1="' + p.x + '" y1="' + p.y + '" x2="' + n.x + '" y2="' + n.y + '" stroke="rgba(232,197,106,0.22)" stroke-width="2"/>';
+        ctx.strokeStyle = 'rgba(232,197,106,0.25)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(n.x, n.y); ctx.stroke();
       });
     });
     TREE.forEach(function (n) {
       var owned = hasNode(n.id);
       var can = canUnlock(n);
-      var cls = 'tree-node' + (owned ? ' owned' : '') + (can ? ' can' : (!owned ? ' locked' : ''));
-      var fill = n.keystone ? 'rgba(255,106,61,0.4)' : 'rgba(20,16,28,0.92)';
-      h += '<g class="' + cls + '" data-action="select-node" data-id="' + n.id + '">';
-      h += '<circle cx="' + n.x + '" cy="' + n.y + '" r="' + (n.keystone ? 17 : 13) + '" fill="' + fill + '" stroke="rgba(244,239,230,0.35)" stroke-width="2"/>';
-      h += '<text x="' + n.x + '" y="' + (n.y + 28) + '" text-anchor="middle" fill="#f4efe6" font-size="7" font-family="Share Tech Mono">' + esc(n.name) + '</text></g>';
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.keystone ? 17 : 13, 0, Math.PI * 2);
+      ctx.fillStyle = owned ? 'rgba(240,208,120,0.35)' : can ? 'rgba(61,224,197,0.25)' : 'rgba(20,16,28,0.9)';
+      ctx.fill();
+      ctx.strokeStyle = owned ? '#f0d078' : can ? '#3de0c5' : 'rgba(244,239,230,0.25)';
+      ctx.lineWidth = 2; ctx.stroke();
+      hit('select-node', 20 + n.x * 0.55 - 16, 140 + n.y * 0.55 - 16, 32, 32, n.id);
     });
-    h += '</svg></div>';
+    ctx.restore();
+    var sel = nodeById(G.selNode) || nodeById('root');
     if (sel) {
-      h += '<div class="tree-detail"><h3>' + esc(sel.name) + (sel.keystone ? ' · KEYSTONE' : '') + '</h3>';
-      h += '<p>' + esc(sel.desc) + '</p><div class="tree-actions">';
-      if (hasNode(sel.id)) h += '<span class="badge">OWNED</span>';
-      else h += '<button type="button" class="stone-btn" data-action="unlock" data-id="' + sel.id + '"' + (canUnlock(sel) ? '' : ' disabled') + '>UNLOCK · ' + sel.cost + ' SP</button>';
-      h += '</div></div>';
+      text(sel.name, 24, H - 120, { size: 18 });
+      wrapText(sel.desc, W / 2, H - 95, W - 48, 13, '#a09080');
+      if (!hasNode(sel.id)) {
+        drawBtn((W - 160) / 2, H - 60, 160, 40, 'UNLOCK ' + sel.cost);
+        hit('unlock', (W - 160) / 2, H - 60, 160, 40, sel.id);
+      }
     }
-    h += '</div></div>';
-    return h;
   }
 
-  function renderForge() {
-    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">FORGE</h2><p class="mode-sub">MERGE · RELICS · EXOTICS</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="panel-scroll"><div class="forge-stage" style="background-image:url(\'' + artUrl('forge') + '\')"><div class="forge-stage-veil"></div><div class="forge-slots">';
-    for (var i = 0; i < 2; i++) {
-      var s = UI.forgeSlots[i];
-      h += '<button type="button" class="forge-slot' + (s ? ' filled' : '') + '" data-action="clear-forge" data-id="' + i + '">' + (s ? esc(s) : 'SLOT') + '</button>';
-    }
-    h += '</div><button type="button" class="stone-btn" style="width:100%" data-action="merge">FUSE</button></div>';
-    h += '<div class="shard-grid">';
-    SHARD_DEFS.forEach(function (sh) {
-      var q = P.shards[sh.id] || 0;
-      if (!q) return;
-      h += '<button type="button" class="shard-tile r-' + sh.rarity + '" data-action="forge-add" data-id="' + sh.id + '">' + sh.icon + '<span class="qty">' + q + '</span></button>';
-    });
-    Object.keys(P.exotics || {}).forEach(function (ex) {
-      if (!(P.exotics[ex] > 0)) return;
-      h += '<button type="button" class="shard-tile r-myth" data-action="forge-add" data-id="' + esc(ex) + '">▣<span class="qty">' + P.exotics[ex] + '</span></button>';
-    });
-    h += '</div>';
-    if (P.relics.length) {
-      h += '<p class="mode-sub" style="margin-top:0.85rem">RELICS</p><div class="loadout-row">';
-      P.relics.forEach(function (r) {
-        var b = RELIC_BONUS[r];
-        h += '<span class="loadout-chip active">' + esc(r.replace('relic_', '').toUpperCase()) + (b ? ' · ' + b.label : '') + '</span>';
-      });
-      h += '</div>';
-    }
-    h += '</div></div>';
-    return h;
-  }
-
-  function renderTower() {
-    var t = UI.tower;
-    if (!t) {
-      var cov = roleCoverage();
-      var h0 = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
-      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
-      h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">ROLES · INFINITE UPS · CO-OP BOSS</p></div>';
-      h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-      h0 += '<div class="role-banner"><span class="role-tag ' + P.loadout + '">' + P.loadout.toUpperCase() + '</span>';
-      h0 += '<span class="badge">BEST ' + P.wavesBest + '</span>';
-      h0 += '<span class="badge">' + (cov.bulwark ? 'B' : '·') + (cov.rift ? 'R' : '·') + (cov.warden ? 'W' : '·') + '</span></div>';
-      h0 += '<div class="upgrade-row">';
-      TOWER_UPS.forEach(function (u) {
-        var lv = P.towerUp[u.id] || 0;
-        var cost = Math.floor(u.base * Math.pow(1.38, lv));
-        h0 += '<button type="button" class="up-chip" data-action="tower-up" data-id="' + u.id + '">' + u.name + ' ' + lv + ' · ' + cost + '</button>';
-      });
-      h0 += '</div><div class="tower-deploy">';
-      h0 += '<button type="button" class="stone-btn battle-btn" data-action="start-tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')">SOLO DEPLOY</button>';
-      h0 += '<button type="button" class="stone-btn alt" data-action="start-coop">CO-OP BOSS</button></div>';
-      h0 += '<p class="empty-note">Co-op boss checks taunt / arc / mend gates. Solo fills missing roles with ghost allies.</p></div>';
-      return h0;
-    }
-    var abl = P.loadout === 'bulwark'
-      ? { p: 'TAUNT', s: 'QUAKE', u: 'OVERLOAD' }
-      : P.loadout === 'warden'
-        ? { p: 'MEND', s: 'WARD', u: 'OVERLOAD' }
-        : { p: 'ARC', s: 'TIMELINE', u: 'OVERLOAD' };
-    var h = '<div class="tower-live" id="tower-live">';
-    h += '<div class="tower-arena" style="background-image:url(\'' + artUrl('tower') + '\')"><div class="tower-arena-veil"></div>';
-    h += '<button type="button" class="tower-flee" data-action="flee-tower" aria-label="Flee">×</button>';
-    h += '<div class="tower-hud"><span data-wave>' + (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave + '</span>';
-    h += '<span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
-    h += '<span data-combo></span></div>';
-    h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
-    h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
-    h += '<div class="ability-bar" style="--abil-sheet:url(\'' + artUrl('uiAbilities') + '\')">';
-    h += '<button type="button" class="ability abil-0" data-action="ability" data-id="primary" data-ability="primary"><span class="abil-icon"></span><span class="abil-name">' + abl.p + '</span><span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability abil-1" data-action="ability" data-id="secondary" data-ability="secondary"><span class="abil-icon"></span><span class="abil-name">' + abl.s + '</span><span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability abil-2" data-action="ability" data-id="ultimate" data-ability="ultimate"><span class="abil-icon"></span><span class="abil-name">' + abl.u + '</span><span class="cd">READY</span></button>';
-    h += '</div></div>';
-    return h;
-  }
-
-  function renderGate() {
-    var h = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">RUN THE EXTRACT · BRING EXOTICS HOME</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="panel-scroll planet-grid">';
+  function drawGate() {
+    drawMenuShell('STARGATE', 'EXTRACT EXOTICS');
+    var y = 110;
     PLANETS.forEach(function (pl) {
-      var open = WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
-      h += '<button type="button" class="planet-card' + (open ? ' unlocked' : ' locked') + '" style="--accent:' + pl.accent + '" data-action="extract" data-id="' + pl.id + '"' + (open ? '' : ' disabled') + '>';
-      h += '<h3>' + esc(pl.name) + '</h3><p>' + esc(pl.blurb) + '</p>';
-      h += '<div class="badge">' + (open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed) + '</div>';
-      if (P.exotics[pl.exotic]) h += '<div class="badge">OWNED x' + P.exotics[pl.exotic] + '</div>';
-      var bank = WORLD.sharedBank[pl.exotic] || 0;
-      if (bank) h += '<div class="badge">BANK x' + bank + '</div>';
-      h += '</button>';
+      var open = G.WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
+      ctx.fillStyle = open ? 'rgba(30,24,18,0.92)' : 'rgba(12,10,10,0.7)';
+      roundRect(20, y, W - 40, 72, 8); ctx.fill();
+      ctx.strokeStyle = open ? pl.accent : '#333';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      text(pl.name, 36, y + 30, { size: 16, color: open ? '#f4ead4' : '#666' });
+      text(open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed, 36, y + 52, { size: 12, color: '#8a8070' });
+      if (open) hit('extract', 20, y, W - 40, 72, pl.id);
+      y += 84;
     });
-    h += '</div></div>';
-    return h;
   }
 
-  function renderExtract() {
-    var pl = UI.extract.planet;
-    var h = '<div class="mode-screen skin-console extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
-    h += '<div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div>';
-    h += '<h2 class="mode-title">' + esc(pl.name) + '</h2>';
-    h += '<p class="mode-sub">' + esc(pl.verb) + ' — survive the hazard</p>';
-    h += '<div class="extract-viz" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
-    h += '<div class="extract-bar"><i style="width:' + UI.extract.progress + '%"></i></div>';
-    h += '<p class="empty-note">Hazards ' + UI.extract.hazards + '/4</p></div>';
-    return h;
+  function drawExtract() {
+    var pl = G.extract.planet;
+    coverImg('gate', 0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    text(pl.name, W / 2, H * 0.35, { align: 'center', size: 28 });
+    text(pl.verb, W / 2, H * 0.4, { align: 'center', size: 14, color: '#8a8070' });
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    roundRect(40, H * 0.5, W - 80, 14, 6); ctx.fill();
+    ctx.fillStyle = pl.accent;
+    roundRect(40, H * 0.5, (W - 80) * (G.extract.progress / 100), 14, 6); ctx.fill();
+    text('HAZARDS ' + G.extract.hazards + '/4', W / 2, H * 0.58, { align: 'center', size: 14 });
   }
 
-  function renderEra() {
-    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">TIMELINE</h2><p class="mode-sub">STABILIZE IN TOWER · ROLE GATES ON BOSSES</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="panel-scroll era-track">';
+  function drawEra() {
+    drawMenuShell('TIMELINE', 'STABILIZE IN TOWER');
+    var y = 110;
     ERAS.forEach(function (era, i) {
-      var cleared = WORLD.erasCleared.indexOf(era.id) >= 0;
-      var current = WORLD.eraIndex === i;
-      var locked = i > WORLD.eraIndex;
-      h += '<div class="era-card' + (current ? ' current' : '') + (locked ? ' locked' : '') + '" style="--accent:' + era.accent + '">';
-      h += '<h3>' + esc(era.name) + '</h3><p>' + esc(era.blurb) + '</p>';
-      if (era.story) h += '<p class="era-story">' + esc(era.story) + '</p>';
-      h += '<div class="badge">' + (cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED') + '</div></div>';
+      var current = G.WORLD.eraIndex === i;
+      var cleared = G.WORLD.erasCleared.indexOf(era.id) >= 0;
+      ctx.fillStyle = current ? 'rgba(40,30,18,0.95)' : 'rgba(16,12,10,0.85)';
+      roundRect(20, y, W - 40, 78, 8); ctx.fill();
+      ctx.strokeStyle = era.accent; ctx.globalAlpha = current ? 1 : 0.35; ctx.stroke(); ctx.globalAlpha = 1;
+      text(era.name, 36, y + 28, { size: 16 });
+      text(cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED', 36, y + 52, { size: 12, color: '#8a8070' });
+      y += 90;
     });
-    h += '</div></div>';
-    return h;
   }
 
-  function renderLife() {
-    var h = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">SLOW LIFE</h2><p class="mode-sub">FISH · GARDEN · BREATHE</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="panel-scroll">';
-    h += '<div class="life-card fish-card"><div class="life-art fish-art' + (UI.fishCast ? ' casting' : '') + '" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
-    h += '<button type="button" class="stone-btn" data-action="fish"' + (UI.fishCast ? ' disabled' : '') + '>' + (UI.fishCast ? 'WAITING…' : 'CAST LINE') + '</button>';
-    h += '<p class="mode-sub">Caught ' + P.fishCaught + '</p></div>';
-    h += '<div class="life-card"><p class="mode-sub">GARDEN PLOTS</p><div class="garden-grid">';
+  function drawLife() {
+    drawMenuShell('SLOW LIFE', 'FISH · GARDEN');
+    drawBtn(40, 130, W - 80, 56, G.fishCast ? 'WAITING…' : 'CAST LINE');
+    if (!G.fishCast) hit('fish', 40, 130, W - 80, 56);
+    text('CAUGHT ' + G.P.fishCaught, W / 2, 210, { align: 'center', size: 14, color: '#8a8070' });
     for (var i = 0; i < 4; i++) {
-      var planted = P.gardenPlanted[i];
+      var px = 30 + i * ((W - 60) / 4);
+      var planted = G.P.gardenPlanted[i];
       var ready = planted && (Date.now() - planted >= 45000);
-      var label = !planted ? 'PLANT 15' : ready ? 'HARVEST' : '…';
-      h += '<button type="button" class="garden-plot' + (planted ? ' grown' : '') + (ready ? ' ready' : '') + '" data-action="garden" data-id="' + i + '">' + label + '</button>';
+      ctx.fillStyle = ready ? 'rgba(40,80,40,0.9)' : 'rgba(30,22,14,0.9)';
+      roundRect(px, 250, (W - 80) / 4, 70, 8); ctx.fill();
+      text(!planted ? 'PLANT' : ready ? 'HARVEST' : '…', px + ((W - 80) / 8), 292, { align: 'center', size: 12 });
+      hit('garden', px, 250, (W - 80) / 4, 70, String(i));
     }
-    h += '</div></div></div></div>';
-    return h;
   }
 
-  function renderStory() {
-    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
-    h += '<h2 class="mode-title">LORE</h2><p class="mode-sub">CHAPTER ' + WORLD.storyChapter + '</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
-    h += '<div class="panel-scroll">';
+  function drawStory() {
+    drawMenuShell('LORE', 'CHAPTER ' + G.WORLD.storyChapter);
+    var y = 110;
     STORY.forEach(function (ch) {
-      var locked = ch.id > WORLD.storyChapter;
-      h += '<div class="story-card' + (locked ? ' locked' : '') + '"><h3>' + esc(ch.title) + '</h3>';
-      h += '<p>' + (locked ? 'Sealed until the timeline opens.' : esc(ch.body)) + '</p></div>';
+      var locked = ch.id > G.WORLD.storyChapter;
+      ctx.fillStyle = 'rgba(20,16,14,0.9)';
+      roundRect(20, y, W - 40, locked ? 64 : 110, 8); ctx.fill();
+      text(ch.title, 36, y + 28, { size: 16, color: locked ? '#555' : '#f4ead4' });
+      if (!locked) wrapText(ch.body, W / 2, y + 55, W - 70, 13, '#a09080');
+      y += locked ? 76 : 122;
     });
-    h += '</div></div>';
-    return h;
   }
 
-  function renderStoryModal() {
-    if (UI.storyOpen == null) return '';
-    var ch = STORY[UI.storyOpen] || STORY[0];
-    return '<div class="story-modal"><div class="story-panel">' +
-      '<div class="mark">TRANSMISSION</div><h2>' + esc(ch.title) + '</h2><p>' + esc(ch.body) + '</p>' +
-      '<button type="button" class="stone-btn" data-action="dismiss-story">CONTINUE</button></div></div>';
+  /* ── Input ── */
+  function onPointer(type, clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    var x = (clientX - rect.left) * (W / rect.width);
+    var y = (clientY - rect.top) * (H / rect.height);
+    G.pointer.x = x; G.pointer.y = y;
+    if (type === 'down') G.pointer.down = true;
+    if (type === 'up') {
+      G.pointer.down = false;
+      var h = hitAt(x, y);
+      if (h) handleHit(h);
+    }
   }
 
-  function render() {
-    var root = document.getElementById('screen-root');
-    if (!root) return;
-    var html = '';
-    if (UI.mode === 'who' || !P) html = renderWho();
-    else if (UI.mode === 'hub') html = renderHub();
-    else if (UI.mode === 'tree') html = renderTree();
-    else if (UI.mode === 'forge') html = renderForge();
-    else if (UI.mode === 'tower') html = renderTower();
-    else if (UI.mode === 'gate') html = renderGate();
-    else if (UI.mode === 'extract') html = renderExtract();
-    else if (UI.mode === 'era') html = renderEra();
-    else if (UI.mode === 'life') html = renderLife();
-    else if (UI.mode === 'story') html = renderStory();
-    else html = renderHub();
-    html += renderStoryModal();
-    root.innerHTML = html;
-    markScreenEnter();
+  function handleHit(h) {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    var id = h.id, d = h.data;
+    if (id === 'pick') pickPlayer(d);
+    else if (id === 'who') { savePlayer(); G.activeId = null; G.P = null; G.scene = 'who'; }
+    else if (id === 'enter' || (id === 'mode' && d === 'tower')) go('tower');
+    else if (id === 'mode') go(d);
+    else if (id === 'hub') go('hub');
+    else if (id === 'dismiss-story') { G.storyOpen = null; savePlayer(); }
+    else if (id === 'start-tower') startTower(false);
+    else if (id === 'start-coop') startTower(true);
+    else if (id === 'flee') endTower(false);
+    else if (id === 'ability') useAbility(d);
+    else if (id === 'tower-up') {
+      var def = TOWER_UPS.find(function (u) { return u.id === d; });
+      if (!def) return;
+      var lv = G.P.towerUp[d] || 0;
+      var cost = Math.floor(def.base * Math.pow(1.38, lv));
+      if (G.P.chrono < cost) { toast('NEED CHRONO'); return; }
+      G.P.chrono -= cost;
+      G.P.towerUp[d] = lv + 1;
+      toast(def.name + ' ' + (lv + 1));
+      savePlayer();
+    } else if (id === 'forge-add') {
+      var slot = G.forge[0] ? (G.forge[1] ? -1 : 1) : 0;
+      if (slot < 0) { toast('FULL'); return; }
+      if (!((G.P.shards[d] || 0) >= 1 || (G.P.exotics[d] || 0) >= 1)) { toast('NONE'); return; }
+      G.forge[slot] = d;
+    } else if (id === 'clear-forge') G.forge[+d] = null;
+    else if (id === 'merge') tryMerge();
+    else if (id === 'select-node') G.selNode = d;
+    else if (id === 'unlock') {
+      var node = nodeById(d);
+      if (!canUnlock(node)) { toast('LOCKED'); return; }
+      G.P.skillPoints -= node.cost;
+      G.P.unlocked.push(node.id);
+      toast(node.name);
+      beep(400, 0.1);
+      savePlayer();
+    } else if (id === 'loadout') { G.P.loadout = d; savePlayer(); toast(d.toUpperCase()); }
+    else if (id === 'extract') {
+      var pl = PLANETS.find(function (p) { return p.id === d; });
+      if (!pl || G.WORLD.planetsUnlocked.indexOf(d) < 0) return;
+      if (G.P.chrono < 35) { toast('NEED 35'); return; }
+      G.P.chrono -= 35;
+      G.extract = { planet: pl, progress: 0, hazards: 0 };
+      G.scene = 'extract';
+      savePlayer();
+    } else if (id === 'fish') {
+      if (G.fishCast) return;
+      G.fishCast = true;
+      setTimeout(function () {
+        G.fishCast = false;
+        var catch_ = FISH[Math.floor(Math.random() * FISH.length)];
+        if (catch_.chrono) G.P.chrono += catch_.chrono;
+        if (catch_.essence) G.P.essence += catch_.essence;
+        if (catch_.shard) G.P.shards[catch_.shard] = (G.P.shards[catch_.shard] || 0) + 1;
+        G.P.fishCaught++;
+        toast(catch_.name.toUpperCase());
+        savePlayer();
+      }, 900);
+    } else if (id === 'garden') {
+      var i = +d;
+      var now = Date.now();
+      if (!G.P.gardenPlanted[i]) {
+        if (G.P.chrono < 15) { toast('NEED 15'); return; }
+        G.P.chrono -= 15;
+        G.P.gardenPlanted[i] = now;
+        toast('PLANTED');
+      } else if (now - G.P.gardenPlanted[i] >= 45000) {
+        G.P.shards.bone = (G.P.shards.bone || 0) + 1;
+        G.P.chrono += 12;
+        G.P.gardenPlanted[i] = 0;
+        toast('HARVEST');
+      } else toast('GROWING…');
+      savePlayer();
+    }
   }
 
-  function onAction(act, id) {
-    if (act === 'pick') { selectPlayer(id); return; }
-    if (act === 'who') { savePlayer(); UI.mode = 'who'; P = null; activeId = null; render(); return; }
-    if (act === 'mode') { UI.mode = id; buzz(10); render(); return; }
-    if (act === 'select-node') { UI.selectedNode = id; render(); return; }
-    if (act === 'unlock') { unlockNode(id); return; }
-    if (act === 'loadout') { P.loadout = id; savePlayer(); toast(id.toUpperCase()); render(); return; }
-    if (act === 'forge-add') { putForgeShard(id); return; }
-    if (act === 'clear-forge') { UI.forgeSlots[+id] = null; render(); return; }
-    if (act === 'merge') { tryMerge(); return; }
-    if (act === 'start-tower') { startTower(false); return; }
-    if (act === 'start-coop') { startTower(true); return; }
-    if (act === 'flee-tower') { endTower(false); return; }
-    if (act === 'ability') { useAbility(id); return; }
-    if (act === 'tower-up') { buyTowerUp(id); return; }
-    if (act === 'extract') { startExtract(id); return; }
-    if (act === 'fish') { castFish(); return; }
-    if (act === 'garden') { tendGarden(+id); return; }
-    if (act === 'dismiss-story') { UI.storyOpen = null; savePlayer(); render(); return; }
+  /* ── Loop ── */
+  function update(dt) {
+    G.time += dt;
+    G.hits = [];
+    if (G.toastT > 0) G.toastT -= dt;
+    if (G.shake > 0) G.shake -= dt;
+    if (G.flash > 0) G.flash -= dt;
+    G.particles = G.particles.filter(function (p) {
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 180 * dt;
+      return p.life > 0;
+    });
+    if (G.scene === 'tower' && G.tower && G.tower.running) updateTower(dt);
+    if (G.scene === 'extract' && G.extract) {
+      G.extract.progress += (8 + (aggregateStats().extract || 0) * 10) * dt * 4;
+      if (Math.random() < dt * 0.9) G.extract.hazards++;
+      if (G.extract.progress >= 100) {
+        var pl = G.extract.planet;
+        var fail = G.extract.hazards >= 4 && Math.random() < 0.35;
+        if (!fail) {
+          G.P.exotics[pl.exotic] = (G.P.exotics[pl.exotic] || 0) + 1;
+          toast(pl.exoticName.toUpperCase());
+        } else {
+          G.P.chrono += 10;
+          toast('EXTRACT FAILED');
+        }
+        G.extract = null;
+        G.scene = 'gate';
+        savePlayer();
+      }
+    }
   }
 
-  function bind() {
-    var app = document.getElementById('chronos-app');
-    if (!app || app._bound) return;
-    app._bound = true;
-    app.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-action]');
-      if (!t) return;
-      onAction(t.getAttribute('data-action'), t.getAttribute('data-id'));
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var sx = 0, sy = 0;
+    if (G.shake > 0) {
+      sx = (Math.random() - 0.5) * 10;
+      sy = (Math.random() - 0.5) * 10;
+    }
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    if (G.scene === 'boot') drawBoot();
+    else if (G.scene === 'who') drawWho();
+    else if (G.scene === 'hub') drawHub();
+    else if (G.scene === 'tower') drawTower();
+    else if (G.scene === 'forge') drawForge();
+    else if (G.scene === 'tree') drawTree();
+    else if (G.scene === 'gate') drawGate();
+    else if (G.scene === 'extract') drawExtract();
+    else if (G.scene === 'era') drawEra();
+    else if (G.scene === 'life') drawLife();
+    else if (G.scene === 'story') drawStory();
+    else drawHub();
+
+    G.particles.forEach(function (p) {
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    if (G.flash > 0) {
+      ctx.fillStyle = 'rgba(255,200,120,' + (G.flash * 0.55) + ')';
+      ctx.fillRect(-20, -20, W + 40, H + 40);
+    }
+
+    if (G.toastT > 0 && G.toast) {
+      ctx.fillStyle = 'rgba(10,8,6,0.88)';
+      var tw = Math.min(W * 0.8, 280);
+      roundRect((W - tw) / 2, H * 0.18, tw, 36, 6); ctx.fill();
+      text(G.toast, W / 2, H * 0.18 + 24, { align: 'center', size: 14, color: '#ffe7a0' });
+    }
+
+    ctx.restore();
+  }
+
+  function frame(ts) {
+    var dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+    lastTs = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function resize() {
+    var parent = canvas.parentElement || document.body;
+    var rw = parent.clientWidth || window.innerWidth;
+    var rh = parent.clientHeight || window.innerHeight;
+    // design in portrait phone space, scale to fill
+    var designW = 390, designH = 844;
+    var scale = Math.min(rw / designW, rh / designH);
+    // use full screen — logical coords match CSS pixels of canvas
+    W = Math.max(320, Math.floor(rw));
+    H = Math.max(560, Math.floor(rh));
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function loadImage(key, src) {
+    return new Promise(function (resolve) {
+      var im = new Image();
+      im.onload = function () { images[key] = im; resolve(); };
+      im.onerror = function () { resolve(); };
+      im.src = src;
     });
   }
 
   function boot() {
-    WORLD = loadWorldLocal();
-    bind();
+    canvas = document.getElementById('game');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'game';
+      document.body.appendChild(canvas);
+    }
+    ctx = canvas.getContext('2d', { alpha: false });
+    resize();
+    window.addEventListener('resize', resize);
+
+    canvas.addEventListener('pointerdown', function (e) { onPointer('down', e.clientX, e.clientY); });
+    canvas.addEventListener('pointerup', function (e) { onPointer('up', e.clientX, e.clientY); });
+    canvas.addEventListener('pointercancel', function () { G.pointer.down = false; });
+
+    G.WORLD = loadWorld();
+    G.scene = 'boot';
+
+    var jobs = [
+      loadImage('who', ART.who),
+      loadImage('hub', ART.hub),
+      loadImage('tower', ART.tower),
+      loadImage('forge', ART.forge),
+      loadImage('gate', ART.gate),
+      loadImage('life', ART.life),
+      loadImage('tree', ART.tree),
+      loadImage('uiBtn', ART.uiBtn),
+      loadImage('dock', '/public/art/chronos/dock-medallions.png'),
+      loadImage('abilities', ART.uiAbilities)
+    ];
+    WARBAND.forEach(function (w) {
+      jobs.push(loadImage('portrait-' + w.id, w.portrait));
+    });
+
+    Promise.all(jobs).then(function () {
+      G.scene = 'who';
+      lastTs = performance.now();
+      requestAnimationFrame(frame);
+    });
+
     try {
       bc = new BroadcastChannel('voidline-chronos');
-      bc.onmessage = function (ev) {
-        if (!ev.data) return;
-        if (ev.data.type === 'world' && ev.data.world) {
-          if ((ev.data.world.updatedAt || 0) > (WORLD.updatedAt || 0)) {
-            WORLD = Object.assign(freshWorld(), ev.data.world);
-            if (UI.mode !== 'who') render();
-          }
-        }
-      };
     } catch (e) { bc = null; }
-    window.addEventListener('storage', function (e) {
-      if (e.key === WORLD_KEY && e.newValue) {
-        try {
-          var w = JSON.parse(e.newValue);
-          if ((w.updatedAt || 0) > (WORLD.updatedAt || 0)) {
-            WORLD = Object.assign(freshWorld(), w);
-            if (UI.mode !== 'who') render();
-          }
-        } catch (err) {}
-      }
-    });
+
+    // light presence ping
     setInterval(function () {
-      if (activeId && WORLD) {
-        WORLD.presence[activeId] = Date.now();
-        saveWorldLocal();
-        fetch('/api/chronos/' + encodeURIComponent(ROOM), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'presence', player: activeId })
-        }).catch(function () {});
-      }
-    }, 15000);
-    setInterval(function () { if (activeId) pullRemote().then(function () { if (UI.mode === 'hub') render(); }); }, 20000);
-    render();
+      if (!G.activeId || !G.WORLD) return;
+      G.WORLD.presence[G.activeId] = Date.now();
+      saveWorld();
+      fetch('/api/chronos/' + encodeURIComponent(ROOM), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'presence', player: G.activeId })
+      }).catch(function () {});
+    }, 20000);
   }
+
+  window.VoidlineChronos = {
+    getScene: function () { return G.scene; },
+    getPlayer: function () { return G.P; },
+    getWorld: function () { return G.WORLD; },
+    pick: function (id) { pickPlayer(id); },
+    go: function (s) { go(s); },
+    startTower: function (coop) { if (G.scene !== 'tower') go('tower'); startTower(!!coop); },
+    towerLive: function () { return !!(G.tower && G.tower.running); },
+    seats: function () { return WARBAND.length; },
+    dismissStory: function () { G.storyOpen = null; if (G.P) savePlayer(); }
+  };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-
-  window.VoidlineChronos = {
-    getPlayer: function () { return P; },
-    getWorld: function () { return WORLD; },
-    sync: pullRemote,
-    render: render
-  };
 })();

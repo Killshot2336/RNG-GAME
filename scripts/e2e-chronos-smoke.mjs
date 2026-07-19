@@ -31,52 +31,48 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
 try {
   await page.goto(BASE + '/index.html', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.waitForTimeout(500);
 
-  const seats = await page.locator('.seat').count();
+  await page.waitForFunction(
+    () => window.VoidlineChronos && window.VoidlineChronos.getScene() === 'who',
+    null,
+    { timeout: 15000 }
+  );
+
+  const canvas = await page.locator('#game').count();
+  if (!canvas) failures.push('missing #game canvas');
+
+  const seats = await page.evaluate(() => window.VoidlineChronos.seats());
   if (seats < 3) failures.push('expected 3 warband seats, got ' + seats);
 
-  await page.locator('.seat').first().click();
-  await page.waitForTimeout(400);
+  await page.evaluate(() => window.VoidlineChronos.pick('aden'));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => window.VoidlineChronos.dismissStory());
+  await page.waitForTimeout(100);
 
-  const storyBtn = page.locator('[data-action="dismiss-story"]').first();
-  if (await storyBtn.count()) {
-    await storyBtn.click();
-    await page.waitForTimeout(200);
-  }
-
-  if (!(await page.locator('.hub-stage').count())) failures.push('hub did not open after seat pick');
+  let scene = await page.evaluate(() => window.VoidlineChronos.getScene());
+  if (scene !== 'hub') failures.push('hub did not open after seat pick, got ' + scene);
 
   for (const mode of ['tree', 'forge', 'tower', 'gate', 'era', 'life', 'story']) {
-    const btn = page.locator('.hub-dock [data-action="mode"][data-id="' + mode + '"]').first();
-    if (!(await btn.count())) {
-      failures.push('missing hub entry ' + mode);
-      continue;
-    }
-    await btn.click();
-    await page.waitForTimeout(300);
-    const dismiss = page.locator('[data-action="dismiss-story"]').first();
-    if (await dismiss.count()) await dismiss.click();
-    const hubBtn = page.locator('[data-action="mode"][data-id="hub"]').first();
-    if (await hubBtn.count()) await hubBtn.click();
-    else {
-      const flee = page.locator('[data-action="flee-tower"]').first();
-      if (await flee.count()) await flee.click();
-    }
-    await page.waitForTimeout(200);
+    await page.evaluate((m) => window.VoidlineChronos.go(m), mode);
+    await page.waitForTimeout(120);
+    scene = await page.evaluate(() => window.VoidlineChronos.getScene());
+    if (scene !== mode) failures.push('failed to open mode ' + mode + ' (got ' + scene + ')');
+    await page.evaluate(() => window.VoidlineChronos.go('hub'));
+    await page.waitForTimeout(80);
   }
 
-  // dismiss intro story if present
-  const intro = page.locator('[data-action="dismiss-story"]').first();
-  if (await intro.count()) await intro.click();
+  await page.evaluate(() => window.VoidlineChronos.go('tower'));
+  await page.waitForTimeout(80);
+  await page.evaluate(() => window.VoidlineChronos.startTower(false));
+  await page.waitForTimeout(400);
 
-  await page.locator('.hub-dock [data-action="mode"][data-id="tower"]').first().click();
-  await page.waitForTimeout(200);
-  await page.locator('[data-action="start-tower"]').first().click();
-  await page.waitForTimeout(900);
-  if (!(await page.locator('.tower-arena').count())) failures.push('tower did not start');
+  const live = await page.evaluate(() => window.VoidlineChronos.towerLive());
+  scene = await page.evaluate(() => window.VoidlineChronos.getScene());
+  if (scene !== 'tower' || !live) failures.push('tower did not start (scene=' + scene + ', live=' + live + ')');
 
-  const nodes = await page.evaluate(() => (window.ChronosData && window.ChronosData.TREE) ? window.ChronosData.TREE.length : 0);
+  const nodes = await page.evaluate(() =>
+    (window.ChronosData && window.ChronosData.TREE) ? window.ChronosData.TREE.length : 0
+  );
   if (nodes < 20) failures.push('skill tree too small: ' + nodes);
 
   if (failures.length) {
