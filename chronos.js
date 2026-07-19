@@ -191,13 +191,25 @@
   }
 
   function softPlate(x, y, w, h, r) {
-    r = r == null ? 10 : r;
+    /* mist band — no web card border */
+    r = r == null ? 14 : r;
     roundRect(x, y, w, h, r);
-    ctx.fillStyle = PANEL;
+    var g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, 'rgba(8,6,10,0.55)');
+    g.addColorStop(1, 'rgba(8,6,10,0.78)');
+    ctx.fillStyle = g;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212,160,90,0.28)';
-    ctx.lineWidth = 1;
+  }
+
+  function closeSeal(x, y) {
+    ctx.beginPath();
+    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(6,5,8,0.65)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(212,160,90,0.5)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
+    text('✕', x, y + 6, { align: 'center', size: 15, color: TEXT, shadow: false });
   }
 
   function drawBattleCta(x, y, w, h, label) {
@@ -212,9 +224,6 @@
       roundRect(x, y, w, h, 8);
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,230,180,0.35)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
     }
     text(label, x + w / 2, y + h * 0.58, {
       align: 'center', size: Math.min(26, Math.floor(h * 0.38)), color: '#1a1008',
@@ -224,7 +233,7 @@
 
   function drawPlateBtn(x, y, w, h, label, opts) {
     opts = opts || {};
-    softPlate(x, y, w, h, opts.r == null ? 8 : opts.r);
+    softPlate(x, y, w, h, opts.r == null ? 12 : opts.r);
     text(label, x + w / 2, y + h * 0.62, {
       align: 'center',
       size: opts.size || 14,
@@ -235,8 +244,23 @@
     });
   }
 
-  /* aliases kept for older call sites */
-  function fillPanel(x, y, w, h) { softPlate(x, y, w, h, 10); }
+  function runeChip(x, y, s, label, accent) {
+    ctx.beginPath();
+    ctx.arc(x, y, s / 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8,6,10,0.7)';
+    ctx.fill();
+    ctx.strokeStyle = accent || COPPER;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = accent || COPPER_DIM;
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    if (label) {
+      text(label, x, y + 5, { align: 'center', size: Math.max(10, s * 0.22), color: TEXT, shadow: false });
+    }
+  }
+
+  function fillPanel(x, y, w, h) { softPlate(x, y, w, h, 14); }
   function drawTacticalBtn(x, y, w, h, label, opts) {
     opts = opts || {};
     if (opts.hot) drawBattleCta(x, y, w, h, label);
@@ -959,96 +983,115 @@
   }
 
   function drawTower() {
+    var breathe = 1 + Math.sin(G.time * 0.2) * 0.01;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(breathe, breathe);
+    ctx.translate(-W / 2, -H / 2);
     coverImg('tower', 0, 0, W, H, 0.5, 0.45);
-    ctx.fillStyle = 'rgba(7,7,9,0.45)';
-    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    drawEmbers(0.4);
 
     var t = G.tower;
     if (!t) {
-      text('CHRONOLITH', W / 2, 56, {
-        align: 'center', size: 30, color: TEXT, display: true, glow: true, glowColor: CORE_DIM
+      var top = ctx.createLinearGradient(0, 0, 0, 120);
+      top.addColorStop(0, 'rgba(6,5,8,0.65)');
+      top.addColorStop(1, 'rgba(6,5,8,0)');
+      ctx.fillStyle = top;
+      ctx.fillRect(0, 0, W, 120);
+
+      text('CHRONOLITH', W / 2, 48, {
+        align: 'center', size: 32, color: TEXT, display: true, glow: true, glowColor: CORE_DIM
       });
-      text('Best wave ' + G.P.wavesBest, W / 2, 84, { align: 'center', size: 13, color: TEXT_DIM, shadow: false });
-      var y = 120;
-      TOWER_UPS.forEach(function (u, i) {
+      text('Best ' + G.P.wavesBest, W / 2, 74, { align: 'center', size: 13, color: TEXT_DIM, shadow: false });
+      closeSeal(W - 28, 28);
+      hit('hub', W - 46, 10, 36, 36);
+
+      // upgrade runes in a ring — not a settings grid
+      var ups = TOWER_UPS;
+      var ringR = Math.min(W, H) * 0.28;
+      ups.forEach(function (u, i) {
+        var ang = -Math.PI / 2 + (i / ups.length) * Math.PI * 2;
+        var cx = W / 2 + Math.cos(ang) * ringR;
+        var cy = H * 0.42 + Math.sin(ang) * ringR * 0.85;
         var lv = G.P.towerUp[u.id] || 0;
         var cost = Math.floor(u.base * Math.pow(1.38, lv));
-        var bx = 20 + (i % 2) * (W / 2 - 20), by = y + Math.floor(i / 2) * 54;
-        softPlate(bx, by, W / 2 - 30, 44, 8);
-        text(u.name + ' ' + lv, bx + 12, by + 28, { size: 13, color: TEXT, shadow: false });
-        text(String(cost), bx + (W / 2 - 42), by + 28, {
-          align: 'right', size: 13, color: COPPER, glow: true, glowColor: COPPER_DIM
-        });
-        hit('tower-up', bx, by, W / 2 - 30, 44, u.id);
+        runeChip(cx, cy, 64, String(lv), COPPER);
+        text(u.name, cx, cy + 48, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
+        text(String(cost), cx, cy + 5, { align: 'center', size: 12, color: COPPER, shadow: false });
+        hit('tower-up', cx - 32, cy - 32, 64, 64, u.id);
       });
-      var bw = Math.min(W * 0.82, 320), bh = 64;
-      var bx = (W - bw) / 2, by = H - 200;
-      drawBattleCta(bx, by, bw, bh, 'SOLO DEPLOY');
+
+      var bw = Math.min(W * 0.84, 340), bh = 70;
+      var bx = (W - bw) / 2, by = H - 168;
+      drawBattleCta(bx, by, bw, bh, 'DEPLOY');
       hit('start-tower', bx, by, bw, bh);
-      drawPlateBtn((W - 200) / 2, by + 78, 200, 42, 'CO-OP BOSS', { size: 14, color: CORE, glow: true });
-      hit('start-coop', (W - 200) / 2, by + 78, 200, 42);
-      drawPlateBtn(W - 52, 18, 36, 36, '✕', { size: 16, color: TEXT_DIM });
-      hit('hub', W - 52, 18, 36, 36);
+      text('CO-OP BOSS', W / 2, by + 96, { align: 'center', size: 14, color: CORE, glow: true });
+      hit('start-coop', W / 2 - 80, by + 78, 160, 36);
       return;
     }
 
-    // live combat
-    text('WAVE ' + t.wave, 18, 40, { size: 16, color: TEXT, display: true });
-    text(Math.ceil(t.coreHp) + ' / ' + t.coreMax, W / 2, 40, {
-      align: 'center', size: 20, color: COPPER, glow: true, glowColor: COPPER_DIM
+    // live combat HUD — floating, minimal
+    text('WAVE ' + t.wave, 18, 36, { size: 18, color: TEXT, display: true });
+    text(Math.ceil(t.coreHp) + '/' + t.coreMax, W / 2, 36, {
+      align: 'center', size: 18, color: COPPER, glow: true, glowColor: COPPER_DIM
     });
-    if (t.combo > 4) text(t.combo + ' COMBO', W - 18, 40, { align: 'right', size: 14, color: CORE, glow: true });
-    drawPlateBtn(W - 52, 14, 36, 32, '✕', { size: 14, color: TEXT_DIM });
-    hit('flee', W - 52, 14, 36, 32);
+    if (t.combo > 4) text(t.combo + 'x', W - 56, 36, { align: 'right', size: 16, color: CORE, glow: true });
+    closeSeal(W - 28, 28);
+    hit('flee', W - 46, 10, 36, 36);
 
-    // core
-    var cx = W * 0.5, cy = H * 0.52;
+    var cx = W * 0.5, cy = H * 0.5;
     var pulse = 1 + Math.sin(G.time * 3) * 0.06;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(pulse, pulse);
-    var grd = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
-    grd.addColorStop(0, '#b6ff9a');
-    grd.addColorStop(0.45, CORE);
+    var grd = ctx.createRadialGradient(0, 0, 4, 0, 0, 40);
+    grd.addColorStop(0, '#dfffea');
+    grd.addColorStop(0.4, CORE);
     grd.addColorStop(1, 'rgba(7,7,9,0)');
     ctx.fillStyle = grd;
-    ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, 40, 0, Math.PI * 2); ctx.fill();
+    // HP ring
+    ctx.beginPath();
+    ctx.arc(0, 0, 48, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, t.coreHp / t.coreMax));
+    ctx.strokeStyle = COPPER;
+    ctx.lineWidth = 4;
+    ctx.stroke();
     ctx.restore();
 
-    // hp bar
-    var barW = W * 0.55, barH = 8;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    roundRect(cx - barW / 2, cy + 48, barW, barH, 3); ctx.fill();
-    ctx.fillStyle = '#e85a2a';
-    roundRect(cx - barW / 2, cy + 48, barW * Math.max(0, t.coreHp / t.coreMax), barH, 3); ctx.fill();
-
-    // enemies
     t.enemies.forEach(function (e) {
-      var sz = e.type === 'boss' ? 36 : e.type === 'brute' ? 26 : e.type === 'flyer' ? 18 : 16;
+      var sz = e.type === 'boss' ? 38 : e.type === 'brute' ? 28 : e.type === 'flyer' ? 18 : 16;
       ctx.save();
       ctx.translate(e.x, e.y);
-      if (e.hit > 0) { ctx.scale(0.88, 0.88); ctx.filter = 'brightness(2)'; }
+      if (e.hit > 0) { ctx.scale(0.88, 0.88); }
       ctx.fillStyle = e.tint || '#ff6a3d';
-      if (e.type === 'flyer') { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.fill(); }
-      else { ctx.fillRect(-sz / 2, -sz / 2, sz, sz); }
-      ctx.filter = 'none';
-      // hp
+      ctx.shadowColor = e.tint || '#ff6a3d';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      if (e.type === 'flyer') ctx.arc(0, 0, sz / 2, 0, Math.PI * 2);
+      else if (e.type === 'boss') {
+        ctx.moveTo(0, -sz / 2); ctx.lineTo(sz / 2, sz / 2); ctx.lineTo(-sz / 2, sz / 2); ctx.closePath();
+      } else ctx.arc(0, 0, sz / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(-sz / 2, sz / 2 + 3, sz, 3);
-      ctx.fillStyle = '#f0d078';
-      ctx.fillRect(-sz / 2, sz / 2 + 3, sz * (e.hp / e.max), 3);
+      ctx.fillRect(-sz / 2, sz / 2 + 4, sz, 3);
+      ctx.fillStyle = COPPER;
+      ctx.fillRect(-sz / 2, sz / 2 + 4, sz * (e.hp / e.max), 3);
       ctx.restore();
     });
 
-    // fx
     t.fx.forEach(function (f) {
       if (f.kind === 'beam') {
-        ctx.strokeStyle = 'rgba(124,240,255,' + Math.min(1, f.life * 8) + ')';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(94,224,208,' + Math.min(1, f.life * 8) + ')';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = CORE_DIM;
+        ctx.shadowBlur = 8;
         ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+        ctx.shadowBlur = 0;
       } else if (f.kind === 'dmg') {
         text((f.crit ? f.text + '!' : f.text), f.x, f.y - (0.7 - f.life) * 40, {
-          align: 'center', size: f.crit ? 22 : 16, color: f.crit ? '#ffd36a' : '#fff'
+          align: 'center', size: f.crit ? 22 : 16, color: f.crit ? COPPER : '#fff'
         });
       } else if (f.kind === 'spark') {
         ctx.fillStyle = 'rgba(255,255,255,' + (f.life * 3) + ')';
@@ -1056,100 +1099,114 @@
       }
     });
 
-    // abilities
     var abl = G.P.loadout === 'bulwark'
       ? ['TAUNT', 'QUAKE', 'OVERLOAD']
       : G.P.loadout === 'warden'
         ? ['MEND', 'WARD', 'OVERLOAD']
         : ['ARC', 'TIMELINE', 'OVERLOAD'];
     var keys = ['primary', 'secondary', 'ultimate'];
-    var aw = 72, gap = 18;
+    var aw = 70, gap = 22;
     var total = aw * 3 + gap * 2;
     var ax0 = (W - total) / 2;
-    var ay = H - 110;
+    var ay = H - 120;
     keys.forEach(function (k, i) {
       var ax = ax0 + i * (aw + gap);
       drawAbilityIcon(i, ax, ay, aw);
       var cd = t.cds[k];
-      text(abl[i], ax + aw / 2, ay + aw + 16, { align: 'center', size: 12 });
-      text(cd > 0 ? cd.toFixed(1) : 'READY', ax + aw / 2, ay + aw + 32, {
-        align: 'center', size: 12, color: cd > 0 ? TEXT_DIM : CORE, glow: cd <= 0
-      });
+      text(abl[i], ax + aw / 2, ay + aw + 14, { align: 'center', size: 11, color: TEXT, shadow: false });
       if (cd > 0) {
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.beginPath(); ctx.arc(ax + aw / 2, ay + aw / 2, aw / 2, 0, Math.PI * 2); ctx.fill();
+        text(cd.toFixed(1), ax + aw / 2, ay + aw / 2 + 5, { align: 'center', size: 14, color: TEXT, shadow: false });
       }
-      hit('ability', ax, ay, aw, aw + 36, k);
+      hit('ability', ax, ay, aw, aw + 28, k);
     });
   }
 
   function drawAbilityIcon(index, x, y, s) {
     var im = img('abilities');
+    var cx = x + s / 2, cy = y + s / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
+    ctx.clip();
     if (!im || !im.complete) {
-      ctx.fillStyle = '#2a2218';
-      roundRect(x, y, s, s, 8); ctx.fill();
-      return;
+      ctx.fillStyle = '#1a1410';
+      ctx.fillRect(x, y, s, s);
+    } else {
+      var sw = im.naturalWidth / 3;
+      ctx.drawImage(im, index * sw, 0, sw, im.naturalHeight, x, y, s, s);
     }
-    var sw = im.naturalWidth / 3;
-    ctx.drawImage(im, index * sw, 0, sw, im.naturalHeight, x, y, s, s);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(cx, cy, s / 2 - 1, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(212,160,90,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   function drawMenuShell(title, sub) {
-    coverImg(G.scene === 'forge' ? 'forge' : G.scene === 'tree' ? 'tree' : G.scene === 'gate' || G.scene === 'extract' ? 'gate' : G.scene === 'life' ? 'life' : 'hub', 0, 0, W, H, 0.5, 0.4);
+    var key = G.scene === 'forge' ? 'forge' : G.scene === 'tree' ? 'tree' : G.scene === 'gate' || G.scene === 'extract' ? 'gate' : G.scene === 'life' ? 'life' : 'hub';
+    var breathe = 1 + Math.sin(G.time * 0.22) * 0.01;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(breathe, breathe);
+    ctx.translate(-W / 2, -H / 2);
+    coverImg(key, 0, 0, W, H, 0.5, 0.4);
+    ctx.restore();
     var veil = ctx.createLinearGradient(0, 0, 0, H);
-    veil.addColorStop(0, 'rgba(6,5,8,0.45)');
-    veil.addColorStop(0.4, 'rgba(6,5,8,0.2)');
-    veil.addColorStop(1, 'rgba(6,5,8,0.7)');
+    veil.addColorStop(0, 'rgba(6,5,8,0.5)');
+    veil.addColorStop(0.45, 'rgba(6,5,8,0.18)');
+    veil.addColorStop(1, 'rgba(6,5,8,0.72)');
     ctx.fillStyle = veil;
     ctx.fillRect(0, 0, W, H);
-    drawEmbers(0.35);
-    text(title, W / 2, 48, {
-      align: 'center', size: 30, color: TEXT, display: true, glow: true, glowColor: 'rgba(0,0,0,0.8)'
+    drawEmbers(0.3);
+    text(title, W / 2, 46, {
+      align: 'center', size: 30, color: TEXT, display: true, glow: true, glowColor: 'rgba(0,0,0,0.85)'
     });
-    if (sub) text(sub, W / 2, 72, { align: 'center', size: 13, color: COPPER, shadow: false });
-    // close as corner glyph, not a web X button box
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.beginPath();
-    ctx.arc(W - 28, 28, 18, 0, Math.PI * 2);
-    ctx.fill();
-    text('✕', W - 28, 34, { align: 'center', size: 16, color: TEXT, shadow: false });
+    if (sub) text(sub, W / 2, 70, { align: 'center', size: 13, color: COPPER, shadow: false });
+    closeSeal(W - 28, 28);
     hit('hub', W - 46, 10, 36, 36);
   }
 
   function drawForge() {
-    drawMenuShell('FORGE', 'MERGE · RELICS');
-    var slotY = 140;
+    drawMenuShell('FORGE', 'Feed the crucible');
+    // two crucibles
     for (var i = 0; i < 2; i++) {
-      var sx = W / 2 - 100 + i * 120, sy = slotY;
-      fillPanel(sx, sy, 80, 80, 10);
-      text(G.forge[i] ? G.forge[i] : 'SLOT', sx + 40, sy + 48, {
-        align: 'center', size: 12, color: G.forge[i] ? CORE : TEXT_DIM, glow: !!G.forge[i]
-      });
-      hit('clear-forge', sx, sy, 80, 80, String(i));
+      var sx = W * (0.32 + i * 0.36), sy = H * 0.28;
+      runeChip(sx, sy, 90, G.forge[i] ? '' : '?', G.forge[i] ? CORE : 'rgba(212,160,90,0.35)');
+      if (G.forge[i]) text(G.forge[i].toUpperCase(), sx, sy + 6, { align: 'center', size: 12, color: CORE, shadow: false });
+      hit('clear-forge', sx - 45, sy - 45, 90, 90, String(i));
     }
-    drawBattleCta((W - 180) / 2, 250, 180, 48, 'FUSE');
-    hit('merge', (W - 180) / 2, 250, 180, 48);
-    var y = 330;
-    SHARDS.forEach(function (sh) {
+    text('+', W / 2, H * 0.28 + 8, { align: 'center', size: 28, color: TEXT_DIM, shadow: false });
+    var bw = Math.min(W * 0.7, 260), bh = 58;
+    drawBattleCta((W - bw) / 2, H * 0.4, bw, bh, 'FUSE');
+    hit('merge', (W - bw) / 2, H * 0.4, bw, bh);
+
+    var mats = SHARDS.filter(function (sh) { return (G.P.shards[sh.id] || 0) > 0; });
+    var cols = Math.min(4, Math.max(1, mats.length));
+    mats.forEach(function (sh, i) {
+      var col = i % cols;
+      var row = Math.floor(i / cols);
+      var cx = W * 0.2 + col * (W * 0.6 / Math.max(1, cols - 1 || 1));
+      if (cols === 1) cx = W / 2;
+      var cy = H * 0.58 + row * 78;
       var q = G.P.shards[sh.id] || 0;
-      if (!q) return;
-      fillPanel(24, y, W - 48, 40, 8);
-      text(sh.icon + ' ' + sh.name.toUpperCase() + '  x' + q, 40, y + 26, { size: 13, color: TEXT, shadow: false });
-      hit('forge-add', 24, y, W - 48, 40, sh.id);
-      y += 48;
+      runeChip(cx, cy, 56, sh.icon, COPPER);
+      text(sh.name, cx, cy + 42, { align: 'center', size: 11, color: TEXT, shadow: false });
+      text('x' + q, cx, cy + 56, { align: 'center', size: 11, color: COPPER, shadow: false });
+      hit('forge-add', cx - 32, cy - 32, 64, 70, sh.id);
     });
   }
 
   function drawTree() {
-    drawMenuShell('CONSTELLATION', 'SP ' + G.P.skillPoints);
+    drawMenuShell('CONSTELLATION', G.P.skillPoints + ' skill');
     ['bulwark', 'rift', 'warden'].forEach(function (r, i) {
-      var bx = 20 + i * 110;
-      if (G.P.loadout === r) drawTacticalBtn(bx, 110, 100, 32, r.toUpperCase(), { size: 11, cut: 8, hot: true });
-      else {
-        fillPanel(bx, 110, 100, 32, 8);
-        text(r.toUpperCase(), bx + 50, 132, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
-      }
-      hit('loadout', bx, 110, 100, 32, r);
+      var bx = W * 0.2 + i * W * 0.3;
+      var on = G.P.loadout === r;
+      runeChip(bx, 108, on ? 52 : 44, r.slice(0, 1).toUpperCase(), on ? CORE : 'rgba(212,160,90,0.35)');
+      text(r.toUpperCase(), bx, 142, { align: 'center', size: 10, color: on ? CORE : TEXT_DIM, shadow: false });
+      hit('loadout', bx - 30, 80, 60, 70, r);
     });
     ctx.save();
     ctx.translate(20, 160);
@@ -1158,7 +1215,7 @@
       n.req.forEach(function (r) {
         var p = nodeById(r);
         if (!p) return;
-        ctx.strokeStyle = CORE_DIM;
+        ctx.strokeStyle = 'rgba(94,224,208,0.25)';
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(n.x, n.y); ctx.stroke();
       });
@@ -1166,97 +1223,134 @@
     TREE.forEach(function (n) {
       var owned = hasNode(n.id);
       var can = canUnlock(n);
+      var pulse = owned ? 1 + Math.sin(G.time * 2 + n.x) * 0.06 : 1;
+      ctx.save();
+      ctx.translate(n.x, n.y);
+      ctx.scale(pulse, pulse);
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.keystone ? 17 : 13, 0, Math.PI * 2);
-      ctx.fillStyle = owned ? 'rgba(94,224,208,0.35)' : can ? 'rgba(94,224,208,0.16)' : 'rgba(12,12,16,0.95)';
+      ctx.arc(0, 0, n.keystone ? 17 : 13, 0, Math.PI * 2);
+      ctx.fillStyle = owned ? 'rgba(94,224,208,0.4)' : can ? 'rgba(212,160,90,0.25)' : 'rgba(8,6,10,0.9)';
       ctx.fill();
-      ctx.strokeStyle = owned ? CORE : can ? '#8ad4c8' : 'rgba(111,133,114,0.45)';
+      ctx.strokeStyle = owned ? CORE : can ? COPPER : 'rgba(154,144,128,0.35)';
       ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
       hit('select-node', 20 + n.x * 0.55 - 16, 160 + n.y * 0.55 - 16, 32, 32, n.id);
     });
     ctx.restore();
     var sel = nodeById(G.selNode) || nodeById('root');
     if (sel) {
-      text(sel.name, 24, H - 120, { size: 18, color: CORE, glow: true });
-      wrapText(sel.desc, W / 2, H - 95, W - 48, 12, TEXT_DIM);
+      text(sel.name, W / 2, H - 108, { align: 'center', size: 20, color: TEXT, display: true });
+      wrapText(sel.desc, W / 2, H - 86, W - 48, 12, TEXT_DIM);
       if (!hasNode(sel.id)) {
-        drawTacticalBtn((W - 160) / 2, H - 60, 160, 40, 'UNLOCK ' + sel.cost, { size: 13 });
-        hit('unlock', (W - 160) / 2, H - 60, 160, 40, sel.id);
+        drawBattleCta((W - 180) / 2, H - 58, 180, 44, 'UNLOCK ' + sel.cost);
+        hit('unlock', (W - 180) / 2, H - 58, 180, 44, sel.id);
       }
     }
   }
 
   function drawGate() {
-    drawMenuShell('STARGATE', 'EXTRACT EXOTICS');
-    var y = 120;
-    PLANETS.forEach(function (pl) {
+    drawMenuShell('STARGATE', 'Reach into the void');
+    PLANETS.forEach(function (pl, i) {
       var open = G.WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
-      fillPanel(20, y, W - 40, 72, 10);
-      text(pl.name, 36, y + 30, { size: 15, color: open ? CORE : TEXT_DIM, glow: open });
-      text(open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed, 36, y + 52, {
-        size: 11, color: TEXT_DIM, shadow: false
+      var col = i % 2;
+      var row = Math.floor(i / 2);
+      var cx = W * (0.3 + col * 0.4);
+      var cy = H * 0.28 + row * 140;
+      runeChip(cx, cy, open ? 88 : 72, '', open ? pl.accent : 'rgba(154,144,128,0.35)');
+      text(pl.name, cx, cy + 6, { align: 'center', size: 12, color: open ? TEXT : TEXT_DIM, shadow: false });
+      text(open ? '35 chrono' : 'Era ' + pl.eraNeed, cx, cy + 58, {
+        align: 'center', size: 11, color: open ? COPPER : TEXT_DIM, shadow: false
       });
-      if (open) hit('extract', 20, y, W - 40, 72, pl.id);
-      y += 84;
+      if (open) hit('extract', cx - 50, cy - 50, 100, 110, pl.id);
     });
   }
 
   function drawExtract() {
     var pl = G.extract.planet;
-    coverImg('gate', 0, 0, W, H);
-    ctx.fillStyle = 'rgba(7,7,9,0.7)';
+    coverImg('gate', 0, 0, W, H, 0.5, 0.4);
+    ctx.fillStyle = 'rgba(6,5,8,0.55)';
     ctx.fillRect(0, 0, W, H);
-    fillPanel(W * 0.1, H * 0.32, W * 0.8, 160, 14);
-    text(pl.name, W / 2, H * 0.38, { align: 'center', size: 24, color: CORE, glow: true });
-    text(pl.verb, W / 2, H * 0.43, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    roundRect(40, H * 0.5, W - 80, 14, 6); ctx.fill();
-    ctx.fillStyle = CORE;
-    roundRect(40, H * 0.5, Math.max(4, (W - 80) * (G.extract.progress / 100)), 14, 6); ctx.fill();
-    text('HAZARDS ' + G.extract.hazards + '/4', W / 2, H * 0.58, { align: 'center', size: 13, color: TEXT });
+    drawEmbers(0.8);
+    text(pl.name, W / 2, H * 0.36, { align: 'center', size: 28, color: TEXT, display: true, glow: true });
+    text(pl.verb, W / 2, H * 0.42, { align: 'center', size: 14, color: TEXT_DIM, shadow: false });
+    var barW = W * 0.7, bx = (W - barW) / 2, by = H * 0.52;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(bx, by, barW, 16, 8); ctx.fill();
+    ctx.fillStyle = pl.accent || CORE;
+    roundRect(bx, by, Math.max(6, barW * (G.extract.progress / 100)), 16, 8); ctx.fill();
+    text('Hazards ' + G.extract.hazards + '/4', W / 2, by + 40, { align: 'center', size: 13, color: TEXT });
   }
 
   function drawEra() {
-    drawMenuShell('TIMELINE', 'STABILIZE IN TOWER');
-    var y = 120;
+    drawMenuShell('TIMELINE', 'Hold the Chronolith');
+    var y0 = 130;
     ERAS.forEach(function (era, i) {
       var current = G.WORLD.eraIndex === i;
       var cleared = G.WORLD.erasCleared.indexOf(era.id) >= 0;
-      fillPanel(20, y, W - 40, 78, 10);
-      text(era.name, 36, y + 28, { size: 15, color: current ? CORE : TEXT, glow: current });
-      text(cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED', 36, y + 52, {
-        size: 11, color: TEXT_DIM, shadow: false
+      var y = y0 + i * 70;
+      // spine
+      if (i < ERAS.length - 1) {
+        ctx.strokeStyle = 'rgba(212,160,90,0.25)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(48, y + 16); ctx.lineTo(48, y + 70); ctx.stroke();
+      }
+      runeChip(48, y + 8, current ? 36 : 28, '', current ? era.accent : (cleared ? COPPER : 'rgba(154,144,128,0.35)'));
+      text(era.name, 80, y + 4, { size: 16, color: current ? TEXT : TEXT_DIM, display: true });
+      text(cleared ? 'Stabilized' : current ? 'Active' : 'Sealed', 80, y + 24, {
+        size: 12, color: current ? COPPER : TEXT_DIM, shadow: false
       });
-      y += 90;
     });
   }
 
   function drawLife() {
-    drawMenuShell('SLOW LIFE', 'FISH · GARDEN');
-    drawTacticalBtn(40, 130, W - 80, 56, G.fishCast ? 'WAITING…' : 'CAST LINE', { size: 16 });
-    if (!G.fishCast) hit('fish', 40, 130, W - 80, 56);
-    text('CAUGHT ' + G.P.fishCaught, W / 2, 210, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
+    drawMenuShell('SLOW LIFE', 'Fish the ash shores');
+    var pondY = H * 0.32;
+    ctx.save();
+    ctx.translate(W / 2, pondY);
+    ctx.scale(1, 0.42);
+    ctx.beginPath();
+    ctx.arc(0, 0, W * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(40,70,80,0.45)';
+    ctx.fill();
+    ctx.strokeStyle = CORE_DIM;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+    drawBattleCta((W - 220) / 2, pondY + 40, 220, 56, G.fishCast ? 'WAITING…' : 'CAST');
+    if (!G.fishCast) hit('fish', (W - 220) / 2, pondY + 40, 220, 56);
+    text('Caught ' + G.P.fishCaught, W / 2, pondY + 120, { align: 'center', size: 13, color: TEXT_DIM, shadow: false });
+
     for (var i = 0; i < 4; i++) {
-      var px = 30 + i * ((W - 60) / 4);
+      var px = W * 0.18 + i * W * 0.22;
+      var py = H * 0.68;
       var planted = G.P.gardenPlanted[i];
       var ready = planted && (Date.now() - planted >= 45000);
-      fillPanel(px, 250, (W - 80) / 4, 70, 8);
-      text(!planted ? 'PLANT' : ready ? 'HARVEST' : '…', px + ((W - 80) / 8), 292, {
-        align: 'center', size: 11, color: ready ? CORE : TEXT_DIM, glow: ready
+      ctx.beginPath();
+      ctx.arc(px, py, 34, 0, Math.PI * 2);
+      ctx.fillStyle = ready ? 'rgba(60,100,50,0.65)' : 'rgba(40,28,18,0.7)';
+      ctx.fill();
+      ctx.strokeStyle = ready ? CORE : COPPER;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      text(!planted ? 'PLANT' : ready ? 'READY' : '…', px, py + 5, {
+        align: 'center', size: 11, color: ready ? CORE : TEXT, shadow: false
       });
-      hit('garden', px, 250, (W - 80) / 4, 70, String(i));
+      hit('garden', px - 36, py - 36, 72, 72, String(i));
     }
   }
 
   function drawStory() {
-    drawMenuShell('LORE', 'CHAPTER ' + G.WORLD.storyChapter);
-    var y = 120;
+    drawMenuShell('LORE', 'Chapter ' + G.WORLD.storyChapter);
+    var y = 110;
     STORY.forEach(function (ch) {
       var locked = ch.id > G.WORLD.storyChapter;
-      fillPanel(20, y, W - 40, locked ? 64 : 110, 10);
-      text(ch.title, 36, y + 28, { size: 15, color: locked ? TEXT_DIM : CORE, glow: !locked });
-      if (!locked) wrapText(ch.body, W / 2, y + 55, W - 70, 12, TEXT_DIM);
-      y += locked ? 76 : 122;
+      var h = locked ? 56 : 100;
+      softPlate(24, y, W - 48, h, 16);
+      text(ch.title, W / 2, y + 28, {
+        align: 'center', size: 16, color: locked ? TEXT_DIM : TEXT, display: true
+      });
+      if (!locked) wrapText(ch.body, W / 2, y + 52, W - 80, 12, TEXT_DIM);
+      y += h + 14;
     });
   }
 
@@ -1508,6 +1602,8 @@
       loadImage('life', ART.life),
       loadImage('tree', ART.tree),
       loadImage('uiBtn', ART.uiBtn),
+      loadImage('uiHud', ART.uiHud),
+      loadImage('uiFrame', ART.uiFrame),
       loadImage('dock', '/public/art/chronos/dock-medallions.png'),
       loadImage('abilities', ART.uiAbilities)
     ];
