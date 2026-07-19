@@ -48,12 +48,12 @@ try {
   if (!(await page.locator('.hub-stage').count())) failures.push('hub did not open after seat pick');
 
   for (const mode of ['tree', 'forge', 'tower', 'gate', 'era', 'life', 'story']) {
-    const hs = page.locator('[data-action="mode"][data-id="' + mode + '"]').first();
-    if (!(await hs.count())) {
-      failures.push('missing hotspot ' + mode);
+    const btn = page.locator('.hub-dock [data-action="mode"][data-id="' + mode + '"]').first();
+    if (!(await btn.count())) {
+      failures.push('missing hub entry ' + mode);
       continue;
     }
-    await hs.click();
+    await btn.click();
     await page.waitForTimeout(300);
     const dismiss = page.locator('[data-action="dismiss-story"]').first();
     if (await dismiss.count()) await dismiss.click();
@@ -70,9 +70,9 @@ try {
   const intro = page.locator('[data-action="dismiss-story"]').first();
   if (await intro.count()) await intro.click();
 
-  await page.locator('[data-action="mode"][data-id="tower"]').click();
+  await page.locator('.hub-dock [data-action="mode"][data-id="tower"]').first().click();
   await page.waitForTimeout(200);
-  await page.locator('[data-action="start-tower"]').click();
+  await page.locator('[data-action="start-tower"]').first().click();
   await page.waitForTimeout(900);
   if (!(await page.locator('.tower-arena').count())) failures.push('tower did not start');
 

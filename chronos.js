@@ -961,9 +961,9 @@
     return h;
   }
 
-  function hotspot(cls, action, glyph, label) {
-    return '<button type="button" class="hotspot ' + cls + '" data-action="mode" data-id="' + action + '">' +
-      '<span class="hotspot-glyph">' + glyph + '</span><span class="hotspot-label">' + label + '</span></button>';
+  function dockBtn(action, glyph, label, glow) {
+    return '<button type="button" class="dock-btn dock-' + action + '" data-action="mode" data-id="' + action + '" style="--hs-glow:' + glow + '">' +
+      '<span class="dock-glyph">' + glyph + '</span><span class="dock-label">' + label + '</span></button>';
   }
 
   function renderHub() {
@@ -972,9 +972,9 @@
     var h = '<div class="hub-screen">';
     h += '<div class="hub-top">';
     h += '<button type="button" class="hub-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
-    h += '<img src="' + w.portrait + '" alt=""><div><div class="hub-pilot-name">' + esc(w.name.toUpperCase()) + '</div>';
+    h += '<img src="' + w.portrait + '" alt=""><div class="hub-pilot-text"><div class="hub-pilot-name">' + esc(w.name.toUpperCase()) + '</div>';
     h += '<div class="hub-pilot-sub">' + esc(P.loadout.toUpperCase()) + ' · SP ' + P.skillPoints + '</div></div></button>';
-    h += '<div class="hub-wallet">' + P.chrono + ' CHRONO<span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
+    h += '<div class="hub-wallet"><span class="hub-wallet-main">' + P.chrono + ' CHRONO</span><span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
     h += '<div class="hub-stage era-' + era.id + '">';
     h += '<img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false">';
     h += '<div class="hub-art-shade"></div>';
@@ -985,14 +985,17 @@
     });
     h += '</div>';
     h += '<div class="hub-era-tag">' + esc(era.name) + '</div>';
-    h += hotspot('hs-forge', 'forge', '⚒', 'FORGE');
-    h += hotspot('hs-tower', 'tower', '▲', 'TOWER');
-    h += hotspot('hs-tree', 'tree', '✦', 'TREE');
-    h += hotspot('hs-gate', 'gate', '◎', 'GATE');
-    h += hotspot('hs-era', 'era', '▣', 'ERAS');
-    h += hotspot('hs-life', 'life', '🌿', 'LIFE');
-    h += hotspot('hs-story', 'story', '◉', 'LORE');
+    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower"><span>ENTER TOWER</span></button>';
     h += '</div>';
+    h += '<nav class="hub-dock" aria-label="Hub actions">';
+    h += dockBtn('tower', '▲', 'TOWER', 'rgba(61,224,197,0.45)');
+    h += dockBtn('forge', '⚒', 'FORGE', 'rgba(255,106,61,0.45)');
+    h += dockBtn('tree', '✦', 'TREE', 'rgba(124,240,255,0.45)');
+    h += dockBtn('gate', '◎', 'GATE', 'rgba(157,255,176,0.4)');
+    h += dockBtn('era', '▣', 'ERAS', 'rgba(232,197,106,0.45)');
+    h += dockBtn('life', '🌿', 'LIFE', 'rgba(157,255,176,0.4)');
+    h += dockBtn('story', '◉', 'LORE', 'rgba(232,197,106,0.35)');
+    h += '</nav>';
     if (WORLD.quest && !WORLD.quest.done) {
       h += '<div class="hub-quest">QUEST · ' + esc(WORLD.quest.name) + ' · ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
     }
