@@ -57,7 +57,7 @@
     el.className = 'toast' + (kind ? ' ' + kind : '');
     el.textContent = msg;
     layer.appendChild(el);
-    setTimeout(function () { el.remove(); }, 2400);
+    setTimeout(function () { el.remove(); }, 1500);
   }
 
   function shake(ms) {
@@ -342,7 +342,6 @@
       UI.storyOpen = 0;
       P._introSeen = true;
     }
-    toast(warband(id).name.toUpperCase() + ' ONLINE', 'mega');
     buzz([16, 24, 16]);
     pullRemote().then(function () { render(); });
     savePlayer();
@@ -358,7 +357,7 @@
     var bonus = 40 + P.streak * 8;
     P.chrono += bonus;
     P.skillPoints += 1;
-    toast('DAILY +' + bonus + ' · STREAK ' + P.streak, 'good');
+    /* silent grant — avoid web-toast spam on boot */
   }
 
   function nodeById(id) { return TREE.find(function (n) { return n.id === id; }); }
@@ -1009,8 +1008,7 @@
     var h = '<div class="who-screen">';
     h += '<div class="screen-art" style="background-image:url(\'' + artUrl('who') + '\')"></div>';
     h += '<div class="screen-art-veil"></div>';
-    h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1>';
-    h += '<p>Three seats. One timeline. Syncs across your devices.</p></div>';
+    h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1></div>';
     h += '<div class="who-seats">';
     WARBAND.forEach(function (w) {
       var raw = null;
@@ -1019,16 +1017,19 @@
       if (raw) {
         try {
           var d = JSON.parse(raw);
-          meta = 'W' + (d.wavesBest || 0) + ' · ' + ((d.unlocked && d.unlocked.length) || 0) + ' NODES';
+          meta = 'WAVE ' + (d.wavesBest || 0);
         } catch (e) { meta = 'SAVED'; }
       }
       h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + '">';
-      h += '<div class="seat-frame"><img class="seat-portrait" src="' + w.portrait + '" alt="">';
-      h += '<div><div class="seat-name">' + esc(w.name.toUpperCase()) + '</div>';
-      h += '<div class="seat-role">' + esc(w.blurb) + '</div></div>';
-      h += '<div class="seat-meta">' + esc(meta) + '</div></div></button>';
+      h += '<span class="seat-frame">';
+      h += '<img class="seat-portrait" src="' + w.portrait + '" alt="">';
+      h += '<span class="seat-plaque">';
+      h += '<span class="seat-name">' + esc(w.name.toUpperCase()) + '</span>';
+      h += '<span class="seat-role">' + esc(w.blurb) + '</span>';
+      h += '<span class="seat-meta">' + esc(meta) + '</span>';
+      h += '</span></span></button>';
     });
-    h += '</div><div class="who-foot">ROOM ' + esc(ROOM) + ' · ' + esc(UI.syncLabel) + ' SYNC</div></div>';
+    h += '</div><div class="who-foot">' + esc(UI.syncLabel) + '</div></div>';
     return h;
   }
 
@@ -1047,26 +1048,27 @@
     });
     var h = '<div class="hub-screen hub-cinematic">';
     h += '<div class="hub-bleed"><img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false"><div class="hub-art-shade"></div></div>';
-    h += '<div class="hub-top">';
-    h += '<button type="button" class="hub-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
-    h += '<img src="' + w.portrait + '" alt=""><div class="hub-pilot-text"><div class="hub-pilot-name">' + esc(w.name.toUpperCase()) + '</div>';
-    h += '<div class="hub-pilot-sub">' + esc(P.loadout.toUpperCase()) + ' · SP ' + P.skillPoints + '</div></div></button>';
-    h += '<div class="hub-wallet"><span class="hub-wallet-main">' + P.chrono + ' CHRONO</span><span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
+    h += '<div class="hub-hud">';
+    h += '<button type="button" class="hud-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
+    h += '<img src="' + w.portrait + '" alt=""><span class="hud-pilot-meta"><b>' + esc(w.name.toUpperCase()) + '</b><i>' + esc(P.loadout.toUpperCase()) + '</i></span></button>';
+    h += '<div class="hud-res"><b>' + P.chrono + '</b><i>CHRONO</i><em>' + P.essence + ' ESS</em></div>';
+    h += '</div>';
     h += '<div class="hub-stage era-' + era.id + '">';
-    h += '<div class="hub-party">';
+    h += '<div class="hub-party" aria-label="Party">';
     WARBAND.forEach(function (p) {
       var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
-      h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '" title="' + p.name + '"></div>';
+      h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '"></div>';
     });
     h += '</div>';
     h += '<div class="hub-stage-copy">';
-    h += '<p class="eyebrow">Chronolith · ' + online + '/3 online</p>';
+    h += '<p class="eyebrow">' + online + ' / 3</p>';
     h += '<h2>' + esc(era.name) + '</h2>';
     h += '<p>' + esc(era.blurb) + '</p>';
     h += '</div>';
     h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower"><span>ENTER TOWER</span></button>';
     h += '</div>';
-    h += '<nav class="hub-dock" aria-label="Hub actions">';
+    h += '<div class="hub-tray">';
+    h += '<nav class="hub-dock" aria-label="Actions">';
     h += dockBtn('tower', 'tower', 'TOWER', 'rgba(61,224,197,0.45)');
     h += dockBtn('forge', 'forge', 'FORGE', 'rgba(255,106,61,0.45)');
     h += dockBtn('tree', 'tree', 'TREE', 'rgba(124,240,255,0.45)');
@@ -1076,17 +1078,17 @@
     h += dockBtn('story', 'story', 'LORE', 'rgba(232,197,106,0.35)');
     h += '</nav>';
     if (WORLD.quest && !WORLD.quest.done) {
-      h += '<div class="hub-quest">QUEST · ' + esc(WORLD.quest.name) + ' · ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
+      h += '<div class="hub-quest">' + esc(WORLD.quest.name) + '  ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
     }
-    h += '</div>';
+    h += '</div></div>';
     return h;
   }
 
   function renderTree() {
     var sel = UI.selectedNode ? nodeById(UI.selectedNode) : nodeById('root');
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">CONSTELLATION</h2><p class="mode-sub">SP ' + P.skillPoints + ' · ' + P.unlocked.length + ' NODES · ' + P.loadout.toUpperCase() + '</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="role-banner">';
     ['bulwark', 'rift', 'warden'].forEach(function (r) {
       h += '<button type="button" class="loadout-chip' + (P.loadout === r ? ' active' : '') + ' role-tag ' + r + '" data-action="loadout" data-id="' + r + '">' + r.toUpperCase() + '</button>';
@@ -1121,9 +1123,9 @@
   }
 
   function renderForge() {
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">FORGE</h2><p class="mode-sub">MERGE · RELICS · EXOTICS</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll"><div class="forge-stage" style="background-image:url(\'' + artUrl('forge') + '\')"><div class="forge-stage-veil"></div><div class="forge-slots">';
     for (var i = 0; i < 2; i++) {
       var s = UI.forgeSlots[i];
@@ -1157,10 +1159,10 @@
     var t = UI.tower;
     if (!t) {
       var cov = roleCoverage();
-      var h0 = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
-      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
+      var h0 = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
+      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
       h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">ROLES · INFINITE UPS · CO-OP BOSS</p></div>';
-      h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+      h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
       h0 += '<div class="role-banner"><span class="role-tag ' + P.loadout + '">' + P.loadout.toUpperCase() + '</span>';
       h0 += '<span class="badge">BEST ' + P.wavesBest + '</span>';
       h0 += '<span class="badge">' + (cov.bulwark ? 'B' : '·') + (cov.rift ? 'R' : '·') + (cov.warden ? 'W' : '·') + '</span></div>';
@@ -1176,19 +1178,19 @@
       h0 += '<p class="empty-note">Co-op boss checks taunt / arc / mend gates. Solo fills missing roles with ghost allies.</p></div>';
       return h0;
     }
-    var h = '<div class="mode-screen" id="tower-live"><div class="mode-head"><div>';
-    h += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub" data-wave>' + (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave + '</p></div>';
-    h += '<button type="button" class="back-stone" data-action="flee-tower">✕</button></div>';
-    h += '<div class="tower-arena" style="background-image:url(\'' + artUrl('tower') + '\')"><div class="tower-arena-veil"></div>';
-    h += '<div class="tower-hud"><span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
-    h += '<span data-gates>B0 R0 W0</span><span data-combo></span></div>';
-    h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
-    h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
     var abl = P.loadout === 'bulwark'
       ? { p: 'TAUNT', s: 'QUAKE', u: 'OVERLOAD' }
       : P.loadout === 'warden'
         ? { p: 'MEND', s: 'WARD', u: 'OVERLOAD' }
         : { p: 'ARC', s: 'TIMELINE', u: 'OVERLOAD' };
+    var h = '<div class="tower-live" id="tower-live">';
+    h += '<div class="tower-arena" style="background-image:url(\'' + artUrl('tower') + '\')"><div class="tower-arena-veil"></div>';
+    h += '<button type="button" class="tower-flee" data-action="flee-tower" aria-label="Flee">×</button>';
+    h += '<div class="tower-hud"><span data-wave>' + (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave + '</span>';
+    h += '<span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
+    h += '<span data-combo></span></div>';
+    h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
+    h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
     h += '<div class="ability-bar">';
     h += '<button type="button" class="ability" data-action="ability" data-id="primary" data-ability="primary">' + abl.p + '<span class="cd">READY</span></button>';
     h += '<button type="button" class="ability" data-action="ability" data-id="secondary" data-ability="secondary">' + abl.s + '<span class="cd">READY</span></button>';
@@ -1198,10 +1200,10 @@
   }
 
   function renderGate() {
-    var h = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">RUN THE EXTRACT · BRING EXOTICS HOME</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll planet-grid">';
     PLANETS.forEach(function (pl) {
       var open = WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
@@ -1219,7 +1221,7 @@
 
   function renderExtract() {
     var pl = UI.extract.planet;
-    var h = '<div class="mode-screen extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
+    var h = '<div class="mode-screen diegetic extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
     h += '<div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
     h += '<div class="screen-art-veil heavy"></div>';
     h += '<h2 class="mode-title">' + esc(pl.name) + '</h2>';
@@ -1231,9 +1233,9 @@
   }
 
   function renderEra() {
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">TIMELINE</h2><p class="mode-sub">STABILIZE IN TOWER · ROLE GATES ON BOSSES</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll era-track">';
     ERAS.forEach(function (era, i) {
       var cleared = WORLD.erasCleared.indexOf(era.id) >= 0;
@@ -1249,10 +1251,10 @@
   }
 
   function renderLife() {
-    var h = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">SLOW LIFE</h2><p class="mode-sub">FISH · GARDEN · BREATHE</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll">';
     h += '<div class="life-card fish-card"><div class="life-art fish-art' + (UI.fishCast ? ' casting' : '') + '" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
     h += '<button type="button" class="stone-btn" data-action="fish"' + (UI.fishCast ? ' disabled' : '') + '>' + (UI.fishCast ? 'WAITING…' : 'CAST LINE') + '</button>';
@@ -1269,9 +1271,9 @@
   }
 
   function renderStory() {
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
     h += '<h2 class="mode-title">LORE</h2><p class="mode-sub">CHAPTER ' + WORLD.storyChapter + '</p></div>';
-    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
+    h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll">';
     STORY.forEach(function (ch) {
       var locked = ch.id > WORLD.storyChapter;
