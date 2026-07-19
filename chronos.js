@@ -1005,7 +1005,7 @@
   }
 
   function renderWho() {
-    var h = '<div class="who-screen">';
+    var h = '<div class="who-screen game-skin">';
     h += '<div class="screen-art" style="background-image:url(\'' + artUrl('who') + '\')"></div>';
     h += '<div class="screen-art-veil"></div>';
     h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1></div>';
@@ -1017,19 +1017,20 @@
       if (raw) {
         try {
           var d = JSON.parse(raw);
-          meta = 'WAVE ' + (d.wavesBest || 0);
-        } catch (e) { meta = 'SAVED'; }
+          meta = 'W' + (d.wavesBest || 0);
+        } catch (e) { meta = 'SAVE'; }
       }
       h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + '">';
       h += '<span class="seat-frame">';
       h += '<img class="seat-portrait" src="' + w.portrait + '" alt="">';
+      h += '<span class="seat-ornament" style="background-image:url(\'' + artUrl('uiFrame') + '\')"></span>';
       h += '<span class="seat-plaque">';
       h += '<span class="seat-name">' + esc(w.name.toUpperCase()) + '</span>';
       h += '<span class="seat-role">' + esc(w.blurb) + '</span>';
       h += '<span class="seat-meta">' + esc(meta) + '</span>';
       h += '</span></span></button>';
     });
-    h += '</div><div class="who-foot">' + esc(UI.syncLabel) + '</div></div>';
+    h += '</div></div>';
     return h;
   }
 
@@ -1046,15 +1047,15 @@
     WARBAND.forEach(function (p) {
       if (WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000)) online++;
     });
-    var h = '<div class="hub-screen hub-cinematic">';
+    var h = '<div class="hub-screen hub-cinematic game-skin">';
     h += '<div class="hub-bleed"><img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false"><div class="hub-art-shade"></div></div>';
-    h += '<div class="hub-hud">';
+    h += '<div class="hub-hud" style="background-image:url(\'' + artUrl('uiHud') + '\')">';
     h += '<button type="button" class="hud-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
     h += '<img src="' + w.portrait + '" alt=""><span class="hud-pilot-meta"><b>' + esc(w.name.toUpperCase()) + '</b><i>' + esc(P.loadout.toUpperCase()) + '</i></span></button>';
     h += '<div class="hud-res"><b>' + P.chrono + '</b><i>CHRONO</i><em>' + P.essence + ' ESS</em></div>';
     h += '</div>';
     h += '<div class="hub-stage era-' + era.id + '">';
-    h += '<div class="hub-party" aria-label="Party">';
+    h += '<div class="hub-party">';
     WARBAND.forEach(function (p) {
       var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
       h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '"></div>';
@@ -1065,7 +1066,7 @@
     h += '<h2>' + esc(era.name) + '</h2>';
     h += '<p>' + esc(era.blurb) + '</p>';
     h += '</div>';
-    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower"><span>ENTER TOWER</span></button>';
+    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')"><span>ENTER TOWER</span></button>';
     h += '</div>';
     h += '<div class="hub-tray">';
     h += '<nav class="hub-dock" aria-label="Actions">';
@@ -1173,7 +1174,7 @@
         h0 += '<button type="button" class="up-chip" data-action="tower-up" data-id="' + u.id + '">' + u.name + ' ' + lv + ' · ' + cost + '</button>';
       });
       h0 += '</div><div class="tower-deploy">';
-      h0 += '<button type="button" class="stone-btn" data-action="start-tower">SOLO DEPLOY</button>';
+      h0 += '<button type="button" class="stone-btn battle-btn" data-action="start-tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')">SOLO DEPLOY</button>';
       h0 += '<button type="button" class="stone-btn alt" data-action="start-coop">CO-OP BOSS</button></div>';
       h0 += '<p class="empty-note">Co-op boss checks taunt / arc / mend gates. Solo fills missing roles with ghost allies.</p></div>';
       return h0;
@@ -1191,10 +1192,10 @@
     h += '<span data-combo></span></div>';
     h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
     h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
-    h += '<div class="ability-bar">';
-    h += '<button type="button" class="ability" data-action="ability" data-id="primary" data-ability="primary">' + abl.p + '<span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability" data-action="ability" data-id="secondary" data-ability="secondary">' + abl.s + '<span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability" data-action="ability" data-id="ultimate" data-ability="ultimate">' + abl.u + '<span class="cd">READY</span></button>';
+    h += '<div class="ability-bar" style="--abil-sheet:url(\'' + artUrl('uiAbilities') + '\')">';
+    h += '<button type="button" class="ability abil-0" data-action="ability" data-id="primary" data-ability="primary"><span class="abil-icon"></span><span class="abil-name">' + abl.p + '</span><span class="cd">READY</span></button>';
+    h += '<button type="button" class="ability abil-1" data-action="ability" data-id="secondary" data-ability="secondary"><span class="abil-icon"></span><span class="abil-name">' + abl.s + '</span><span class="cd">READY</span></button>';
+    h += '<button type="button" class="ability abil-2" data-action="ability" data-id="ultimate" data-ability="ultimate"><span class="abil-icon"></span><span class="abil-name">' + abl.u + '</span><span class="cd">READY</span></button>';
     h += '</div></div>';
     return h;
   }

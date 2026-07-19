@@ -12,7 +12,12 @@ window.ChronosData = {
     forge: '/public/art/chronos/forge-bg.png',
     gate: '/public/art/chronos/gate-bg.png',
     life: '/public/art/chronos/life-bg.png',
-    tree: '/public/art/chronos/tree-bg.png'
+    tree: '/public/art/chronos/tree-bg.png',
+    uiBtn: '/public/art/chronos/ui/btn-battle.png',
+    uiFrame: '/public/art/chronos/ui/frame-portrait.png',
+    uiHud: '/public/art/chronos/ui/hud-top.png',
+    uiAbilities: '/public/art/chronos/ui/ability-icons.png',
+    uiChrome: '/public/art/chronos/ui/ui-chrome-sheet.png'
   },
   ERAS: [
     { id: 'stone', name: 'STONE AGE', blurb: 'Bone spears. Fire rings. Survive the first night.', accent: '#c4a574', story: 'You hit dirt and ash. The Chronolith hums under a dead sky.' },
