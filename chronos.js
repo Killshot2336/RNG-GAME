@@ -55,6 +55,15 @@
   var bc = null;
   var audioCtx = null;
 
+  /* Tactical HUD palette */
+  var NEON = '#39ff14';
+  var NEON_DIM = 'rgba(57,255,20,0.35)';
+  var METAL = '#070709';
+  var PANEL = '#0c0c10';
+  var TEXT = '#d8ffe0';
+  var TEXT_DIM = '#6f8572';
+  var FONT = '"Share Tech Mono", "IBM Plex Mono", Consolas, "Courier New", monospace';
+
   /* ── Utils ── */
   function daySeed() { return Math.floor(Date.now() / 86400000); }
 
@@ -150,14 +159,14 @@
   function text(str, x, y, opts) {
     opts = opts || {};
     ctx.save();
-    ctx.font = (opts.weight || '700') + ' ' + (opts.size || 18) + 'px "Arial Black", Impact, sans-serif';
-    ctx.fillStyle = opts.color || '#f4ead4';
+    ctx.font = (opts.weight || '700') + ' ' + (opts.size || 18) + 'px ' + FONT;
+    ctx.fillStyle = opts.color || TEXT;
     ctx.textAlign = opts.align || 'left';
     ctx.textBaseline = opts.base || 'alphabetic';
     if (opts.shadow !== false) {
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = opts.blur != null ? opts.blur : 8;
-      ctx.shadowOffsetY = 2;
+      ctx.shadowColor = opts.glow ? NEON_DIM : 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = opts.blur != null ? opts.blur : (opts.glow ? 12 : 6);
+      ctx.shadowOffsetY = opts.glow ? 0 : 2;
     }
     ctx.fillText(str, x, y);
     ctx.restore();
@@ -172,6 +181,104 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
+  }
+
+  function panelPath(x, y, w, h, cut) {
+    cut = Math.min(cut == null ? 14 : cut, w * 0.25, h * 0.25);
+    ctx.beginPath();
+    ctx.moveTo(x + cut, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + h - cut);
+    ctx.lineTo(x + w - cut, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + cut);
+    ctx.closePath();
+  }
+
+  function fillPanel(x, y, w, h, cut) {
+    panelPath(x, y, w, h, cut);
+    ctx.fillStyle = PANEL;
+    ctx.fill();
+    ctx.strokeStyle = NEON;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = NEON_DIM;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  function drawTacticalBtn(x, y, w, h, label, opts) {
+    opts = opts || {};
+    var cut = opts.cut == null ? 10 : opts.cut;
+    var hot = opts.hot;
+    panelPath(x, y, w, h, cut);
+    var g = ctx.createLinearGradient(x, y, x, y + h);
+    if (hot) {
+      g.addColorStop(0, '#6cff4a');
+      g.addColorStop(1, NEON);
+      ctx.fillStyle = g;
+      ctx.fill();
+      text(label, x + w / 2, y + h * 0.62, {
+        align: 'center', size: opts.size || 16, color: METAL, shadow: false, weight: '700'
+      });
+    } else {
+      g.addColorStop(0, 'rgba(57,255,20,0.14)');
+      g.addColorStop(1, 'rgba(7,7,9,0.92)');
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.strokeStyle = NEON;
+      ctx.lineWidth = 1.5;
+      ctx.shadowColor = NEON_DIM;
+      ctx.shadowBlur = 8;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      text(label, x + w / 2, y + h * 0.62, {
+        align: 'center', size: opts.size || 16, color: NEON, glow: true, blur: 10, weight: '700'
+      });
+    }
+  }
+
+  function syncHudChrome() {
+    var modeEl = document.getElementById('hud-mode');
+    var sysEl = document.getElementById('hud-sys');
+    var tagEl = document.getElementById('panel-tag');
+    var metaEl = document.getElementById('panel-meta');
+    var dock = document.getElementById('hud-dock');
+    var scene = (G.scene || 'boot').toUpperCase();
+    if (modeEl) modeEl.textContent = scene;
+    if (sysEl) sysEl.textContent = G.activeId ? 'ONLINE' : 'STANDBY';
+    if (tagEl) tagEl.textContent = 'CHRONOS // ' + scene;
+    if (metaEl) {
+      metaEl.textContent = G.P
+        ? ('CHRONO ' + G.P.chrono + '  ·  WAVE BEST ' + (G.P.wavesBest || 0))
+        : 'SELECT OPERATIVE';
+    }
+    if (dock) {
+      var show = G.scene === 'hub' || G.scene === 'forge' || G.scene === 'tree' ||
+        G.scene === 'gate' || G.scene === 'era' || G.scene === 'life' || G.scene === 'story';
+      dock.style.display = show ? 'flex' : 'none';
+      var buttons = dock.querySelectorAll('.tactical-btn');
+      for (var i = 0; i < buttons.length; i++) {
+        var b = buttons[i];
+        var m = b.getAttribute('data-mode');
+        b.classList.toggle('is-live', m === G.scene);
+      }
+    }
+  }
+
+  function wireHudDock() {
+    var dock = document.getElementById('hud-dock');
+    if (!dock || dock._wired) return;
+    dock._wired = true;
+    dock.addEventListener('click', function (e) {
+      var btn = e.target.closest('.tactical-btn');
+      if (!btn || !G.activeId) return;
+      var mode = btn.getAttribute('data-mode');
+      if (!mode) return;
+      if (mode === 'hub') go('hub');
+      else go(mode);
+      beep(300, 0.05);
+    });
   }
 
   /* ── Save / player ── */
@@ -601,44 +708,47 @@
 
   /* ── Draw scenes ── */
   function drawBoot() {
-    ctx.fillStyle = '#050308';
+    ctx.fillStyle = METAL;
     ctx.fillRect(0, 0, W, H);
-    text('VOIDLINE', W / 2, H * 0.42, { align: 'center', size: 16, color: '#e85a2a' });
-    text('CHRONOS', W / 2, H * 0.48, { align: 'center', size: 48 });
-    text('LOADING…', W / 2, H * 0.56, { align: 'center', size: 14, color: '#8a8070' });
+    fillPanel(W * 0.12, H * 0.34, W * 0.76, H * 0.28, 18);
+    text('VOIDLINE', W / 2, H * 0.42, { align: 'center', size: 14, color: NEON, glow: true });
+    text('CHRONOS', W / 2, H * 0.5, { align: 'center', size: 42, color: TEXT, glow: true, blur: 16 });
+    text('// INITIALIZING TACTICAL LINK', W / 2, H * 0.58, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
   }
 
   function drawWho() {
     var t = G.time;
+    ctx.fillStyle = METAL;
+    ctx.fillRect(0, 0, W, H);
     coverImg('who', 0, 0, W, H, 0.5, 0.35 + Math.sin(t * 0.2) * 0.02);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(0, 0, W, H * 0.18);
-    text('VOIDLINE', W / 2, 36 + Math.min(24, safeTop()), { align: 'center', size: 14, color: '#e85a2a' });
-    text('CHRONOS', W / 2, 78 + Math.min(24, safeTop()), { align: 'center', size: 52 });
+    ctx.fillStyle = 'rgba(7,7,9,0.72)';
+    ctx.fillRect(0, 0, W, H);
 
-    var colW = W / 3;
+    fillPanel(16, 18, W - 32, 86, 14);
+    text('OPERATIVE SELECT', W / 2, 48, { align: 'center', size: 12, color: NEON, glow: true });
+    text('VOIDLINE CHRONOS', W / 2, 78, { align: 'center', size: 28, color: TEXT, glow: true });
+
+    var colW = (W - 40) / 3;
     WARBAND.forEach(function (w, i) {
-      var x = i * colW;
+      var x = 20 + i * colW;
+      var y = 120;
+      var h = H - 150;
+      fillPanel(x + 4, y, colW - 8, h, 12);
       var key = 'portrait-' + w.id;
-      coverImg(key, x, H * 0.16, colW, H * 0.84, 0.5, 0.2);
-      var g = ctx.createLinearGradient(0, H * 0.55, 0, H);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,0.92)');
-      ctx.fillStyle = g;
-      ctx.fillRect(x, H * 0.55, colW, H * 0.45);
-      if (i > 0) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(x, H * 0.16, 1, H * 0.84);
-      }
-      text(w.name.toUpperCase(), x + colW / 2, H - 48 - safeBottom(), {
-        align: 'center', size: 22, color: '#fff'
+      ctx.save();
+      panelPath(x + 10, y + 10, colW - 20, h - 70, 10);
+      ctx.clip();
+      coverImg(key, x + 10, y + 10, colW - 20, h - 70, 0.5, 0.18);
+      ctx.fillStyle = 'rgba(7,7,9,0.35)';
+      ctx.fillRect(x + 10, y + 10, colW - 20, h - 70);
+      ctx.restore();
+      text(w.name.toUpperCase(), x + colW / 2, y + h - 36, {
+        align: 'center', size: 16, color: NEON, glow: true
       });
-      // accent underline
-      ctx.fillStyle = w.accent;
-      ctx.globalAlpha = 0.85;
-      ctx.fillRect(x + colW * 0.28, H - 40 - safeBottom(), colW * 0.44, 3);
-      ctx.globalAlpha = 1;
-      hit('pick', x, H * 0.16, colW, H * 0.84, w.id);
+      text(w.blurb.toUpperCase(), x + colW / 2, y + h - 16, {
+        align: 'center', size: 10, color: TEXT_DIM, shadow: false
+      });
+      hit('pick', x + 4, y, colW - 8, h, w.id);
     });
   }
 
@@ -648,7 +758,7 @@
   function drawHub() {
     var era = ERAS[G.WORLD.eraIndex] || ERAS[0];
     var w = warband(G.activeId);
-    var breathe = 1 + Math.sin(G.time * 0.35) * 0.015;
+    var breathe = 1 + Math.sin(G.time * 0.35) * 0.012;
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(breathe, breathe);
@@ -656,48 +766,49 @@
     coverImg('hub', 0, 0, W, H, 0.5, 0.38);
     ctx.restore();
 
-    var veil = ctx.createLinearGradient(0, 0, 0, H);
-    veil.addColorStop(0, 'rgba(0,0,0,0.5)');
-    veil.addColorStop(0.35, 'rgba(0,0,0,0)');
-    veil.addColorStop(0.7, 'rgba(0,0,0,0.15)');
-    veil.addColorStop(1, 'rgba(0,0,0,0.78)');
-    ctx.fillStyle = veil;
+    ctx.fillStyle = 'rgba(7,7,9,0.62)';
     ctx.fillRect(0, 0, W, H);
 
-    // floating pilot
-    var px = 18, py = 18;
-    var pr = 28;
-    coverImg('portrait-' + w.id, px, py, pr * 2, pr * 2, 0.5, 0.15);
+    // pilot chip
+    var px = 18, py = 48;
+    var pr = 26;
+    fillPanel(px - 4, py - 4, pr * 2 + 8, pr * 2 + 8, 8);
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(px + pr, py + pr, pr + 2, 0, Math.PI * 2);
-    ctx.strokeStyle = w.accent;
-    ctx.lineWidth = 3;
+    ctx.arc(px + pr, py + pr, pr, 0, Math.PI * 2);
+    ctx.clip();
+    coverImg('portrait-' + w.id, px, py, pr * 2, pr * 2, 0.5, 0.15);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(px + pr, py + pr, pr + 1, 0, Math.PI * 2);
+    ctx.strokeStyle = NEON;
+    ctx.lineWidth = 2;
     ctx.stroke();
-    hit('who', px, py, pr * 2, pr * 2);
+    hit('who', px - 4, py - 4, pr * 2 + 8, pr * 2 + 8);
 
-    text(String(G.P.chrono), W - 18, 48, { align: 'right', size: 34, color: '#ffe7a0' });
+    text('CHRONO', W - 18, 58, { align: 'right', size: 11, color: TEXT_DIM, shadow: false });
+    text(String(G.P.chrono), W - 18, 88, { align: 'right', size: 32, color: NEON, glow: true });
 
-    text(era.name, W / 2, H * 0.62, { align: 'center', size: 40 });
+    fillPanel(W * 0.1, H * 0.52, W * 0.8, 120, 16);
+    text('// SECTOR STATUS', W / 2, H * 0.52 + 28, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
+    text(era.name, W / 2, H * 0.52 + 62, { align: 'center', size: 30, color: TEXT, glow: true });
+    text(era.blurb || '', W / 2, H * 0.52 + 92, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
 
-    // ENTER battle button
-    var bw = Math.min(W * 0.82, 320), bh = 72;
-    var bx = (W - bw) / 2, by = H * 0.68;
-    drawImg('uiBtn', bx, by, bw, bh);
-    text('ENTER', W / 2, by + bh * 0.58, { align: 'center', size: 28, color: '#1a1008', shadow: false });
+    var bw = Math.min(W * 0.78, 300), bh = 56;
+    var bx = (W - bw) / 2, by = H * 0.72;
+    drawTacticalBtn(bx, by, bw, bh, '» ENTER TOWER', { size: 18, hot: Math.sin(G.time * 4) > 0.65 });
     hit('enter', bx, by, bw, bh);
 
-    // dock medallions
-    var mods = [
-      ['tower', 'tower'], ['forge', 'forge'], ['tree', 'tree'], ['gate', 'gate'],
-      ['era', 'era'], ['life', 'life'], ['story', 'story']
-    ];
-    var dockY = H - 70;
+    // canvas hotkeys kept as thin neon tags above DOM dock
+    var mods = ['tower', 'forge', 'tree', 'gate', 'era', 'life', 'story'];
+    var dockY = H - 118;
     var cell = W / mods.length;
     mods.forEach(function (m, i) {
       var cx = cell * i + cell / 2;
-      var s = m[0] === 'tower' ? 52 : 44;
-      drawMedallion(m[1], cx - s / 2, dockY - s / 2, s);
-      hit('mode', cx - s / 2, dockY - s / 2, s, s, m[0]);
+      var s = 40;
+      fillPanel(cx - s / 2, dockY - s / 2, s, s, 8);
+      text(m.slice(0, 3).toUpperCase(), cx, dockY + 5, { align: 'center', size: 10, color: NEON, shadow: false });
+      hit('mode', cx - s / 2, dockY - s / 2, s, s, m);
     });
 
     if (G.storyOpen != null) drawStoryModal();
@@ -721,24 +832,22 @@
 
   function drawStoryModal() {
     var ch = STORY[G.storyOpen] || STORY[0];
-    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillStyle = 'rgba(7,7,9,0.88)';
     ctx.fillRect(0, 0, W, H);
-    var pw = W * 0.86, ph = 260;
+    var pw = W * 0.86, ph = 280;
     var px = (W - pw) / 2, py = (H - ph) / 2;
-    ctx.fillStyle = '#1a1410';
-    roundRect(px, py, pw, ph, 10); ctx.fill();
-    ctx.strokeStyle = '#6a5420'; ctx.lineWidth = 2; ctx.stroke();
-    text('TRANSMISSION', W / 2, py + 36, { align: 'center', size: 14, color: '#e85a2a' });
-    text(ch.title, W / 2, py + 72, { align: 'center', size: 26 });
-    wrapText(ch.body, W / 2, py + 110, pw - 40, 16, '#c8bca8');
-    var bx = W / 2 - 70, by = py + ph - 58;
-    drawBtn(bx, by, 140, 40, 'CONTINUE');
-    hit('dismiss-story', bx, by, 140, 40);
+    fillPanel(px, py, pw, ph, 16);
+    text('// INCOMING TRANSMISSION', W / 2, py + 36, { align: 'center', size: 12, color: NEON, glow: true });
+    text(ch.title, W / 2, py + 72, { align: 'center', size: 24, color: TEXT, glow: true });
+    wrapText(ch.body, W / 2, py + 110, pw - 40, 14, TEXT_DIM);
+    var bx = W / 2 - 80, by = py + ph - 62;
+    drawTacticalBtn(bx, by, 160, 42, 'CONTINUE', { size: 14 });
+    hit('dismiss-story', bx, by, 160, 42);
   }
 
   function wrapText(str, cx, y, maxW, size, color) {
     ctx.save();
-    ctx.font = '600 ' + size + 'px "Trebuchet MS", sans-serif';
+    ctx.font = '600 ' + size + 'px ' + FONT;
     ctx.fillStyle = color;
     ctx.textAlign = 'center';
     var words = String(str).split(' ');
@@ -757,54 +866,46 @@
   }
 
   function drawBtn(x, y, w, h, label) {
-    var g = ctx.createLinearGradient(x, y, x, y + h);
-    g.addColorStop(0, '#ffe7a8');
-    g.addColorStop(0.45, '#d4b45a');
-    g.addColorStop(1, '#9a7020');
-    ctx.fillStyle = g;
-    roundRect(x, y, w, h, 6); ctx.fill();
-    text(label, x + w / 2, y + h * 0.65, { align: 'center', size: 18, color: '#1a1008', shadow: false });
+    drawTacticalBtn(x, y, w, h, label, { size: Math.min(16, Math.floor(h * 0.4)) });
   }
 
   function drawTower() {
     coverImg('tower', 0, 0, W, H, 0.5, 0.45);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillStyle = 'rgba(7,7,9,0.45)';
     ctx.fillRect(0, 0, W, H);
 
     var t = G.tower;
     if (!t) {
-      // deploy screen
-      text('CHRONOLITH', W / 2, 56, { align: 'center', size: 28 });
-      text('BEST WAVE ' + G.P.wavesBest, W / 2, 88, { align: 'center', size: 14, color: '#8a8070' });
-      var y = 140;
+      fillPanel(16, 40, W - 32, 70, 12);
+      text('CHRONOLITH DEPLOY', W / 2, 72, { align: 'center', size: 22, color: NEON, glow: true });
+      text('BEST WAVE ' + G.P.wavesBest, W / 2, 96, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
+      var y = 130;
       TOWER_UPS.forEach(function (u, i) {
         var lv = G.P.towerUp[u.id] || 0;
         var cost = Math.floor(u.base * Math.pow(1.38, lv));
         var bx = 20 + (i % 2) * (W / 2 - 20), by = y + Math.floor(i / 2) * 54;
-        ctx.fillStyle = 'rgba(20,16,14,0.85)';
-        roundRect(bx, by, W / 2 - 30, 44, 6); ctx.fill();
-        text(u.name + ' ' + lv, bx + 12, by + 28, { size: 14 });
-        text(String(cost), bx + (W / 2 - 42), by + 28, { align: 'right', size: 14, color: '#ffe7a0' });
+        fillPanel(bx, by, W / 2 - 30, 44, 8);
+        text(u.name + ' ' + lv, bx + 12, by + 28, { size: 13, color: TEXT, shadow: false });
+        text(String(cost), bx + (W / 2 - 42), by + 28, { align: 'right', size: 13, color: NEON, glow: true });
         hit('tower-up', bx, by, W / 2 - 30, 44, u.id);
       });
-      var bw = Math.min(W * 0.8, 300), bh = 64;
+      var bw = Math.min(W * 0.8, 300), bh = 56;
       var bx = (W - bw) / 2, by = H - 200;
-      drawImg('uiBtn', bx, by, bw, bh);
-      text('SOLO DEPLOY', W / 2, by + 40, { align: 'center', size: 22, color: '#1a1008', shadow: false });
+      drawTacticalBtn(bx, by, bw, bh, 'SOLO DEPLOY', { size: 18 });
       hit('start-tower', bx, by, bw, bh);
-      drawBtn((W - 200) / 2, by + 80, 200, 44, 'CO-OP BOSS');
-      hit('start-coop', (W - 200) / 2, by + 80, 200, 44);
-      drawBtn(W - 56, 18, 40, 40, 'X');
-      hit('hub', W - 56, 18, 40, 40);
+      drawTacticalBtn((W - 200) / 2, by + 72, 200, 42, 'CO-OP BOSS', { size: 14 });
+      hit('start-coop', (W - 200) / 2, by + 72, 200, 42);
+      drawTacticalBtn(W - 56, 48, 40, 36, 'X', { size: 14, cut: 6 });
+      hit('hub', W - 56, 48, 40, 36);
       return;
     }
 
     // live combat
-    text('WAVE ' + t.wave, 18, 40, { size: 18 });
-    text(Math.ceil(t.coreHp) + ' / ' + t.coreMax, W / 2, 40, { align: 'center', size: 20, color: '#ffe7a0' });
-    if (t.combo > 4) text(t.combo + ' COMBO', W - 18, 40, { align: 'right', size: 16, color: '#3de0c5' });
-    drawBtn(W - 52, 14, 36, 36, 'X');
-    hit('flee', W - 52, 14, 36, 36);
+    text('WAVE ' + t.wave, 18, 56, { size: 16, color: NEON, glow: true });
+    text(Math.ceil(t.coreHp) + ' / ' + t.coreMax, W / 2, 56, { align: 'center', size: 18, color: TEXT, glow: true });
+    if (t.combo > 4) text(t.combo + ' COMBO', W - 18, 56, { align: 'right', size: 14, color: NEON, glow: true });
+    drawTacticalBtn(W - 52, 30, 36, 32, 'X', { size: 12, cut: 6 });
+    hit('flee', W - 52, 30, 36, 32);
 
     // core
     var cx = W * 0.5, cy = H * 0.52;
@@ -813,9 +914,9 @@
     ctx.translate(cx, cy);
     ctx.scale(pulse, pulse);
     var grd = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
-    grd.addColorStop(0, '#7cf0ff');
-    grd.addColorStop(0.5, '#2ec4a8');
-    grd.addColorStop(1, 'rgba(10,40,40,0)');
+    grd.addColorStop(0, '#b6ff9a');
+    grd.addColorStop(0.45, NEON);
+    grd.addColorStop(1, 'rgba(7,7,9,0)');
     ctx.fillStyle = grd;
     ctx.beginPath(); ctx.arc(0, 0, 34, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
@@ -878,7 +979,7 @@
       var cd = t.cds[k];
       text(abl[i], ax + aw / 2, ay + aw + 16, { align: 'center', size: 12 });
       text(cd > 0 ? cd.toFixed(1) : 'READY', ax + aw / 2, ay + aw + 32, {
-        align: 'center', size: 12, color: cd > 0 ? '#8a8070' : '#3de0c5'
+        align: 'center', size: 12, color: cd > 0 ? TEXT_DIM : NEON, glow: cd <= 0
       });
       if (cd > 0) {
         ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -901,12 +1002,13 @@
 
   function drawMenuShell(title, sub) {
     coverImg(G.scene === 'forge' ? 'forge' : G.scene === 'tree' ? 'tree' : G.scene === 'gate' || G.scene === 'extract' ? 'gate' : G.scene === 'life' ? 'life' : 'hub', 0, 0, W, H, 0.5, 0.4);
-    ctx.fillStyle = 'rgba(5,4,8,0.72)';
+    ctx.fillStyle = 'rgba(7,7,9,0.78)';
     ctx.fillRect(0, 0, W, H);
-    text(title, 20, 48, { size: 26 });
-    if (sub) text(sub, 20, 72, { size: 13, color: '#8a8070' });
-    drawBtn(W - 52, 16, 36, 36, 'X');
-    hit('hub', W - 52, 16, 36, 36);
+    fillPanel(12, 40, W - 70, 56, 12);
+    text(title, 28, 66, { size: 22, color: NEON, glow: true });
+    if (sub) text(sub, 28, 86, { size: 11, color: TEXT_DIM, shadow: false });
+    drawTacticalBtn(W - 52, 48, 36, 36, 'X', { size: 14, cut: 6 });
+    hit('hub', W - 52, 48, 36, 36);
   }
 
   function drawForge() {
@@ -914,21 +1016,20 @@
     var slotY = 140;
     for (var i = 0; i < 2; i++) {
       var sx = W / 2 - 100 + i * 120, sy = slotY;
-      ctx.strokeStyle = G.forge[i] ? '#e85a2a' : '#5a4630';
-      ctx.lineWidth = 2;
-      roundRect(sx, sy, 80, 80, 10); ctx.stroke();
-      text(G.forge[i] ? G.forge[i] : 'SLOT', sx + 40, sy + 48, { align: 'center', size: 12, color: '#8a8070' });
+      fillPanel(sx, sy, 80, 80, 10);
+      text(G.forge[i] ? G.forge[i] : 'SLOT', sx + 40, sy + 48, {
+        align: 'center', size: 12, color: G.forge[i] ? NEON : TEXT_DIM, glow: !!G.forge[i]
+      });
       hit('clear-forge', sx, sy, 80, 80, String(i));
     }
-    drawBtn((W - 180) / 2, 250, 180, 48, 'FUSE');
+    drawTacticalBtn((W - 180) / 2, 250, 180, 48, 'FUSE', { size: 16 });
     hit('merge', (W - 180) / 2, 250, 180, 48);
     var y = 330;
     SHARDS.forEach(function (sh) {
       var q = G.P.shards[sh.id] || 0;
       if (!q) return;
-      ctx.fillStyle = 'rgba(20,16,14,0.9)';
-      roundRect(24, y, W - 48, 40, 6); ctx.fill();
-      text(sh.icon + ' ' + sh.name.toUpperCase() + '  x' + q, 40, y + 26, { size: 14 });
+      fillPanel(24, y, W - 48, 40, 8);
+      text(sh.icon + ' ' + sh.name.toUpperCase() + '  x' + q, 40, y + 26, { size: 13, color: TEXT, shadow: false });
       hit('forge-add', 24, y, W - 48, 40, sh.id);
       y += 48;
     });
@@ -938,19 +1039,21 @@
     drawMenuShell('CONSTELLATION', 'SP ' + G.P.skillPoints);
     ['bulwark', 'rift', 'warden'].forEach(function (r, i) {
       var bx = 20 + i * 110;
-      ctx.fillStyle = G.P.loadout === r ? 'rgba(61,224,197,0.25)' : 'rgba(20,16,14,0.85)';
-      roundRect(bx, 90, 100, 32, 6); ctx.fill();
-      text(r.toUpperCase(), bx + 50, 112, { align: 'center', size: 12 });
-      hit('loadout', bx, 90, 100, 32, r);
+      if (G.P.loadout === r) drawTacticalBtn(bx, 110, 100, 32, r.toUpperCase(), { size: 11, cut: 8, hot: true });
+      else {
+        fillPanel(bx, 110, 100, 32, 8);
+        text(r.toUpperCase(), bx + 50, 132, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
+      }
+      hit('loadout', bx, 110, 100, 32, r);
     });
     ctx.save();
-    ctx.translate(20, 140);
+    ctx.translate(20, 160);
     ctx.scale(0.55, 0.55);
     TREE.forEach(function (n) {
       n.req.forEach(function (r) {
         var p = nodeById(r);
         if (!p) return;
-        ctx.strokeStyle = 'rgba(232,197,106,0.25)';
+        ctx.strokeStyle = NEON_DIM;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(n.x, n.y); ctx.stroke();
       });
@@ -960,19 +1063,19 @@
       var can = canUnlock(n);
       ctx.beginPath();
       ctx.arc(n.x, n.y, n.keystone ? 17 : 13, 0, Math.PI * 2);
-      ctx.fillStyle = owned ? 'rgba(240,208,120,0.35)' : can ? 'rgba(61,224,197,0.25)' : 'rgba(20,16,28,0.9)';
+      ctx.fillStyle = owned ? 'rgba(57,255,20,0.35)' : can ? 'rgba(57,255,20,0.16)' : 'rgba(12,12,16,0.95)';
       ctx.fill();
-      ctx.strokeStyle = owned ? '#f0d078' : can ? '#3de0c5' : 'rgba(244,239,230,0.25)';
+      ctx.strokeStyle = owned ? NEON : can ? '#8dff70' : 'rgba(111,133,114,0.45)';
       ctx.lineWidth = 2; ctx.stroke();
-      hit('select-node', 20 + n.x * 0.55 - 16, 140 + n.y * 0.55 - 16, 32, 32, n.id);
+      hit('select-node', 20 + n.x * 0.55 - 16, 160 + n.y * 0.55 - 16, 32, 32, n.id);
     });
     ctx.restore();
     var sel = nodeById(G.selNode) || nodeById('root');
     if (sel) {
-      text(sel.name, 24, H - 120, { size: 18 });
-      wrapText(sel.desc, W / 2, H - 95, W - 48, 13, '#a09080');
+      text(sel.name, 24, H - 120, { size: 18, color: NEON, glow: true });
+      wrapText(sel.desc, W / 2, H - 95, W - 48, 12, TEXT_DIM);
       if (!hasNode(sel.id)) {
-        drawBtn((W - 160) / 2, H - 60, 160, 40, 'UNLOCK ' + sel.cost);
+        drawTacticalBtn((W - 160) / 2, H - 60, 160, 40, 'UNLOCK ' + sel.cost, { size: 13 });
         hit('unlock', (W - 160) / 2, H - 60, 160, 40, sel.id);
       }
     }
@@ -980,15 +1083,14 @@
 
   function drawGate() {
     drawMenuShell('STARGATE', 'EXTRACT EXOTICS');
-    var y = 110;
+    var y = 120;
     PLANETS.forEach(function (pl) {
       var open = G.WORLD.planetsUnlocked.indexOf(pl.id) >= 0;
-      ctx.fillStyle = open ? 'rgba(30,24,18,0.92)' : 'rgba(12,10,10,0.7)';
-      roundRect(20, y, W - 40, 72, 8); ctx.fill();
-      ctx.strokeStyle = open ? pl.accent : '#333';
-      ctx.lineWidth = 1.5; ctx.stroke();
-      text(pl.name, 36, y + 30, { size: 16, color: open ? '#f4ead4' : '#666' });
-      text(open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed, 36, y + 52, { size: 12, color: '#8a8070' });
+      fillPanel(20, y, W - 40, 72, 10);
+      text(pl.name, 36, y + 30, { size: 15, color: open ? NEON : TEXT_DIM, glow: open });
+      text(open ? pl.verb.toUpperCase() + ' · 35' : 'ERA ' + pl.eraNeed, 36, y + 52, {
+        size: 11, color: TEXT_DIM, shadow: false
+      });
       if (open) hit('extract', 20, y, W - 40, 72, pl.id);
       y += 84;
     });
@@ -997,57 +1099,58 @@
   function drawExtract() {
     var pl = G.extract.planet;
     coverImg('gate', 0, 0, W, H);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(7,7,9,0.7)';
     ctx.fillRect(0, 0, W, H);
-    text(pl.name, W / 2, H * 0.35, { align: 'center', size: 28 });
-    text(pl.verb, W / 2, H * 0.4, { align: 'center', size: 14, color: '#8a8070' });
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    roundRect(40, H * 0.5, W - 80, 14, 6); ctx.fill();
-    ctx.fillStyle = pl.accent;
-    roundRect(40, H * 0.5, (W - 80) * (G.extract.progress / 100), 14, 6); ctx.fill();
-    text('HAZARDS ' + G.extract.hazards + '/4', W / 2, H * 0.58, { align: 'center', size: 14 });
+    fillPanel(W * 0.1, H * 0.32, W * 0.8, 160, 14);
+    text(pl.name, W / 2, H * 0.38, { align: 'center', size: 24, color: NEON, glow: true });
+    text(pl.verb, W / 2, H * 0.43, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    panelPath(40, H * 0.5, W - 80, 14, 4); ctx.fill();
+    ctx.fillStyle = NEON;
+    panelPath(40, H * 0.5, Math.max(4, (W - 80) * (G.extract.progress / 100)), 14, 4); ctx.fill();
+    text('HAZARDS ' + G.extract.hazards + '/4', W / 2, H * 0.58, { align: 'center', size: 13, color: TEXT });
   }
 
   function drawEra() {
     drawMenuShell('TIMELINE', 'STABILIZE IN TOWER');
-    var y = 110;
+    var y = 120;
     ERAS.forEach(function (era, i) {
       var current = G.WORLD.eraIndex === i;
       var cleared = G.WORLD.erasCleared.indexOf(era.id) >= 0;
-      ctx.fillStyle = current ? 'rgba(40,30,18,0.95)' : 'rgba(16,12,10,0.85)';
-      roundRect(20, y, W - 40, 78, 8); ctx.fill();
-      ctx.strokeStyle = era.accent; ctx.globalAlpha = current ? 1 : 0.35; ctx.stroke(); ctx.globalAlpha = 1;
-      text(era.name, 36, y + 28, { size: 16 });
-      text(cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED', 36, y + 52, { size: 12, color: '#8a8070' });
+      fillPanel(20, y, W - 40, 78, 10);
+      text(era.name, 36, y + 28, { size: 15, color: current ? NEON : TEXT, glow: current });
+      text(cleared ? 'STABILIZED' : current ? 'ACTIVE' : 'SEALED', 36, y + 52, {
+        size: 11, color: TEXT_DIM, shadow: false
+      });
       y += 90;
     });
   }
 
   function drawLife() {
     drawMenuShell('SLOW LIFE', 'FISH · GARDEN');
-    drawBtn(40, 130, W - 80, 56, G.fishCast ? 'WAITING…' : 'CAST LINE');
+    drawTacticalBtn(40, 130, W - 80, 56, G.fishCast ? 'WAITING…' : 'CAST LINE', { size: 16 });
     if (!G.fishCast) hit('fish', 40, 130, W - 80, 56);
-    text('CAUGHT ' + G.P.fishCaught, W / 2, 210, { align: 'center', size: 14, color: '#8a8070' });
+    text('CAUGHT ' + G.P.fishCaught, W / 2, 210, { align: 'center', size: 12, color: TEXT_DIM, shadow: false });
     for (var i = 0; i < 4; i++) {
       var px = 30 + i * ((W - 60) / 4);
       var planted = G.P.gardenPlanted[i];
       var ready = planted && (Date.now() - planted >= 45000);
-      ctx.fillStyle = ready ? 'rgba(40,80,40,0.9)' : 'rgba(30,22,14,0.9)';
-      roundRect(px, 250, (W - 80) / 4, 70, 8); ctx.fill();
-      text(!planted ? 'PLANT' : ready ? 'HARVEST' : '…', px + ((W - 80) / 8), 292, { align: 'center', size: 12 });
+      fillPanel(px, 250, (W - 80) / 4, 70, 8);
+      text(!planted ? 'PLANT' : ready ? 'HARVEST' : '…', px + ((W - 80) / 8), 292, {
+        align: 'center', size: 11, color: ready ? NEON : TEXT_DIM, glow: ready
+      });
       hit('garden', px, 250, (W - 80) / 4, 70, String(i));
     }
   }
 
   function drawStory() {
     drawMenuShell('LORE', 'CHAPTER ' + G.WORLD.storyChapter);
-    var y = 110;
+    var y = 120;
     STORY.forEach(function (ch) {
       var locked = ch.id > G.WORLD.storyChapter;
-      ctx.fillStyle = 'rgba(20,16,14,0.9)';
-      roundRect(20, y, W - 40, locked ? 64 : 110, 8); ctx.fill();
-      text(ch.title, 36, y + 28, { size: 16, color: locked ? '#555' : '#f4ead4' });
-      if (!locked) wrapText(ch.body, W / 2, y + 55, W - 70, 13, '#a09080');
+      fillPanel(20, y, W - 40, locked ? 64 : 110, 10);
+      text(ch.title, 36, y + 28, { size: 15, color: locked ? TEXT_DIM : NEON, glow: !locked });
+      if (!locked) wrapText(ch.body, W / 2, y + 55, W - 70, 12, TEXT_DIM);
       y += locked ? 76 : 122;
     });
   }
@@ -1213,18 +1316,18 @@
     });
 
     if (G.flash > 0) {
-      ctx.fillStyle = 'rgba(255,200,120,' + (G.flash * 0.55) + ')';
+      ctx.fillStyle = 'rgba(57,255,20,' + (G.flash * 0.35) + ')';
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
 
     if (G.toastT > 0 && G.toast) {
-      ctx.fillStyle = 'rgba(10,8,6,0.88)';
-      var tw = Math.min(W * 0.8, 280);
-      roundRect((W - tw) / 2, H * 0.18, tw, 36, 6); ctx.fill();
-      text(G.toast, W / 2, H * 0.18 + 24, { align: 'center', size: 14, color: '#ffe7a0' });
+      var tw = Math.min(W * 0.84, 300);
+      fillPanel((W - tw) / 2, H * 0.16, tw, 40, 10);
+      text(G.toast, W / 2, H * 0.16 + 26, { align: 'center', size: 13, color: NEON, glow: true });
     }
 
     ctx.restore();
+    syncHudChrome();
   }
 
   function frame(ts) {
@@ -1239,17 +1342,13 @@
     var parent = canvas.parentElement || document.body;
     var rw = parent.clientWidth || window.innerWidth;
     var rh = parent.clientHeight || window.innerHeight;
-    // design in portrait phone space, scale to fill
-    var designW = 390, designH = 844;
-    var scale = Math.min(rw / designW, rh / designH);
-    // use full screen — logical coords match CSS pixels of canvas
     W = Math.max(320, Math.floor(rw));
-    H = Math.max(560, Math.floor(rh));
+    H = Math.max(480, Math.floor(rh));
     dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.floor(W * dpr);
     canvas.height = Math.floor(H * dpr);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
@@ -1272,6 +1371,7 @@
     ctx = canvas.getContext('2d', { alpha: false });
     resize();
     window.addEventListener('resize', resize);
+    wireHudDock();
 
     canvas.addEventListener('pointerdown', function (e) { onPointer('down', e.clientX, e.clientY); });
     canvas.addEventListener('pointerup', function (e) { onPointer('up', e.clientX, e.clientY); });
@@ -1279,6 +1379,7 @@
 
     G.WORLD = loadWorld();
     G.scene = 'boot';
+    syncHudChrome();
 
     var jobs = [
       loadImage('who', ART.who),
