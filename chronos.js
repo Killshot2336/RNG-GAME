@@ -69,6 +69,29 @@
     }
   }
 
+  function buzz(pattern) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern == null ? 18 : pattern);
+    } catch (e) {}
+  }
+
+  function flashOverlay(cls) {
+    var app = document.getElementById('chronos-app');
+    if (!app) return;
+    var el = document.createElement('div');
+    el.className = cls || 'merge-flash';
+    app.appendChild(el);
+    setTimeout(function () { el.remove(); }, 650);
+  }
+
+  function markScreenEnter() {
+    var root = document.getElementById('screen-root');
+    if (!root) return;
+    var first = root.firstElementChild;
+    if (!first) return;
+    first.classList.add('screen-in');
+  }
+
   function daySeed() {
     return Math.floor(Date.now() / 86400000);
   }
@@ -319,7 +342,8 @@
       UI.storyOpen = 0;
       P._introSeen = true;
     }
-    toast(warband(id).name.toUpperCase() + ' ONLINE', 'good');
+    toast(warband(id).name.toUpperCase() + ' ONLINE', 'mega');
+    buzz([16, 24, 16]);
     pullRemote().then(function () { render(); });
     savePlayer();
     render();
@@ -432,6 +456,7 @@
       UI.forgeSlots = [null, null];
       P.chrono += 10;
       toast('SCRAP +10');
+      buzz(12);
       savePlayer(); render(); return;
     }
     var s = aggregateStats();
@@ -448,6 +473,8 @@
     P.essence += 1;
     if (P.totalMerged % 3 === 0) P.skillPoints += 1;
     UI.forgeSlots = [null, null];
+    buzz([22, 30, 22]);
+    flashOverlay('merge-flash');
     savePlayer();
     render();
   }
@@ -565,7 +592,9 @@
         }
       }
     }
-    toast((won ? 'HOLD' : 'BREACH') + ' · +' + gain + ' CHRONO', won ? 'good' : 'bad');
+    toast((won ? 'HOLD' : 'BREACH') + ' · +' + gain + ' CHRONO', won ? 'mega' : 'bad');
+    if (won) { flashOverlay('victory-burst'); buzz([20, 40, 20, 40, 35]); }
+    else buzz([40, 80]);
     addShard('bone', 2 + Math.floor(t.wave / 2));
     if (t.wave >= 3) addShard('spark', 1);
     if (t.kills >= 20) addShard('ash', 1);
@@ -600,15 +629,33 @@
     var s = aggregateStats();
     var dmg = amt;
     if (e.type === 'boss') dmg *= 1 + (s.bossDmg || 0);
-    if (Math.random() < (s.crit || 0)) dmg *= 2;
+    var crit = Math.random() < (0.08 + (s.crit || 0));
+    if (crit) dmg *= 2;
+    dmg = Math.max(1, Math.floor(dmg));
     e.hp -= dmg;
-    UI.tower.fx.push({ x: e.x, y: e.y, life: 0.3 });
+    e.hitFlash = 0.12;
+    UI.tower.fx.push({ kind: 'hit', x: e.x, y: e.y, life: 0.32 });
+    UI.tower.fx.push({
+      kind: 'dmg',
+      x: e.x + (Math.random() * 6 - 3),
+      y: e.y - 4,
+      life: 0.7,
+      text: String(dmg),
+      crit: crit
+    });
     UI.tower.combo++;
     if (tag) UI.tower.gates[tag] = (UI.tower.gates[tag] || 0) + 1;
     if (e.hp <= 0) {
       UI.tower.kills++;
       UI.tower.chronoEarned += e.type === 'boss' ? 50 : e.type === 'brute' ? 9 : 3;
-      if (e.type === 'boss') { P.bossesKilled++; P.skillPoints += 1; shake(320); }
+      UI.tower.fx.push({ kind: 'burst', x: e.x, y: e.y, life: 0.45 });
+      if (e.type === 'boss') {
+        P.bossesKilled++;
+        P.skillPoints += 1;
+        shake(320);
+        buzz([40, 60, 40]);
+        flashOverlay('victory-burst');
+      }
       return true;
     }
     return false;
@@ -626,6 +673,7 @@
     });
     if (!best) return;
     var dmg = towerDps() * 0.38;
+    UI.tower.fx.push({ kind: 'beam', x1: cx, y1: cy, x2: best.x, y2: best.y, life: 0.12 });
     damageEnemy(best, dmg, P.loadout === 'rift' ? 'rift' : null);
     var s = aggregateStats();
     if (s.chain > 0) {
@@ -705,8 +753,11 @@
         t.chronoEarned += 2;
       });
       shake(260);
-      toast('OVERLOAD');
+      buzz([30, 40, 30]);
+      flashOverlay('merge-flash');
+      toast('OVERLOAD', 'mega');
     }
+    buzz(14);
     syncTowerDom();
   }
 
@@ -765,7 +816,11 @@
         } else t.coreHp -= hit;
         e.hp = 0;
         shake(120);
+        buzz(25);
       }
+    });
+    t.enemies.forEach(function (e) {
+      if (e.hitFlash > 0) e.hitFlash = Math.max(0, e.hitFlash - dt);
     });
     t.enemies = t.enemies.filter(function (e) { return e.hp > 0; });
     t.fx = t.fx.map(function (f) { f.life -= dt; return f; }).filter(function (f) { return f.life > 0; });
@@ -802,11 +857,27 @@
     }
     var layer = root.querySelector('.enemy-layer');
     if (layer) {
-      layer.innerHTML = t.enemies.map(function (e) {
-        return '<div class="enemy ' + e.type + '" style="left:' + e.x + '%;top:' + e.y + '%;color:' + (e.tint || '') + '"></div>';
-      }).join('') + t.fx.map(function (f) {
-        return '<div class="fx-hit" style="left:' + f.x + '%;top:' + f.y + '%"></div>';
-      }).join('');
+      var bits = t.enemies.map(function (e) {
+        var pct = Math.max(0, Math.min(100, (e.hp / e.max) * 100));
+        var hit = e.hitFlash > 0 ? ' is-hit' : '';
+        return '<div class="enemy ' + e.type + hit + '" style="left:' + e.x + '%;top:' + e.y + '%;--tint:' + (e.tint || '#ff6a3d') + '">' +
+          '<i class="enemy-hp"><b style="width:' + pct + '%"></b></i></div>';
+      });
+      t.fx.forEach(function (f) {
+        if (f.kind === 'beam') {
+          var dx = f.x2 - f.x1, dy = f.y2 - f.y1;
+          var len = Math.hypot(dx, dy);
+          var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+          bits.push('<div class="fx-beam" style="left:' + f.x1 + '%;top:' + f.y1 + '%;width:' + len + '%;transform:rotate(' + ang + 'deg)"></div>');
+        } else if (f.kind === 'dmg') {
+          bits.push('<div class="dmg-float' + (f.crit ? ' crit' : '') + '" style="left:' + f.x + '%;top:' + f.y + '%">' + f.text + (f.crit ? '!' : '') + '</div>');
+        } else if (f.kind === 'burst') {
+          bits.push('<div class="fx-burst" style="left:' + f.x + '%;top:' + f.y + '%"></div>');
+        } else {
+          bits.push('<div class="fx-hit" style="left:' + (f.x || 0) + '%;top:' + (f.y || 0) + '%"></div>');
+        }
+      });
+      layer.innerHTML = bits.join('');
     }
     ['primary', 'secondary', 'ultimate'].forEach(function (k) {
       var btn = root.querySelector('[data-ability="' + k + '"]');
@@ -961,40 +1032,48 @@
     return h;
   }
 
-  function dockBtn(action, glyph, label, glow) {
+  function dockBtn(action, med, label, glow) {
     return '<button type="button" class="dock-btn dock-' + action + '" data-action="mode" data-id="' + action + '" style="--hs-glow:' + glow + '">' +
-      '<span class="dock-glyph">' + glyph + '</span><span class="dock-label">' + label + '</span></button>';
+      '<span class="dock-glyph medallion med-' + med + '" aria-hidden="true"></span>' +
+      '<span class="dock-label">' + label + '</span></button>';
   }
 
   function renderHub() {
     var w = warband(activeId);
     var era = ERAS[WORLD.eraIndex] || ERAS[0];
-    var h = '<div class="hub-screen">';
+    var online = 0;
+    WARBAND.forEach(function (p) {
+      if (WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000)) online++;
+    });
+    var h = '<div class="hub-screen hub-cinematic">';
+    h += '<div class="hub-bleed"><img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false"><div class="hub-art-shade"></div></div>';
     h += '<div class="hub-top">';
     h += '<button type="button" class="hub-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
     h += '<img src="' + w.portrait + '" alt=""><div class="hub-pilot-text"><div class="hub-pilot-name">' + esc(w.name.toUpperCase()) + '</div>';
     h += '<div class="hub-pilot-sub">' + esc(P.loadout.toUpperCase()) + ' · SP ' + P.skillPoints + '</div></div></button>';
     h += '<div class="hub-wallet"><span class="hub-wallet-main">' + P.chrono + ' CHRONO</span><span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
     h += '<div class="hub-stage era-' + era.id + '">';
-    h += '<img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false">';
-    h += '<div class="hub-art-shade"></div>';
     h += '<div class="hub-party">';
     WARBAND.forEach(function (p) {
       var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
       h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '" title="' + p.name + '"></div>';
     });
     h += '</div>';
-    h += '<div class="hub-era-tag">' + esc(era.name) + '</div>';
+    h += '<div class="hub-stage-copy">';
+    h += '<p class="eyebrow">Chronolith · ' + online + '/3 online</p>';
+    h += '<h2>' + esc(era.name) + '</h2>';
+    h += '<p>' + esc(era.blurb) + '</p>';
+    h += '</div>';
     h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower"><span>ENTER TOWER</span></button>';
     h += '</div>';
     h += '<nav class="hub-dock" aria-label="Hub actions">';
-    h += dockBtn('tower', '▲', 'TOWER', 'rgba(61,224,197,0.45)');
-    h += dockBtn('forge', '⚒', 'FORGE', 'rgba(255,106,61,0.45)');
-    h += dockBtn('tree', '✦', 'TREE', 'rgba(124,240,255,0.45)');
-    h += dockBtn('gate', '◎', 'GATE', 'rgba(157,255,176,0.4)');
-    h += dockBtn('era', '▣', 'ERAS', 'rgba(232,197,106,0.45)');
-    h += dockBtn('life', '🌿', 'LIFE', 'rgba(157,255,176,0.4)');
-    h += dockBtn('story', '◉', 'LORE', 'rgba(232,197,106,0.35)');
+    h += dockBtn('tower', 'tower', 'TOWER', 'rgba(61,224,197,0.45)');
+    h += dockBtn('forge', 'forge', 'FORGE', 'rgba(255,106,61,0.45)');
+    h += dockBtn('tree', 'tree', 'TREE', 'rgba(124,240,255,0.45)');
+    h += dockBtn('gate', 'gate', 'GATE', 'rgba(157,255,176,0.4)');
+    h += dockBtn('era', 'era', 'ERAS', 'rgba(232,197,106,0.45)');
+    h += dockBtn('life', 'life', 'LIFE', 'rgba(157,255,176,0.4)');
+    h += dockBtn('story', 'story', 'LORE', 'rgba(232,197,106,0.35)');
     h += '</nav>';
     if (WORLD.quest && !WORLD.quest.done) {
       h += '<div class="hub-quest">QUEST · ' + esc(WORLD.quest.name) + ' · ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
@@ -1105,10 +1184,15 @@
     h += '<span data-gates>B0 R0 W0</span><span data-combo></span></div>';
     h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
     h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
+    var abl = P.loadout === 'bulwark'
+      ? { p: 'TAUNT', s: 'QUAKE', u: 'OVERLOAD' }
+      : P.loadout === 'warden'
+        ? { p: 'MEND', s: 'WARD', u: 'OVERLOAD' }
+        : { p: 'ARC', s: 'TIMELINE', u: 'OVERLOAD' };
     h += '<div class="ability-bar">';
-    h += '<button type="button" class="ability" data-action="ability" data-id="primary" data-ability="primary">PRIMARY<span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability" data-action="ability" data-id="secondary" data-ability="secondary">SIGIL<span class="cd">READY</span></button>';
-    h += '<button type="button" class="ability" data-action="ability" data-id="ultimate" data-ability="ultimate">ULT<span class="cd">READY</span></button>';
+    h += '<button type="button" class="ability" data-action="ability" data-id="primary" data-ability="primary">' + abl.p + '<span class="cd">READY</span></button>';
+    h += '<button type="button" class="ability" data-action="ability" data-id="secondary" data-ability="secondary">' + abl.s + '<span class="cd">READY</span></button>';
+    h += '<button type="button" class="ability" data-action="ability" data-id="ultimate" data-ability="ultimate">' + abl.u + '<span class="cd">READY</span></button>';
     h += '</div></div>';
     return h;
   }
@@ -1223,12 +1307,13 @@
     else html = renderHub();
     html += renderStoryModal();
     root.innerHTML = html;
+    markScreenEnter();
   }
 
   function onAction(act, id) {
     if (act === 'pick') { selectPlayer(id); return; }
     if (act === 'who') { savePlayer(); UI.mode = 'who'; P = null; activeId = null; render(); return; }
-    if (act === 'mode') { UI.mode = id; render(); return; }
+    if (act === 'mode') { UI.mode = id; buzz(10); render(); return; }
     if (act === 'select-node') { UI.selectedNode = id; render(); return; }
     if (act === 'unlock') { unlockNode(id); return; }
     if (act === 'loadout') { P.loadout = id; savePlayer(); toast(id.toUpperCase()); render(); return; }
