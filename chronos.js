@@ -1005,89 +1005,52 @@
   }
 
   function renderWho() {
-    var h = '<div class="who-screen game-skin">';
+    var h = '<div class="who-screen skin-console">';
     h += '<div class="screen-art" style="background-image:url(\'' + artUrl('who') + '\')"></div>';
-    h += '<div class="screen-art-veil"></div>';
-    h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1></div>';
+    h += '<div class="who-title"><span>VOIDLINE</span><strong>CHRONOS</strong></div>';
     h += '<div class="who-seats">';
     WARBAND.forEach(function (w) {
-      var raw = null;
-      try { raw = localStorage.getItem(SAVE_PREFIX + w.id) || localStorage.getItem('voidline_chronos_v1_' + w.id); } catch (e) {}
-      var meta = 'NEW';
-      if (raw) {
-        try {
-          var d = JSON.parse(raw);
-          meta = 'W' + (d.wavesBest || 0);
-        } catch (e) { meta = 'SAVE'; }
-      }
-      h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + '">';
-      h += '<span class="seat-frame">';
-      h += '<img class="seat-portrait" src="' + w.portrait + '" alt="">';
-      h += '<span class="seat-ornament" style="background-image:url(\'' + artUrl('uiFrame') + '\')"></span>';
-      h += '<span class="seat-plaque">';
+      h += '<button type="button" class="seat" data-action="pick" data-id="' + w.id + '" style="--seat-accent:' + w.accent + ';--seat-art:url(\'' + w.portrait + '\')">';
+      h += '<span class="seat-wash"></span>';
       h += '<span class="seat-name">' + esc(w.name.toUpperCase()) + '</span>';
-      h += '<span class="seat-role">' + esc(w.blurb) + '</span>';
-      h += '<span class="seat-meta">' + esc(meta) + '</span>';
-      h += '</span></span></button>';
+      h += '</button>';
     });
     h += '</div></div>';
     return h;
   }
 
-  function dockBtn(action, med, label, glow) {
-    return '<button type="button" class="dock-btn dock-' + action + '" data-action="mode" data-id="' + action + '" style="--hs-glow:' + glow + '">' +
-      '<span class="dock-glyph medallion med-' + med + '" aria-hidden="true"></span>' +
-      '<span class="dock-label">' + label + '</span></button>';
+  function dockBtn(action, med, label) {
+    return '<button type="button" class="dock-btn dock-' + action + '" data-action="mode" data-id="' + action + '" aria-label="' + label + '">' +
+      '<span class="dock-glyph medallion med-' + med + '"></span></button>';
   }
 
   function renderHub() {
     var w = warband(activeId);
     var era = ERAS[WORLD.eraIndex] || ERAS[0];
-    var online = 0;
-    WARBAND.forEach(function (p) {
-      if (WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000)) online++;
-    });
-    var h = '<div class="hub-screen hub-cinematic game-skin">';
-    h += '<div class="hub-bleed"><img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false"><div class="hub-art-shade"></div></div>';
-    h += '<div class="hub-hud" style="background-image:url(\'' + artUrl('uiHud') + '\')">';
-    h += '<button type="button" class="hud-pilot" data-action="who" style="--seat-accent:' + w.accent + '">';
-    h += '<img src="' + w.portrait + '" alt=""><span class="hud-pilot-meta"><b>' + esc(w.name.toUpperCase()) + '</b><i>' + esc(P.loadout.toUpperCase()) + '</i></span></button>';
-    h += '<div class="hud-res"><b>' + P.chrono + '</b><i>CHRONO</i><em>' + P.essence + ' ESS</em></div>';
+    var h = '<div class="hub-screen skin-console">';
+    h += '<img class="hub-fill" src="' + artUrl('hub') + '" alt="" draggable="false">';
+    h += '<button type="button" class="float-pilot" data-action="who" style="--seat-accent:' + w.accent + '" aria-label="Switch">';
+    h += '<img src="' + w.portrait + '" alt=""></button>';
+    h += '<div class="float-chrono"><b>' + P.chrono + '</b></div>';
+    h += '<div class="float-center hub-stage">';
+    h += '<div class="float-era">' + esc(era.name) + '</div>';
+    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')"><span>ENTER</span></button>';
     h += '</div>';
-    h += '<div class="hub-stage era-' + era.id + '">';
-    h += '<div class="hub-party">';
-    WARBAND.forEach(function (p) {
-      var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
-      h += '<div class="party-pip' + (on ? ' on' : '') + '" style="--pip:' + p.accent + '"></div>';
-    });
-    h += '</div>';
-    h += '<div class="hub-stage-copy">';
-    h += '<p class="eyebrow">' + online + ' / 3</p>';
-    h += '<h2>' + esc(era.name) + '</h2>';
-    h += '<p>' + esc(era.blurb) + '</p>';
-    h += '</div>';
-    h += '<button type="button" class="hub-enter" data-action="mode" data-id="tower" style="background-image:url(\'' + artUrl('uiBtn') + '\')"><span>ENTER TOWER</span></button>';
-    h += '</div>';
-    h += '<div class="hub-tray">';
-    h += '<nav class="hub-dock" aria-label="Actions">';
-    h += dockBtn('tower', 'tower', 'TOWER', 'rgba(61,224,197,0.45)');
-    h += dockBtn('forge', 'forge', 'FORGE', 'rgba(255,106,61,0.45)');
-    h += dockBtn('tree', 'tree', 'TREE', 'rgba(124,240,255,0.45)');
-    h += dockBtn('gate', 'gate', 'GATE', 'rgba(157,255,176,0.4)');
-    h += dockBtn('era', 'era', 'ERAS', 'rgba(232,197,106,0.45)');
-    h += dockBtn('life', 'life', 'LIFE', 'rgba(157,255,176,0.4)');
-    h += dockBtn('story', 'story', 'LORE', 'rgba(232,197,106,0.35)');
-    h += '</nav>';
-    if (WORLD.quest && !WORLD.quest.done) {
-      h += '<div class="hub-quest">' + esc(WORLD.quest.name) + '  ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
-    }
-    h += '</div></div>';
+    h += '<nav class="float-dock hub-dock" aria-label="Actions">';
+    h += dockBtn('tower', 'tower', 'Tower');
+    h += dockBtn('forge', 'forge', 'Forge');
+    h += dockBtn('tree', 'tree', 'Tree');
+    h += dockBtn('gate', 'gate', 'Gate');
+    h += dockBtn('era', 'era', 'Eras');
+    h += dockBtn('life', 'life', 'Life');
+    h += dockBtn('story', 'story', 'Lore');
+    h += '</nav></div>';
     return h;
   }
 
   function renderTree() {
     var sel = UI.selectedNode ? nodeById(UI.selectedNode) : nodeById('root');
-    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">CONSTELLATION</h2><p class="mode-sub">SP ' + P.skillPoints + ' · ' + P.unlocked.length + ' NODES · ' + P.loadout.toUpperCase() + '</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="role-banner">';
@@ -1124,7 +1087,7 @@
   }
 
   function renderForge() {
-    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">FORGE</h2><p class="mode-sub">MERGE · RELICS · EXOTICS</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll"><div class="forge-stage" style="background-image:url(\'' + artUrl('forge') + '\')"><div class="forge-stage-veil"></div><div class="forge-slots">';
@@ -1160,8 +1123,8 @@
     var t = UI.tower;
     if (!t) {
       var cov = roleCoverage();
-      var h0 = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
-      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
+      var h0 = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
+      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
       h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">ROLES · INFINITE UPS · CO-OP BOSS</p></div>';
       h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
       h0 += '<div class="role-banner"><span class="role-tag ' + P.loadout + '">' + P.loadout.toUpperCase() + '</span>';
@@ -1201,8 +1164,8 @@
   }
 
   function renderGate() {
-    var h = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">RUN THE EXTRACT · BRING EXOTICS HOME</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll planet-grid">';
@@ -1222,7 +1185,7 @@
 
   function renderExtract() {
     var pl = UI.extract.planet;
-    var h = '<div class="mode-screen diegetic extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
+    var h = '<div class="mode-screen skin-console extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
     h += '<div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
     h += '<div class="screen-art-veil heavy"></div>';
     h += '<h2 class="mode-title">' + esc(pl.name) + '</h2>';
@@ -1234,7 +1197,7 @@
   }
 
   function renderEra() {
-    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">TIMELINE</h2><p class="mode-sub">STABILIZE IN TOWER · ROLE GATES ON BOSSES</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll era-track">';
@@ -1252,8 +1215,8 @@
   }
 
   function renderLife() {
-    var h = '<div class="mode-screen diegetic mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
-    h += '<div class="screen-art-veil heavy"></div><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">SLOW LIFE</h2><p class="mode-sub">FISH · GARDEN · BREATHE</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll">';
@@ -1272,7 +1235,7 @@
   }
 
   function renderStory() {
-    var h = '<div class="mode-screen diegetic"><div class="mode-head plate"><div>';
+    var h = '<div class="mode-screen skin-console"><div class="mode-head float-head"><div>';
     h += '<h2 class="mode-title">LORE</h2><p class="mode-sub">CHAPTER ' + WORLD.storyChapter + '</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">×</button></div>';
     h += '<div class="panel-scroll">';
