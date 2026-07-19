@@ -1,60 +1,38 @@
-# Voidline Galaxy Farm
+# Voidline Chronos
 
-Hyper-immersive space-botany tycoon PWA — React + Vite + Zustand.
+Private 3-player co-op warband — **Aden · Jamie · Edward**.
+
+Thrown into deep time. Stabilize eras. Merge relics. Spec the constellation. Hold the Chronolith. Raid planets for exotics.
 
 **Live:** https://rng-game-gules.vercel.app  
 **Repo:** https://github.com/Killshot2336/RNG-GAME
+
+## Play
+
+1. Open the app → pick who you are  
+2. Hub is art — tap **Tower / Forge / Tree / Gate / Eras**  
+3. Spec Bulwark / Rift / Warden · merge shards · push waves · extract exotics  
+4. Progress syncs per seat (phone ↔ PC via local save + optional cloud)
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | React 19, TypeScript, Vite 6, Tailwind 4 |
-| State | Zustand `gameStore` + `GameProvider` tick loop |
-| Hosting | Vercel (auto-deploy on push to `main`) |
-| Database | Supabase optional — legacy API in `api/room/` |
+| Game | Vanilla JS (`chronos.js`) + cinematic CSS |
+| Auth / cloud | Supabase optional (`cloud-auth.js`) |
+| Hosting | Vercel → `dist` |
 
-## Project structure
+## Scripts
 
-```
-src/
-├── context/GameContext.tsx    # GameProvider + useGame() facade
-├── store/gameStore.ts         # All game logic (cash, strains, rivals, tick)
-├── store/uiStore.ts           # Nav, modals, card lift, reality warp
-├── screens/                   # Shop, Farm, Index, Clan tabs
-├── components/                # HUD, LiftableCard, PackReveal, etc.
-├── utils/
-│   ├── strainGenerator.ts     # Procedural strain engine
-│   ├── dialogueEngine.ts      # State-aware voice lines
-│   └── persistence.ts         # localStorage save/load
-legacy/syndicate-block.html    # Original co-op game (preserved)
-api/room/[roomId].js           # Supabase co-op API (future sync)
+```bash
+npm run build    # copy static → dist
+npm run preview  # serve dist
 ```
 
-## Features
+## Legacy
 
-- **4 tabs:** Shop (gacha + blitz + store), Farm (upgrade/control/portal), Index (infinite inventory), Clan (marketplace)
-- **3-player profiles:** You, Player_Dad_99, Cousin_Chris with profile flipper
-- **Tycoon tick:** Passive revenue from equipped portal floors (50ms interval)
-- **Procedural strains:** Seeded gacha packs with scan-rate rarity bonuses
-- **Card lift:** Fortnite-style 3D parallax on Index and Clan cards
-- **Reality Warp:** CSS vignette + chromatic aberration shader toggle
-- **Persistence:** Game state auto-saves to localStorage
+Previous Galaxy Farm shell preserved under `legacy/galaxy-farm/`.
 
-## Deploy (Vercel)
+## Design notes
 
-1. Import **RNG-GAME** at [vercel.com/new](https://vercel.com/new)
-2. Build: `npm run build` · Output: `dist`
-3. Optional env vars for legacy co-op API:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-
-## Local dev (optional)
-
-```powershell
-cd c:\Users\Aden\syndicate-block
-npm install
-npm run dev
-```
-
-Open http://localhost:5173
+See `docs/CHRONOS.md`.

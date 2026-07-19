@@ -7,6 +7,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const mime = {
   '.html': 'text/html',
   '.js': 'text/javascript',
+  '.css': 'text/css',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
 };

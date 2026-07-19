@@ -24,11 +24,14 @@ function cpDir(srcDir, destDir) {
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
-for (const f of ['index.html', 'index.css', 'catalog.js', 'cloud-auth.js', 'game.js']) {
-  cp(path.join(root, f), path.join(dist, f));
+for (const f of ['index.html', 'chronos.css', 'chronos.js', 'cloud-auth.js', 'player-core.js']) {
+  const src = path.join(root, f);
+  if (fs.existsSync(src)) cp(src, path.join(dist, f));
 }
 
 cpDir(path.join(root, 'public'), path.join(dist, 'public'));
 cpDir(path.join(root, 'api'), path.join(dist, 'api'));
+cpDir(path.join(root, 'docs'), path.join(dist, 'docs'));
+cpDir(path.join(root, 'legacy'), path.join(dist, 'legacy'));
 
-console.log('Static monolith copied to dist/');
+console.log('Chronos warband copied to dist/');

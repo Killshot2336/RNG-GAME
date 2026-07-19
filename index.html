@@ -4,84 +4,24 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/public/voidline-icon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#1c120c" />
+  <meta name="theme-color" content="#07060a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Voidline Galaxy Farm</title>
+  <title>Voidline Chronos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Exo+2:wght@400;500;600;700;800&family=Fredoka:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="index.css?v=28" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="chronos.css?v=1" />
 </head>
 <body>
-  <div id="voidline-app">
-    <div class="backdrop-gradient"></div>
-    <div id="phone-shell" class="phone-inner void-bg farm-backyard">
-      <header id="hud-header">
-        <div style="flex-shrink:0">
-          <div class="brand-sub">Voidline</div>
-          <div class="brand-title chromatic-text">GALAXY FARM</div>
-        </div>
-        <button type="button" class="hud-battle-pass" data-action="open-battle-pass" aria-label="Battle Pass">
-          <div id="hud-bp-icon" class="hud-bp-icon-wrap"><span class="farm-icon farm-icon-mega farm-icon-img" aria-hidden="true"></span></div>
-          <div style="min-width:0;text-align:left">
-            <div class="font-mono text-green" style="font-size:0.45rem;letter-spacing:0.12em">BATTLE PASS</div>
-            <div id="hud-bp-label">TIER 0</div>
-          </div>
-          <span id="hud-bp-ping" class="hud-bp-ping" hidden aria-hidden="true"></span>
-        </button>
-        <button type="button" id="btn-open-profile" class="profile-ribbon" data-action="open-profile" aria-label="Open profile">
-          <div class="avatar-wrap">
-            <div class="avatar-ring"></div>
-            <div class="avatar-inner" id="hud-avatar"><span class="farm-icon farm-icon-strains" aria-hidden="true"></span></div>
-          </div>
-          <div style="text-align:left;min-width:0">
-            <div style="display:flex;align-items:center;gap:0.375rem;flex-wrap:wrap">
-              <span id="hud-name" style="font-size:0.65rem;font-weight:700;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Player</span>
-              <span id="hud-level" class="hud-level-badge">LV.1</span>
-              <span id="hud-rank" class="hud-rank-badge">ROOKIE</span>
-            </div>
-            <span id="hud-cash" class="font-mono" style="font-size:0.55rem;color:var(--muted);letter-spacing:0.05em">$250.00K</span>
-          </div>
-        </button>
-      </header>
-      <div id="hud-xp-strip">
-        <div class="hud-xp-row">
-          <span id="hud-xp-text">XP 0 / 500</span>
-          <span id="hud-sp">100 SP</span>
-        </div>
-        <div class="hud-xp-bar"><div id="hud-xp-fill"></div></div>
-      </div>
-      <div id="hud-cloud-sync" class="hud-cloud-sync-strip cloud-guest" aria-live="polite"><span class="cloud-sync-dot"></span><span id="hud-cloud-sync-text">LOCAL SAVE</span></div>
-      <div id="battle-toast-layer"></div>
-      <div id="arcade-pop-layer"></div>
-      <main id="screen-root"></main>
-      <div id="overlay-aux"></div>
-      <nav id="bottom-dock">
-        <button type="button" class="nav-btn" data-tab="shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 6h15l-1.5 9H7.5L6 6z"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>SHOP</button>
-        <button type="button" class="nav-btn" data-tab="index"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5"/></svg>INDEX</button>
-        <button type="button" class="nav-btn active" data-tab="battle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l2 6h6l-5 4 2 7-5-3-5 3 2-7-5-4h6z"/></svg>HOME</button>
-        <button type="button" class="nav-btn" data-tab="coop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>GROUP</button>
-        <button type="button" class="nav-btn" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>MAP</button>
-      </nav>
-      <div id="overlay-reality-warp" class="reality-warp-overlay"></div>
-      <div id="overlay-dialogue" class="dialogue-bubble"></div>
-      <div id="overlay-transaction-beam" class="transaction-beam"><div class="beam-line"></div><div class="beam-label" id="beam-label"></div></div>
-      <div id="overlay-card-lift"></div>
-      <div id="overlay-card-hero"></div>
-    </div>
-    <div id="overlay-auth-gate" class="overlay auth-gate-overlay"></div>
-    <div id="overlay-player-select" class="overlay"></div>
-    <div id="overlay-profile" class="overlay"><button type="button" class="overlay-backdrop" data-close="profile"></button><div class="overlay-panel halftone-panel glass-panel ink-border" id="profile-panel"></div></div>
-    <div id="overlay-settings" class="overlay"><button type="button" class="overlay-backdrop" data-close="settings"></button><div class="overlay-panel halftone-panel glass-panel ink-border p-4" id="settings-panel"></div></div>
-    <div id="overlay-pack-reveal" class="overlay"><button type="button" class="overlay-backdrop" data-close="pack"></button><div id="pack-panel"></div></div>
-    <div id="overlay-merge-lab" class="overlay"></div>
+  <div id="chronos-app">
+    <div class="atmosphere" aria-hidden="true"></div>
+    <div id="toast-layer"></div>
+    <div id="screen-root"></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="cloud-auth.js?v=5"></script>
   <script src="player-core.js?v=1"></script>
-  <script src="clan-system.js?v=2"></script>
-  <script src="catalog.js?v=35"></script>
-  <script src="game.js?v=74"></script>
+  <script src="chronos.js?v=1"></script>
 </body>
 </html>
