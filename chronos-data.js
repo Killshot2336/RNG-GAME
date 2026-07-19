@@ -1,10 +1,19 @@
 /* Chronos static content — tree, story, planets, recipes */
 window.ChronosData = {
   WARBAND: [
-    { id: 'aden', name: 'Aden', accent: '#3de0c5', portrait: '/public/art/portraits/aden.svg', blurb: 'Rift lead' },
-    { id: 'jamie', name: 'Jamie', accent: '#ff3d5a', portrait: '/public/art/portraits/jamie.svg', blurb: 'Bulwark steel' },
-    { id: 'edward', name: 'Edward', accent: '#e8c56a', portrait: '/public/art/portraits/edward.svg', blurb: 'Warden craft' }
+    { id: 'aden', name: 'Aden', accent: '#3de0c5', portrait: '/public/art/chronos/portrait-aden.png', blurb: 'Rift lead' },
+    { id: 'jamie', name: 'Jamie', accent: '#ff3d5a', portrait: '/public/art/chronos/portrait-jamie.png', blurb: 'Bulwark steel' },
+    { id: 'edward', name: 'Edward', accent: '#e8c56a', portrait: '/public/art/chronos/portrait-edward.png', blurb: 'Warden craft' }
   ],
+  ART: {
+    who: '/public/art/chronos/who-bg.png',
+    hub: '/public/art/chronos/hub-stage.png',
+    tower: '/public/art/chronos/tower-arena.png',
+    forge: '/public/art/chronos/forge-bg.png',
+    gate: '/public/art/chronos/gate-bg.png',
+    life: '/public/art/chronos/life-bg.png',
+    tree: '/public/art/chronos/tree-bg.png'
+  },
   ERAS: [
     { id: 'stone', name: 'STONE AGE', blurb: 'Bone spears. Fire rings. Survive the first night.', accent: '#c4a574', story: 'You hit dirt and ash. The Chronolith hums under a dead sky.' },
     { id: 'bronze', name: 'BRONZE AGE', blurb: 'Cast shields. Rally tribes against the swarm.', accent: '#cd7f32', story: 'Metal remembers the future. Tribes gather at your fire.' },

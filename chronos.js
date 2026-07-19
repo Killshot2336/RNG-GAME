@@ -930,8 +930,14 @@
   }
 
   /* ── Render ── */
+  function artUrl(key) {
+    return (D.ART && D.ART[key]) || '';
+  }
+
   function renderWho() {
     var h = '<div class="who-screen">';
+    h += '<div class="screen-art" style="background-image:url(\'' + artUrl('who') + '\')"></div>';
+    h += '<div class="screen-art-veil"></div>';
     h += '<div class="who-brand"><div class="mark">VOIDLINE</div><h1>CHRONOS</h1>';
     h += '<p>Three seats. One timeline. Syncs across your devices.</p></div>';
     h += '<div class="who-seats">';
@@ -970,6 +976,8 @@
     h += '<div class="hub-pilot-sub">' + esc(P.loadout.toUpperCase()) + ' · SP ' + P.skillPoints + '</div></div></button>';
     h += '<div class="hub-wallet">' + P.chrono + ' CHRONO<span>' + P.essence + ' ESS · ' + UI.syncLabel + '</span></div></div>';
     h += '<div class="hub-stage era-' + era.id + '">';
+    h += '<img class="hub-art" src="' + artUrl('hub') + '" alt="" draggable="false">';
+    h += '<div class="hub-art-shade"></div>';
     h += '<div class="hub-party">';
     WARBAND.forEach(function (p) {
       var on = WORLD.presence[p.id] && (Date.now() - WORLD.presence[p.id] < 5 * 60 * 1000);
@@ -977,15 +985,13 @@
     });
     h += '</div>';
     h += '<div class="hub-era-tag">' + esc(era.name) + '</div>';
-    h += '<div class="hub-aurora"></div><div class="hub-ground"></div><div class="hub-chronolith"></div>';
-    h += '<div class="hub-embers" aria-hidden="true"></div>';
     h += hotspot('hs-forge', 'forge', '⚒', 'FORGE');
     h += hotspot('hs-tower', 'tower', '▲', 'TOWER');
     h += hotspot('hs-tree', 'tree', '✦', 'TREE');
     h += hotspot('hs-gate', 'gate', '◎', 'GATE');
     h += hotspot('hs-era', 'era', '▣', 'ERAS');
-    h += hotspot('hs-life', 'life', '🎣', 'LIFE');
-    h += hotspot('hs-story', 'story', '📜', 'LORE');
+    h += hotspot('hs-life', 'life', '🌿', 'LIFE');
+    h += hotspot('hs-story', 'story', '◉', 'LORE');
     h += '</div>';
     if (WORLD.quest && !WORLD.quest.done) {
       h += '<div class="hub-quest">QUEST · ' + esc(WORLD.quest.name) + ' · ' + WORLD.quest.prog + '/' + WORLD.quest.target + '</div>';
@@ -1003,7 +1009,7 @@
     ['bulwark', 'rift', 'warden'].forEach(function (r) {
       h += '<button type="button" class="loadout-chip' + (P.loadout === r ? ' active' : '') + ' role-tag ' + r + '" data-action="loadout" data-id="' + r + '">' + r.toUpperCase() + '</button>';
     });
-    h += '</div><div class="panel-scroll"><div class="tree-canvas-wrap"><svg class="tree-svg" viewBox="0 0 600 620">';
+    h += '</div><div class="panel-scroll"><div class="tree-canvas-wrap" style="background-image:url(\'' + artUrl('tree') + '\')"><svg class="tree-svg" viewBox="0 0 600 620">';
     TREE.forEach(function (n) {
       n.req.forEach(function (r) {
         var p = nodeById(r);
@@ -1036,7 +1042,7 @@
     var h = '<div class="mode-screen"><div class="mode-head"><div>';
     h += '<h2 class="mode-title">FORGE</h2><p class="mode-sub">MERGE · RELICS · EXOTICS</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
-    h += '<div class="panel-scroll"><div class="forge-stage"><div class="forge-slots">';
+    h += '<div class="panel-scroll"><div class="forge-stage" style="background-image:url(\'' + artUrl('forge') + '\')"><div class="forge-stage-veil"></div><div class="forge-slots">';
     for (var i = 0; i < 2; i++) {
       var s = UI.forgeSlots[i];
       h += '<button type="button" class="forge-slot' + (s ? ' filled' : '') + '" data-action="clear-forge" data-id="' + i + '">' + (s ? esc(s) : 'SLOT') + '</button>';
@@ -1069,7 +1075,8 @@
     var t = UI.tower;
     if (!t) {
       var cov = roleCoverage();
-      var h0 = '<div class="mode-screen"><div class="mode-head"><div>';
+      var h0 = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('tower') + '\')"></div>';
+      h0 += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
       h0 += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub">ROLES · INFINITE UPS · CO-OP BOSS</p></div>';
       h0 += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
       h0 += '<div class="role-banner"><span class="role-tag ' + P.loadout + '">' + P.loadout.toUpperCase() + '</span>';
@@ -1090,7 +1097,8 @@
     var h = '<div class="mode-screen" id="tower-live"><div class="mode-head"><div>';
     h += '<h2 class="mode-title">CHRONOLITH</h2><p class="mode-sub" data-wave>' + (t.coopBoss ? 'CO-OP ' : '') + 'WAVE ' + t.wave + '</p></div>';
     h += '<button type="button" class="back-stone" data-action="flee-tower">✕</button></div>';
-    h += '<div class="tower-arena"><div class="tower-hud"><span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
+    h += '<div class="tower-arena" style="background-image:url(\'' + artUrl('tower') + '\')"><div class="tower-arena-veil"></div>';
+    h += '<div class="tower-hud"><span data-hp>' + Math.ceil(t.coreHp) + ' / ' + t.coreMax + '</span>';
     h += '<span data-gates>B0 R0 W0</span><span data-combo></span></div>';
     h += '<div class="enemy-layer"></div><div class="tower-core"></div>';
     h += '<div class="tower-core-hp"><i style="width:' + (t.coreHp / t.coreMax * 100) + '%"></i></div></div>';
@@ -1103,7 +1111,8 @@
   }
 
   function renderGate() {
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
     h += '<h2 class="mode-title">STARGATE</h2><p class="mode-sub">RUN THE EXTRACT · BRING EXOTICS HOME</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
     h += '<div class="panel-scroll planet-grid">';
@@ -1123,10 +1132,12 @@
 
   function renderExtract() {
     var pl = UI.extract.planet;
-    var h = '<div class="mode-screen extract-screen" style="--accent:' + pl.accent + '">';
+    var h = '<div class="mode-screen extract-screen mode-has-art" style="--accent:' + pl.accent + '">';
+    h += '<div class="screen-art" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div>';
     h += '<h2 class="mode-title">' + esc(pl.name) + '</h2>';
     h += '<p class="mode-sub">' + esc(pl.verb) + ' — survive the hazard</p>';
-    h += '<div class="extract-viz"></div>';
+    h += '<div class="extract-viz" style="background-image:url(\'' + artUrl('gate') + '\')"></div>';
     h += '<div class="extract-bar"><i style="width:' + UI.extract.progress + '%"></i></div>';
     h += '<p class="empty-note">Hazards ' + UI.extract.hazards + '/4</p></div>';
     return h;
@@ -1151,11 +1162,12 @@
   }
 
   function renderLife() {
-    var h = '<div class="mode-screen"><div class="mode-head"><div>';
+    var h = '<div class="mode-screen mode-has-art"><div class="screen-art" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
+    h += '<div class="screen-art-veil heavy"></div><div class="mode-head"><div>';
     h += '<h2 class="mode-title">SLOW LIFE</h2><p class="mode-sub">FISH · GARDEN · BREATHE</p></div>';
     h += '<button type="button" class="back-stone" data-action="mode" data-id="hub">✕</button></div>';
     h += '<div class="panel-scroll">';
-    h += '<div class="life-card fish-card"><div class="life-art fish-art' + (UI.fishCast ? ' casting' : '') + '"></div>';
+    h += '<div class="life-card fish-card"><div class="life-art fish-art' + (UI.fishCast ? ' casting' : '') + '" style="background-image:url(\'' + artUrl('life') + '\')"></div>';
     h += '<button type="button" class="stone-btn" data-action="fish"' + (UI.fishCast ? ' disabled' : '') + '>' + (UI.fishCast ? 'WAITING…' : 'CAST LINE') + '</button>';
     h += '<p class="mode-sub">Caught ' + P.fishCaught + '</p></div>';
     h += '<div class="life-card"><p class="mode-sub">GARDEN PLOTS</p><div class="garden-grid">';
