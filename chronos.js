@@ -949,36 +949,96 @@
   function safeTop() { return 0; }
   function safeBottom() { return 0; }
 
+  function drawStoneCta(x, y, w, h, label) {
+    var pulse = 1 + Math.sin(G.time * 2.4) * 0.012;
+    var squash = G.ctaSquash || 1;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.scale(pulse * squash, (2 - pulse) * squash);
+    ctx.translate(-(x + w / 2), -(y + h / 2));
+    // carved chronolith slab — not a web button / banner asset
+    var g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, '#2a221c');
+    g.addColorStop(0.45, '#141014');
+    g.addColorStop(1, '#0a080a');
+    roundRect(x, y, w, h, 10);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(212,160,90,0.65)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // inner cyan seam
+    ctx.strokeStyle = 'rgba(94,224,208,0.35)';
+    ctx.lineWidth = 1;
+    roundRect(x + 5, y + 5, w - 10, h - 10, 7);
+    ctx.stroke();
+    // soft core glow behind label
+    var cg = ctx.createRadialGradient(x + w / 2, y + h / 2, 4, x + w / 2, y + h / 2, w * 0.35);
+    cg.addColorStop(0, 'rgba(94,224,208,0.18)');
+    cg.addColorStop(1, 'rgba(94,224,208,0)');
+    ctx.fillStyle = cg;
+    ctx.fillRect(x, y, w, h);
+    text(label, x + w / 2, y + h * 0.62, {
+      align: 'center', size: Math.min(24, Math.floor(h * 0.36)), color: TEXT,
+      display: true, glow: true, glowColor: CORE_DIM
+    });
+    ctx.restore();
+  }
+
+  function drawWaypoint(cx, cy, label, hot) {
+    var bob = Math.sin(G.time * 2.2 + cx * 0.02) * 2;
+    cy += bob;
+    // pin
+    ctx.beginPath();
+    ctx.arc(cx, cy, hot ? 6 : 5, 0, Math.PI * 2);
+    ctx.fillStyle = hot ? CORE : COPPER;
+    ctx.shadowColor = hot ? CORE_DIM : COPPER_DIM;
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 11, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(242,235,224,0.28)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    text(label, cx, cy + 22, {
+      align: 'center', size: 12, color: TEXT, shadow: true, blur: 6
+    });
+  }
+
   function drawHub() {
     var w = warband(G.activeId);
-    var breathe = 1 + Math.sin(G.time * 0.28) * 0.016;
-    var drift = Math.sin(G.time * 0.12) * 0.018;
+    var breathe = 1 + Math.sin(G.time * 0.28) * 0.014;
+    var drift = Math.sin(G.time * 0.11) * 0.016;
 
-    // place first — almost no UI chrome
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(breathe, breathe);
-    ctx.translate(-W / 2 + drift * 28, -H / 2);
-    coverImg('hub', -W * 0.04, -H * 0.02, W * 1.08, H * 1.04, 0.5 + drift, 0.38);
+    ctx.translate(-W / 2 + drift * 22, -H / 2);
+    coverImg('hub', -W * 0.03, -H * 0.02, W * 1.06, H * 1.04, 0.5 + drift, 0.42);
     ctx.restore();
 
-    drawEmbers(0.7);
+    drawEmbers(0.85);
 
-    // thin readability only at edges
-    var top = ctx.createLinearGradient(0, 0, 0, 90);
-    top.addColorStop(0, 'rgba(6,5,8,0.55)');
+    // edge veils only
+    var top = ctx.createLinearGradient(0, 0, 0, 100);
+    top.addColorStop(0, 'rgba(6,5,8,0.6)');
     top.addColorStop(1, 'rgba(6,5,8,0)');
     ctx.fillStyle = top;
-    ctx.fillRect(0, 0, W, 90);
+    ctx.fillRect(0, 0, W, 100);
 
-    var bot = ctx.createLinearGradient(0, H * 0.72, 0, H);
+    var bot = ctx.createLinearGradient(0, H * 0.68, 0, H);
     bot.addColorStop(0, 'rgba(6,5,8,0)');
-    bot.addColorStop(1, 'rgba(6,5,8,0.75)');
+    bot.addColorStop(1, 'rgba(6,5,8,0.8)');
     ctx.fillStyle = bot;
-    ctx.fillRect(0, H * 0.72, W, H * 0.28);
+    ctx.fillRect(0, H * 0.68, W, H * 0.32);
 
-    // pilot
-    var px = 14, py = 14, pr = 30;
+    // pilot — framed stone circle
+    var px = 16, py = 18, pr = 28;
+    var fr = img('uiFrame');
+    if (fr && fr.complete && fr.naturalWidth) {
+      ctx.drawImage(fr, px - 8, py - 8, pr * 2 + 16, pr * 2 + 16);
+    }
     ctx.save();
     ctx.beginPath();
     ctx.arc(px + pr, py + pr, pr, 0, Math.PI * 2);
@@ -992,94 +1052,64 @@
     ctx.stroke();
     hit('who', px, py, pr * 2, pr * 2);
 
+    text('CHRONO', W - 18, 28, { align: 'right', size: 11, color: TEXT_DIM, shadow: false });
     var chronoShow = Math.round(G.chronoDisp || G.P.chrono);
-    text(String(chronoShow), W - 16, 44, {
-      align: 'right', size: 32, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
+    text(String(chronoShow), W - 18, 56, {
+      align: 'right', size: 30, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
     });
 
+    // primary action — stone slab CTA
     var campT = G.campT || 0;
-    var bw = Math.min(W * 0.88, 360), bh = 76;
+    var bw = Math.min(W * 0.78, 300), bh = 64;
     var bx = (W - bw) / 2;
-    var by = lerp(H - 140, H - 210, campT);
+    var by = lerp(H - 128, H - 248, campT);
     var pop = G.enterPop > 0 ? G.enterPop : 1;
     ctx.save();
     ctx.translate(W / 2, by + bh / 2);
     ctx.scale(pop, pop);
     ctx.translate(-W / 2, -(by + bh / 2));
-    drawBattleCta(bx, by, bw, bh, 'BATTLE');
+    drawStoneCta(bx, by, bw, bh, 'ENTER THE HOLD');
     ctx.restore();
     hit('enter', bx, by, bw, bh);
 
-    var sealY = H - 48;
-    var sealR = 16 + Math.sin(G.time * 3) * 1.5;
-    ctx.beginPath();
-    ctx.arc(W / 2, sealY, sealR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(10,8,6,0.7)';
-    ctx.fill();
-    ctx.strokeStyle = COPPER;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    text(campT > 0.5 ? '∧' : '∨', W / 2, sealY + 6, {
-      align: 'center', size: 14, color: COPPER, shadow: false
-    });
-    hit('camp', W / 2 - 28, sealY - 28, 56, 56);
+    // chronolith tap zone
+    hit('mode', W * 0.32, H * 0.2, W * 0.36, H * 0.35, 'tower');
 
+    // camp toggle — text, not an icon badge
+    var sealY = H - 36;
+    text(campT > 0.5 ? 'CLOSE MAP' : 'OPEN MAP', W / 2, sealY, {
+      align: 'center', size: 12, color: COPPER, glow: true, glowColor: COPPER_DIM
+    });
+    hit('camp', W / 2 - 70, sealY - 22, 140, 36);
+
+    // waypoints — place names + pins, zero icon sheet
     if (campT > 0.02) {
       var spots = [
-        { id: 'forge', med: 'forge' },
-        { id: 'tree', med: 'tree' },
-        { id: 'gate', med: 'gate' },
-        { id: 'era', med: 'era' },
-        { id: 'life', med: 'life' },
-        { id: 'story', med: 'story' }
+        { id: 'forge', label: 'FORGE', x: 0.18, y: 0.74 },
+        { id: 'tree', label: 'TREE', x: 0.38, y: 0.7 },
+        { id: 'gate', label: 'GATE', x: 0.62, y: 0.7 },
+        { id: 'era', label: 'ERA', x: 0.82, y: 0.74 },
+        { id: 'life', label: 'LIFE', x: 0.28, y: 0.82 },
+        { id: 'story', label: 'LORE', x: 0.72, y: 0.82 }
       ];
-      var total = spots.length;
       spots.forEach(function (s, i) {
-        var u = (i / (total - 1)) - 0.5;
-        var rise = easeOutBack(Math.min(1, campT * 1.2 - i * 0.06));
-        var cx = W / 2 + u * Math.min(W * 0.82, 320) * campT;
-        var cy = lerp(H + 40, H - 96 + Math.abs(u) * 10, rise);
-        var size = 44 * (0.7 + 0.3 * rise);
+        var rise = easeOutBack(Math.min(1, campT * 1.25 - i * 0.05));
+        if (rise <= 0) return;
+        var cx = W * s.x;
+        var cy = lerp(H + 30, H * s.y, rise);
         ctx.globalAlpha = Math.max(0, rise);
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.beginPath();
-        ctx.arc(cx, cy + 18, size * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-        drawMedallion(s.med, cx - size / 2, cy - size / 2, size);
+        drawWaypoint(cx, cy, s.label, false);
         ctx.globalAlpha = 1;
-        if (rise > 0.7) hit('mode', cx - size / 2 - 4, cy - size / 2 - 4, size + 8, size + 8, s.id);
+        if (rise > 0.65) hit('mode', cx - 36, cy - 16, 72, 48, s.id);
       });
     }
-
-    // tap the Chronolith monolith to enter tower
-    hit('mode', W * 0.35, H * 0.22, W * 0.3, H * 0.32, 'tower');
 
     if (G.storyOpen != null) drawStoryModal();
   }
 
   function drawMedallion(med, x, y, s) {
-    var im = img('dock');
-    var cx = x + s / 2, cy = y + s / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
-    ctx.clip();
-    if (!im || !im.complete) {
-      ctx.fillStyle = '#1a1410';
-      ctx.fillRect(x, y, s, s);
-    } else {
-      var map = { forge: [0, 0], tree: [1, 0], tower: [2, 0], era: [0, 1], life: [1, 1], story: [2, 1], gate: [2, 0] };
-      var p = map[med] || [0, 0];
-      var sw = im.naturalWidth / 3, sh = im.naturalHeight / 2;
-      if (med === 'gate') ctx.filter = 'hue-rotate(95deg) saturate(1.15)';
-      ctx.drawImage(im, p[0] * sw, p[1] * sh, sw, sh, x, y, s, s);
-    }
-    ctx.restore();
-    ctx.beginPath();
-    ctx.arc(cx, cy, s / 2 - 0.5, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212,160,90,0.55)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // legacy no-op kept for safety — hub no longer uses icon sheets
+    drawWaypoint(x + s / 2, y + s / 2, '', false);
   }
 
   function drawStoryModal() {

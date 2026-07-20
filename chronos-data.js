@@ -7,7 +7,7 @@ window.ChronosData = {
   ],
   ART: {
     who: '/public/art/chronos/who-bg.png',
-    hub: '/public/art/chronos/hub-stage.png',
+    hub: '/public/art/chronos/hub-stage.png?v=18',
     tower: '/public/art/chronos/tower-arena.png',
     forge: '/public/art/chronos/forge-bg.png',
     gate: '/public/art/chronos/gate-bg.png',
