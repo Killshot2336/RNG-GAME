@@ -70,7 +70,12 @@
     camKickY: 0,
     camZoom: 1,
     introT: 0,
-    introDone: false
+    introDone: false,
+    hoverKey: null,
+    pressKey: null,
+    hoverSfxKey: null,
+    ripples: [],
+    scenePop: 1
   };
 
   var canvas, ctx, W = 390, H = 844, dpr = 1;
@@ -181,7 +186,10 @@
     }
     G.fadeScene = null;
     G.fadeTarget = 0;
+    G.scenePop = 0.86;
+    tweenTo(G, 'scenePop', 1, 0.4, easeOutBack);
     spawnParts(W * 0.5, H * 0.15, 8, COPPER);
+    spawnRipple(W * 0.5, H * 0.2, COPPER);
   }
 
   function slideWho(dir) {
@@ -338,6 +346,119 @@
     return null;
   }
 
+  function hitKey(id, data) {
+    return id + ':' + (data == null ? '' : String(data));
+  }
+
+  function pointerIn(x, y, w, h) {
+    return G.pointer.x >= x && G.pointer.x <= x + w && G.pointer.y >= y && G.pointer.y <= y + h;
+  }
+
+  function pointerInCircle(cx, cy, r) {
+    return Math.hypot(G.pointer.x - cx, G.pointer.y - cy) <= r;
+  }
+
+  function isHot(id, data) {
+    return G.hoverKey === hitKey(id, data);
+  }
+
+  function isPressed(id, data) {
+    return G.pointer.down && G.pressKey === hitKey(id, data);
+  }
+
+  function interactScale(id, data) {
+    if (isPressed(id, data)) return 0.9;
+    if (isHot(id, data)) return 1.07 + Math.sin(G.time * 6) * 0.012;
+    return 1;
+  }
+
+  function refreshHover() {
+    var h = hitAt(G.pointer.x, G.pointer.y);
+    var next = h ? hitKey(h.id, h.data) : null;
+    if (next && next !== G.hoverSfxKey && !G.pointer.down) {
+      sfx('ui');
+      buzz(4);
+    }
+    G.hoverSfxKey = next;
+    G.hoverKey = next;
+  }
+
+  function spawnRipple(x, y, color) {
+    G.ripples.push({
+      x: x, y: y,
+      life: 0.45,
+      max: 0.45,
+      color: color || CORE
+    });
+  }
+
+  function updateRipples(dt) {
+    G.ripples = G.ripples.filter(function (r) {
+      r.life -= dt;
+      return r.life > 0;
+    });
+  }
+
+  function drawRipples() {
+    G.ripples.forEach(function (r) {
+      var u = 1 - r.life / r.max;
+      var a = (1 - u) * 0.7;
+      var rad = 8 + u * 52;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 2.5 - u * 1.5;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, rad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = a * 0.35;
+      ctx.fillStyle = r.color;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, rad * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function beginInteract(cx, cy, scale) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+  }
+
+  function endInteract() {
+    ctx.restore();
+  }
+
+  function drawFocusAura(cx, cy, r, hot, accent) {
+    if (!hot && !accent) return;
+    var pulse = 1 + Math.sin(G.time * 5) * 0.08;
+    var rad = r * pulse;
+    var grd = ctx.createRadialGradient(cx, cy, 2, cx, cy, rad);
+    grd.addColorStop(0, hot ? 'rgba(94,224,208,0.35)' : 'rgba(212,160,90,0.2)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.fill();
+    if (hot) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(94,224,208,' + (0.45 + Math.sin(G.time * 7) * 0.2) + ')';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  function tapFeedback(h) {
+    if (!h) return;
+    spawnRipple(h.x + h.w / 2, h.y + h.h / 2, CORE);
+    sfx('ui');
+    buzz(10);
+    G.flash = Math.max(G.flash, 0.08);
+  }
+
   function img(key) { return images[key] || null; }
 
   function drawImg(key, x, y, w, h, alpha) {
@@ -411,24 +532,31 @@
   }
 
   function closeSeal(x, y) {
+    var hot = pointerInCircle(x, y, 22);
+    var press = G.pointer.down && hot && (G.pressKey === 'hub:' || G.pressKey === 'flee:');
+    var sc = press ? 0.88 : hot ? 1.1 : 1;
+    beginInteract(x, y, sc);
+    if (hot) drawFocusAura(x, y, 26, true);
     ctx.beginPath();
     ctx.arc(x, y, 18, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(6,5,8,0.65)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212,160,90,0.5)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = hot ? CORE : 'rgba(212,160,90,0.5)';
+    ctx.lineWidth = hot ? 2.2 : 1.5;
     ctx.stroke();
     text('✕', x, y + 6, { align: 'center', size: 15, color: TEXT, shadow: false });
+    endInteract();
   }
 
-  function drawBattleCta(x, y, w, h, label) {
+  function drawBattleCta(x, y, w, h, label, hitId, hitData) {
+    var hot = hitId ? isHot(hitId, hitData) : pointerIn(x, y, w, h);
+    var press = hitId ? isPressed(hitId, hitData) : (G.pointer.down && pointerIn(x, y, w, h));
     var pulse = 1 + Math.sin(G.time * 2.6) * 0.018;
-    var squash = G.ctaSquash || 1;
+    var squash = (G.ctaSquash || 1) * (press ? 0.92 : hot ? 1.05 : 1);
     var scale = pulse * squash;
-    ctx.save();
-    ctx.translate(x + w / 2, y + h / 2);
-    ctx.scale(scale, 2 - scale);
-    ctx.translate(-(x + w / 2), -(y + h / 2));
+    var cx = x + w / 2, cy = y + h / 2;
+    beginInteract(cx, cy, scale);
+    if (hot) drawFocusAura(cx, cy, Math.max(w, h) * 0.55, true);
     var im = img('uiBtn');
     if (im && im.complete && im.naturalWidth) {
       ctx.drawImage(im, x, y, w, h);
@@ -441,44 +569,53 @@
       ctx.fillStyle = g;
       ctx.fill();
     }
-    // shimmer sweep
     var shx = x + ((G.time * 90) % (w + 80)) - 40;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillStyle = 'rgba(255,255,255,' + (hot ? 0.2 : 0.12) + ')';
     ctx.fillRect(shx, y + 6, 28, h - 12);
     text(label, x + w / 2, y + h * 0.58, {
       align: 'center', size: Math.min(26, Math.floor(h * 0.38)), color: '#1a1008',
       shadow: false, weight: '800', display: true
     });
-    ctx.restore();
+    endInteract();
   }
 
   function drawPlateBtn(x, y, w, h, label, opts) {
     opts = opts || {};
+    var hot = pointerIn(x, y, w, h);
+    var sc = (G.pointer.down && hot) ? 0.94 : hot ? 1.05 : 1;
+    beginInteract(x + w / 2, y + h / 2, sc);
+    if (hot) drawFocusAura(x + w / 2, y + h / 2, Math.max(w, h) * 0.5, true);
     softPlate(x, y, w, h, opts.r == null ? 12 : opts.r);
     text(label, x + w / 2, y + h * 0.62, {
       align: 'center',
       size: opts.size || 14,
       color: opts.color || COPPER,
-      glow: !!opts.glow,
+      glow: !!opts.glow || hot,
       glowColor: COPPER_DIM,
       weight: '700'
     });
+    endInteract();
   }
 
-  function runeChip(x, y, s, label, accent) {
+  function runeChip(x, y, s, label, accent, hot) {
+    var sc = hot ? 1.08 + Math.sin(G.time * 6) * 0.02 : 1;
+    if (hot && G.pointer.down) sc = 0.9;
+    beginInteract(x, y, sc);
+    if (hot) drawFocusAura(x, y, s * 0.75, true, accent);
     ctx.beginPath();
     ctx.arc(x, y, s / 2, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(8,6,10,0.7)';
     ctx.fill();
-    ctx.strokeStyle = accent || COPPER;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = accent || COPPER_DIM;
-    ctx.shadowBlur = 8;
+    ctx.strokeStyle = hot ? CORE : (accent || COPPER);
+    ctx.lineWidth = hot ? 2.8 : 2;
+    ctx.shadowColor = hot ? CORE_DIM : (accent || COPPER_DIM);
+    ctx.shadowBlur = hot ? 14 : 8;
     ctx.stroke();
     ctx.shadowBlur = 0;
     if (label) {
       text(label, x, y + 5, { align: 'center', size: Math.max(10, s * 0.22), color: TEXT, shadow: false });
     }
+    endInteract();
   }
 
   function fillPanel(x, y, w, h) { softPlate(x, y, w, h, 14); }
@@ -1126,8 +1263,16 @@
     });
 
     var cueA = 0.35 + Math.sin(t * 3) * 0.2;
-    text('‹', 28, H * 0.5, { align: 'center', size: 42, color: 'rgba(242,235,224,' + cueA + ')', shadow: false });
-    text('›', W - 28, H * 0.5, { align: 'center', size: 42, color: 'rgba(242,235,224,' + cueA + ')', shadow: false });
+    var prevHot = isHot('who-prev') || pointerIn(0, H * 0.2, W * 0.28, H * 0.45);
+    var nextHot = isHot('who-next') || pointerIn(W * 0.72, H * 0.2, W * 0.28, H * 0.45);
+    text('‹', 28, H * 0.5, {
+      align: 'center', size: prevHot ? 48 : 42,
+      color: 'rgba(242,235,224,' + (prevHot ? 0.9 : cueA) + ')', shadow: false
+    });
+    text('›', W - 28, H * 0.5, {
+      align: 'center', size: nextHot ? 48 : 42,
+      color: 'rgba(242,235,224,' + (nextHot ? 0.9 : cueA) + ')', shadow: false
+    });
     hit('who-prev', 0, H * 0.2, W * 0.28, H * 0.45);
     hit('who-next', W * 0.72, H * 0.2, W * 0.28, H * 0.45);
 
@@ -1153,7 +1298,7 @@
 
     var bw = Math.min(W * 0.72, 280), bh = 64;
     var bx = (W - bw) / 2, by = H - 110;
-    drawBattleCta(bx, by, bw, bh, 'DEPLOY');
+    drawBattleCta(bx, by, bw, bh, 'DEPLOY', 'pick', w.id);
     hit('pick', bx, by, bw, bh, w.id);
 
     drawEmbers(0.55);
@@ -1191,13 +1336,14 @@
   function safeTop() { return 0; }
   function safeBottom() { return 0; }
 
-  function drawStoneCta(x, y, w, h, label) {
+  function drawStoneCta(x, y, w, h, label, hitId, hitData) {
+    var hot = hitId ? isHot(hitId, hitData) : pointerIn(x, y, w, h);
+    var press = hitId ? isPressed(hitId, hitData) : (G.pointer.down && pointerIn(x, y, w, h));
     var pulse = 1 + Math.sin(G.time * 2.4) * 0.012;
-    var squash = G.ctaSquash || 1;
-    ctx.save();
-    ctx.translate(x + w / 2, y + h / 2);
-    ctx.scale(pulse * squash, (2 - pulse) * squash);
-    ctx.translate(-(x + w / 2), -(y + h / 2));
+    var squash = (G.ctaSquash || 1) * (press ? 0.92 : hot ? 1.05 : 1);
+    var cx = x + w / 2, cy = y + h / 2;
+    beginInteract(cx, cy, pulse * squash);
+    if (hot) drawFocusAura(cx, cy, Math.max(w, h) * 0.55, true);
     var g = ctx.createLinearGradient(x, y, x, y + h);
     g.addColorStop(0, '#2a221c');
     g.addColorStop(0.45, '#141014');
@@ -1205,15 +1351,15 @@
     roundRect(x, y, w, h, 10);
     ctx.fillStyle = g;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(212,160,90,0.65)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = hot ? CORE : 'rgba(212,160,90,0.65)';
+    ctx.lineWidth = hot ? 2.5 : 2;
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(94,224,208,0.35)';
+    ctx.strokeStyle = 'rgba(94,224,208,' + (hot ? 0.55 : 0.35) + ')';
     ctx.lineWidth = 1;
     roundRect(x + 5, y + 5, w - 10, h - 10, 7);
     ctx.stroke();
-    var cg = ctx.createRadialGradient(x + w / 2, y + h / 2, 4, x + w / 2, y + h / 2, w * 0.35);
-    cg.addColorStop(0, 'rgba(94,224,208,0.18)');
+    var cg = ctx.createRadialGradient(cx, cy, 4, cx, cy, w * 0.35);
+    cg.addColorStop(0, hot ? 'rgba(94,224,208,0.28)' : 'rgba(94,224,208,0.18)');
     cg.addColorStop(1, 'rgba(94,224,208,0)');
     ctx.fillStyle = cg;
     ctx.fillRect(x, y, w, h);
@@ -1221,7 +1367,7 @@
       align: 'center', size: Math.min(22, Math.floor(h * 0.34)), color: TEXT,
       display: true, glow: true, glowColor: CORE_DIM
     });
-    ctx.restore();
+    endInteract();
   }
 
   function hubWorldRect() {
@@ -1253,17 +1399,21 @@
   }
 
   function drawPlaceMarker(place, sx, sy, focused) {
+    var key = hitKey('mode', place.id);
+    var press = G.pointer.down && G.pressKey === key;
     var bob = Math.sin(G.time * 2 + place.wx * 10) * (focused ? 3 : 2);
     sy += bob;
-    var r = (place.r || 48) * (focused ? 1.08 : 0.92);
+    var r = (place.r || 48) * (focused ? 1.08 : 0.92) * (press ? 0.9 : 1);
+    beginInteract(sx, sy, press ? 0.92 : focused ? 1.06 : 1);
     // soft ground glow
     var grd = ctx.createRadialGradient(sx, sy, 4, sx, sy, r);
-    grd.addColorStop(0, focused ? 'rgba(94,224,208,0.28)' : 'rgba(212,160,90,0.16)');
+    grd.addColorStop(0, focused ? 'rgba(94,224,208,0.32)' : 'rgba(212,160,90,0.16)');
     grd.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = grd;
     ctx.beginPath();
     ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();
+    if (focused) drawFocusAura(sx, sy, r * 0.7, true);
     // stone ring
     ctx.beginPath();
     ctx.arc(sx, sy, focused ? 14 : 10, 0, Math.PI * 2);
@@ -1272,7 +1422,7 @@
     ctx.strokeStyle = focused ? CORE : COPPER;
     ctx.lineWidth = focused ? 2.5 : 1.5;
     ctx.shadowColor = focused ? CORE_DIM : COPPER_DIM;
-    ctx.shadowBlur = focused ? 14 : 8;
+    ctx.shadowBlur = focused ? 16 : 8;
     ctx.stroke();
     ctx.shadowBlur = 0;
     // core pip
@@ -1292,7 +1442,14 @@
       text(place.hint, sx, sy + 50, {
         align: 'center', size: 11, color: TEXT_DIM, shadow: false
       });
+      // interactive cue ring
+      ctx.beginPath();
+      ctx.arc(sx, sy, 22 + Math.sin(G.time * 4) * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(94,224,208,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
+    endInteract();
   }
 
   function drawHub() {
@@ -1341,6 +1498,10 @@
     ctx.fillRect(0, H * 0.78, W, H * 0.22);
 
     var px = 16, py = 18, pr = 28;
+    var whoHot = isHot('who') || pointerInCircle(px + pr, py + pr, pr + 6);
+    var whoSc = isPressed('who') ? 0.9 : whoHot ? 1.08 : 1;
+    beginInteract(px + pr, py + pr, whoSc);
+    if (whoHot) drawFocusAura(px + pr, py + pr, pr + 10, true);
     var fr = img('uiFrame');
     if (fr && fr.complete && fr.naturalWidth) {
       ctx.drawImage(fr, px - 8, py - 8, pr * 2 + 16, pr * 2 + 16);
@@ -1353,9 +1514,10 @@
     ctx.restore();
     ctx.beginPath();
     ctx.arc(px + pr, py + pr, pr + 2, 0, Math.PI * 2);
-    ctx.strokeStyle = w.accent || CORE;
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = whoHot ? CORE : (w.accent || CORE);
+    ctx.lineWidth = whoHot ? 4 : 3;
     ctx.stroke();
+    endInteract();
     hit('who', px, py, pr * 2, pr * 2);
 
     text('CHRONO', W - 18, 28, { align: 'right', size: 11, color: TEXT_DIM, shadow: false });
@@ -1366,12 +1528,12 @@
     // one diegetic battle slab — always available
     var bw = Math.min(W * 0.78, 300), bh = 60;
     var bx = (W - bw) / 2, by = H - 108;
-    var pop = G.enterPop > 0 ? G.enterPop : 1;
+    var pop = (G.enterPop > 0 ? G.enterPop : 1) * (G.scenePop || 1);
     ctx.save();
     ctx.translate(W / 2, by + bh / 2);
     ctx.scale(pop, pop);
     ctx.translate(-W / 2, -(by + bh / 2));
-    drawStoneCta(bx, by, bw, bh, 'ENTER THE HOLD');
+    drawStoneCta(bx, by, bw, bh, 'ENTER THE HOLD', 'enter');
     ctx.restore();
     hit('enter', bx, by, bw, bh);
 
@@ -1394,7 +1556,7 @@
     });
     wrapText(ch.body, W / 2, H * 0.42, W * 0.78, 15, TEXT_DIM);
     var bx = (W - 200) / 2, by = H * 0.72;
-    drawBattleCta(bx, by, 200, 56, 'CONTINUE');
+    drawBattleCta(bx, by, 200, 56, 'CONTINUE', 'dismiss-story');
     hit('dismiss-story', bx, by, 200, 56);
   }
 
@@ -1649,7 +1811,7 @@
         var ucy = H * 0.42 + Math.sin(ang) * ringR * 0.85;
         var lv = G.P.towerUp[u.id] || 0;
         var cost = Math.floor(u.base * Math.pow(1.38, lv));
-        runeChip(ucx, ucy, 64, String(lv), COPPER);
+        runeChip(ucx, ucy, 64, String(lv), COPPER, isHot('tower-up', u.id) || pointerInCircle(ucx, ucy, 36));
         text(u.name, ucx, ucy + 48, { align: 'center', size: 11, color: TEXT_DIM, shadow: false });
         text(String(cost), ucx, ucy + 5, { align: 'center', size: 12, color: COPPER, shadow: false });
         hit('tower-up', ucx - 32, ucy - 32, 64, 64, u.id);
@@ -1657,9 +1819,12 @@
 
       var bw = Math.min(W * 0.84, 340), bh = 70;
       var bx = (W - bw) / 2, by = H - 168;
-      drawBattleCta(bx, by, bw, bh, 'DEPLOY');
+      drawBattleCta(bx, by, bw, bh, 'DEPLOY', 'start-tower');
       hit('start-tower', bx, by, bw, bh);
-      text('CO-OP BOSS', W / 2, by + 96, { align: 'center', size: 14, color: CORE, glow: true });
+      var coopHot = isHot('start-coop') || pointerIn(W / 2 - 80, by + 78, 160, 36);
+      text('CO-OP BOSS', W / 2, by + 96, {
+        align: 'center', size: 14, color: CORE, glow: true, glowColor: coopHot ? CORE_DIM : undefined
+      });
       hit('start-coop', W / 2 - 80, by + 78, 160, 36);
       return;
     }
@@ -1730,7 +1895,7 @@
     var ay = H - 120;
     keys.forEach(function (k, i) {
       var ax = ax0 + i * (aw + gap);
-      drawAbilityIcon(i, ax, ay, aw);
+      drawAbilityIcon(i, ax, ay, aw, k);
       var cd = t.cds[k];
       text(abl[i], ax + aw / 2, ay + aw + 14, { align: 'center', size: 11, color: TEXT, shadow: false });
       if (cd > 0) {
@@ -1742,9 +1907,14 @@
     });
   }
 
-  function drawAbilityIcon(index, x, y, s) {
-    var im = img('abilities');
+  function drawAbilityIcon(index, x, y, s, slot) {
+    var hot = slot ? (isHot('ability', slot) || pointerIn(x, y, s, s + 28)) : pointerIn(x, y, s, s);
+    var press = slot && isPressed('ability', slot);
     var cx = x + s / 2, cy = y + s / 2;
+    var sc = press ? 0.88 : hot ? 1.1 : 1;
+    beginInteract(cx, cy, sc);
+    if (hot) drawFocusAura(cx, cy, s * 0.7, true);
+    var im = img('abilities');
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, s / 2, 0, Math.PI * 2);
@@ -1759,9 +1929,10 @@
     ctx.restore();
     ctx.beginPath();
     ctx.arc(cx, cy, s / 2 - 1, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(212,160,90,0.55)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = hot ? CORE : 'rgba(212,160,90,0.55)';
+    ctx.lineWidth = hot ? 2.8 : 2;
     ctx.stroke();
+    endInteract();
   }
 
   function drawMenuShell(title, sub) {
@@ -1799,13 +1970,14 @@
     // two crucibles
     for (var i = 0; i < 2; i++) {
       var sx = W * (0.32 + i * 0.36), sy = H * 0.28;
-      runeChip(sx, sy, 90, G.forge[i] ? '' : '?', G.forge[i] ? CORE : 'rgba(212,160,90,0.35)');
+      var slotHot = isHot('clear-forge', String(i)) || pointerInCircle(sx, sy, 50);
+      runeChip(sx, sy, 90, G.forge[i] ? '' : '?', G.forge[i] ? CORE : 'rgba(212,160,90,0.35)', slotHot);
       if (G.forge[i]) text(G.forge[i].toUpperCase(), sx, sy + 6, { align: 'center', size: 12, color: CORE, shadow: false });
       hit('clear-forge', sx - 45, sy - 45, 90, 90, String(i));
     }
     text('+', W / 2, H * 0.28 + 8, { align: 'center', size: 28, color: TEXT_DIM, shadow: false });
     var bw = Math.min(W * 0.7, 260), bh = 58;
-    drawBattleCta((W - bw) / 2, H * 0.4, bw, bh, 'FUSE');
+    drawBattleCta((W - bw) / 2, H * 0.4, bw, bh, 'FUSE', 'merge');
     hit('merge', (W - bw) / 2, H * 0.4, bw, bh);
 
     var mats = SHARDS.filter(function (sh) { return (G.P.shards[sh.id] || 0) > 0; });
@@ -1817,7 +1989,8 @@
       if (cols === 1) cx = W / 2;
       var cy = H * 0.58 + row * 78;
       var q = G.P.shards[sh.id] || 0;
-      runeChip(cx, cy, 56, sh.icon, COPPER);
+      var matHot = isHot('forge-add', sh.id) || pointerInCircle(cx, cy, 36);
+      runeChip(cx, cy, 56, sh.icon, COPPER, matHot);
       text(sh.name, cx, cy + 42, { align: 'center', size: 11, color: TEXT, shadow: false });
       text('x' + q, cx, cy + 56, { align: 'center', size: 11, color: COPPER, shadow: false });
       hit('forge-add', cx - 32, cy - 32, 64, 70, sh.id);
@@ -1829,8 +2002,9 @@
     ['bulwark', 'rift', 'warden'].forEach(function (r, i) {
       var bx = W * 0.2 + i * W * 0.3;
       var on = G.P.loadout === r;
-      runeChip(bx, 108, on ? 52 : 44, r.slice(0, 1).toUpperCase(), on ? CORE : 'rgba(212,160,90,0.35)');
-      text(r.toUpperCase(), bx, 142, { align: 'center', size: 10, color: on ? CORE : TEXT_DIM, shadow: false });
+      var loadHot = isHot('loadout', r) || pointerInCircle(bx, 108, 30);
+      runeChip(bx, 108, on ? 52 : 44, r.slice(0, 1).toUpperCase(), on ? CORE : 'rgba(212,160,90,0.35)', loadHot || on);
+      text(r.toUpperCase(), bx, 142, { align: 'center', size: 10, color: on || loadHot ? CORE : TEXT_DIM, shadow: false });
       hit('loadout', bx - 30, 80, 60, 70, r);
     });
     ctx.save();
@@ -1848,7 +2022,12 @@
     TREE.forEach(function (n) {
       var owned = hasNode(n.id);
       var can = canUnlock(n);
+      var sel = G.selNode === n.id;
+      var hx = 20 + n.x * 0.55;
+      var hy = 160 + n.y * 0.55;
+      var nodeHot = isHot('select-node', n.id) || pointerInCircle(hx, hy, 18);
       var pulse = owned ? 1 + Math.sin(G.time * 2 + n.x) * 0.06 : 1;
+      if (nodeHot || sel) pulse *= 1.12;
       ctx.save();
       ctx.translate(n.x, n.y);
       ctx.scale(pulse, pulse);
@@ -1856,10 +2035,10 @@
       ctx.arc(0, 0, n.keystone ? 17 : 13, 0, Math.PI * 2);
       ctx.fillStyle = owned ? 'rgba(94,224,208,0.4)' : can ? 'rgba(212,160,90,0.25)' : 'rgba(8,6,10,0.9)';
       ctx.fill();
-      ctx.strokeStyle = owned ? CORE : can ? COPPER : 'rgba(154,144,128,0.35)';
-      ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = sel || nodeHot ? CORE : owned ? CORE : can ? COPPER : 'rgba(154,144,128,0.35)';
+      ctx.lineWidth = sel || nodeHot ? 3 : 2; ctx.stroke();
       ctx.restore();
-      hit('select-node', 20 + n.x * 0.55 - 16, 160 + n.y * 0.55 - 16, 32, 32, n.id);
+      hit('select-node', hx - 16, hy - 16, 32, 32, n.id);
     });
     ctx.restore();
     var sel = nodeById(G.selNode) || nodeById('root');
@@ -1867,7 +2046,7 @@
       text(sel.name, W / 2, H - 108, { align: 'center', size: 20, color: TEXT, display: true });
       wrapText(sel.desc, W / 2, H - 86, W - 48, 12, TEXT_DIM);
       if (!hasNode(sel.id)) {
-        drawBattleCta((W - 180) / 2, H - 58, 180, 44, 'UNLOCK ' + sel.cost);
+        drawBattleCta((W - 180) / 2, H - 58, 180, 44, 'UNLOCK ' + sel.cost, 'unlock', sel.id);
         hit('unlock', (W - 180) / 2, H - 58, 180, 44, sel.id);
       }
     }
@@ -1881,7 +2060,8 @@
       var row = Math.floor(i / 2);
       var cx = W * (0.3 + col * 0.4);
       var cy = H * 0.28 + row * 140;
-      runeChip(cx, cy, open ? 88 : 72, '', open ? pl.accent : 'rgba(154,144,128,0.35)');
+      var planetHot = open && (isHot('extract', pl.id) || pointerInCircle(cx, cy, 55));
+      runeChip(cx, cy, open ? 88 : 72, '', open ? pl.accent : 'rgba(154,144,128,0.35)', planetHot);
       text(pl.name, cx, cy + 6, { align: 'center', size: 12, color: open ? TEXT : TEXT_DIM, shadow: false });
       text(open ? '35 chrono' : 'Era ' + pl.eraNeed, cx, cy + 58, {
         align: 'center', size: 11, color: open ? COPPER : TEXT_DIM, shadow: false
@@ -1941,7 +2121,7 @@
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
-    drawBattleCta((W - 220) / 2, pondY + 40, 220, 56, G.fishCast ? 'WAITING…' : 'CAST');
+    drawBattleCta((W - 220) / 2, pondY + 40, 220, 56, G.fishCast ? 'WAITING…' : 'CAST', 'fish');
     if (!G.fishCast) hit('fish', (W - 220) / 2, pondY + 40, 220, 56);
     text('Caught ' + G.P.fishCaught, W / 2, pondY + 120, { align: 'center', size: 13, color: TEXT_DIM, shadow: false });
 
@@ -1950,16 +2130,21 @@
       var py = H * 0.68;
       var planted = G.P.gardenPlanted[i];
       var ready = planted && (Date.now() - planted >= 45000);
+      var gHot = isHot('garden', String(i)) || pointerInCircle(px, py, 40);
+      var gSc = isPressed('garden', String(i)) ? 0.9 : gHot ? 1.08 : 1;
+      beginInteract(px, py, gSc);
+      if (gHot) drawFocusAura(px, py, 42, true);
       ctx.beginPath();
       ctx.arc(px, py, 34, 0, Math.PI * 2);
       ctx.fillStyle = ready ? 'rgba(60,100,50,0.65)' : 'rgba(40,28,18,0.7)';
       ctx.fill();
-      ctx.strokeStyle = ready ? CORE : COPPER;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = gHot || ready ? CORE : COPPER;
+      ctx.lineWidth = gHot ? 3 : 2;
       ctx.stroke();
       text(!planted ? 'PLANT' : ready ? 'READY' : '…', px, py + 5, {
         align: 'center', size: 11, color: ready ? CORE : TEXT, shadow: false
       });
+      endInteract();
       hit('garden', px - 36, py - 36, 72, 72, String(i));
     }
   }
@@ -1987,6 +2172,9 @@
     var prevX = G.pointer.x;
     var prevY = G.pointer.y;
     G.pointer.x = x; G.pointer.y = y;
+    if (type === 'move' && !G.pointer.down) {
+      refreshHover();
+    }
     if (type === 'down') {
       G.pointer.down = true;
       G.pointer.sx = x;
@@ -1995,6 +2183,16 @@
       G.ctaSquash = 0.94;
       G.hubVelX = 0;
       G.hubVelY = 0;
+      var downHit = hitAt(x, y);
+      if (downHit) {
+        G.pressKey = hitKey(downHit.id, downHit.data);
+        spawnRipple(x, y, COPPER);
+        sfx('ui');
+        buzz(6);
+      } else {
+        G.pressKey = null;
+        spawnRipple(x, y, 'rgba(212,160,90,0.7)');
+      }
     }
     if (type === 'move' && G.pointer.down && G.scene === 'hub') {
       var mdx = x - prevX;
@@ -2013,11 +2211,20 @@
       var dy = y - G.pointer.sy;
       if (G.scene === 'who' && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
         slideWho(dx < 0 ? 1 : -1);
+        G.pressKey = null;
         return;
       }
-      if (G.scene === 'hub' && G.pointer.moved) return;
+      if (G.scene === 'hub' && G.pointer.moved) {
+        G.pressKey = null;
+        return;
+      }
       var h = hitAt(x, y);
-      if (h) handleHit(h);
+      if (h) {
+        tapFeedback(h);
+        handleHit(h);
+      }
+      G.pressKey = null;
+      refreshHover();
     }
   }
 
@@ -2130,6 +2337,10 @@
     }
     if (G.P) G.chronoDisp = approach(G.chronoDisp || 0, G.P.chrono, 120, dt);
     if (!G.pointer.down) G.ctaSquash = approach(G.ctaSquash || 1, 1, 8, dt);
+    G.scenePop = approach(G.scenePop == null ? 1 : G.scenePop, 1, 2.5, dt);
+    updateRipples(dt);
+    // keep hover live even without move events (touch linger / idle)
+    if (!G.pointer.down && G.hits.length) refreshHover();
 
     if (G.toastT > 0) G.toastT -= dt;
     if (G.shake > 0) G.shake -= dt;
@@ -2188,8 +2399,11 @@
       sx = (Math.random() - 0.5) * 10;
       sy = (Math.random() - 0.5) * 10;
     }
+    var pop = G.scenePop == null ? 1 : G.scenePop;
     ctx.save();
-    ctx.translate(sx, sy);
+    ctx.translate(sx + W / 2, sy + H / 2);
+    ctx.scale(pop, pop);
+    ctx.translate(-W / 2, -H / 2);
 
     if (G.scene === 'boot') drawBoot();
     else if (G.scene === 'intro') drawIntro();
@@ -2211,6 +2425,8 @@
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
     });
+
+    drawRipples();
 
     if (G.flash > 0) {
       ctx.fillStyle = 'rgba(94,224,208,' + (G.flash * 0.3) + ')';
