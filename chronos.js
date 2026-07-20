@@ -94,18 +94,18 @@
   var CORE_DIM = 'rgba(94,224,208,0.4)';
   var TEXT = '#f2ebe0';
   var TEXT_DIM = '#9a9080';
-  var FONT_UI = 'Arial Black, Impact, Haettenschweiler, sans-serif';
-  var FONT_DISPLAY = 'Impact, "Arial Black", Haettenschweiler, sans-serif';
+  var FONT_UI = 'Rajdhani, "Segoe UI", sans-serif';
+  var FONT_DISPLAY = 'Cinzel, "Palatino Linotype", serif';
 
-  /* Places in the hub world (normalized coords on the vista) */
+  /* Places in the hub world — props in the vista, not labeled buttons */
   var HUB_PLACES = [
-    { id: 'tower', label: 'THE HOLD', hint: 'Hold the Chronolith', wx: 0.50, wy: 0.40, r: 78, primary: true },
-    { id: 'forge', label: 'FORGE', hint: 'Fuse relics', wx: 0.16, wy: 0.58, r: 52 },
-    { id: 'tree', label: 'STARS', hint: 'Spend skill', wx: 0.84, wy: 0.52, r: 52 },
-    { id: 'gate', label: 'GATE', hint: 'Extract exotics', wx: 0.80, wy: 0.70, r: 50 },
-    { id: 'era', label: 'AGES', hint: 'Timeline', wx: 0.20, wy: 0.45, r: 48 },
-    { id: 'life', label: 'SHORE', hint: 'Fish & garden', wx: 0.32, wy: 0.80, r: 48 },
-    { id: 'story', label: 'LORE', hint: 'Transmissions', wx: 0.68, wy: 0.80, r: 48 }
+    { id: 'tower', label: 'The Hold', hint: 'Enter the Chronolith', wx: 0.50, wy: 0.38, r: 72, primary: true, prop: 'chronolith' },
+    { id: 'forge', label: 'Forge', hint: 'Feed the crucible', wx: 0.15, wy: 0.58, r: 54, prop: 'anvil' },
+    { id: 'tree', label: 'Constellation', hint: 'Spend skill', wx: 0.85, wy: 0.50, r: 54, prop: 'stars' },
+    { id: 'gate', label: 'Gate', hint: 'Extract exotics', wx: 0.82, wy: 0.72, r: 52, prop: 'arch' },
+    { id: 'era', label: 'Ages', hint: 'Timeline', wx: 0.18, wy: 0.44, r: 48, prop: 'dial' },
+    { id: 'life', label: 'Shore', hint: 'Fish & garden', wx: 0.30, wy: 0.82, r: 50, prop: 'reeds' },
+    { id: 'story', label: 'Lore', hint: 'Transmissions', wx: 0.70, wy: 0.82, r: 48, prop: 'tablet' }
   ];
 
   /* ── Animation engine ── */
@@ -496,7 +496,7 @@
     opts = opts || {};
     ctx.save();
     var face = opts.display ? FONT_DISPLAY : FONT_UI;
-    ctx.font = (opts.weight || '700') + ' ' + (opts.size || 18) + 'px ' + face;
+    ctx.font = (opts.weight || (opts.display ? '700' : '600')) + ' ' + (opts.size || 18) + 'px ' + face;
     ctx.fillStyle = opts.color || TEXT;
     ctx.textAlign = opts.align || 'left';
     ctx.textBaseline = opts.base || 'alphabetic';
@@ -889,8 +889,9 @@
     });
     if (!best) return;
     var dmg = towerDps() * 0.38;
-    t.fx.push({ kind: 'beam', x1: cx, y1: cy, x2: best.x, y2: best.y, life: 0.12 });
-    t.fx.push({ kind: 'muzzle', x: cx, y: cy, life: 0.15 });
+    t.fx.push({ kind: 'beam', x1: cx, y1: cy, x2: best.x, y2: best.y, life: 0.16 });
+    t.fx.push({ kind: 'muzzle', x: cx, y: cy, life: 0.2 });
+    spawnParts(best.x, best.y, 3, CORE);
     damageEnemy(best, dmg, G.P.loadout === 'rift' ? 'rift' : null);
     var s = aggregateStats();
     if (s.chain > 0) {
@@ -1123,11 +1124,11 @@
     coverImg('hub', 0, 0, W, H, 0.5, 0.4);
     ctx.fillStyle = 'rgba(6,5,8,0.55)';
     ctx.fillRect(0, 0, W, H);
-    text('VOIDLINE', W / 2, H * 0.42, {
+    text('Voidline', W / 2, H * 0.42, {
       align: 'center', size: 15, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
     });
-    text('CHRONOS', W / 2, H * 0.5, {
-      align: 'center', size: 52, color: TEXT, display: true, glow: true, glowColor: CORE_DIM, blur: 18
+    text('Chronos', W / 2, H * 0.5, {
+      align: 'center', size: 48, color: TEXT, display: true, glow: true, glowColor: CORE_DIM, blur: 18
     });
     text('Waking the Chronolith…', W / 2, H * 0.58, {
       align: 'center', size: 14, color: TEXT_DIM, shadow: false
@@ -1255,11 +1256,11 @@
     ctx.fillRect(0, 0, W, H * 0.22);
 
     var titleY = 36 + Math.sin(t * 1.2) * 1.5;
-    text('VOIDLINE', W / 2, titleY, {
+    text('Voidline', W / 2, titleY, {
       align: 'center', size: 14, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
     });
-    text('CHRONOS', W / 2, titleY + 36, {
-      align: 'center', size: 42, color: TEXT, display: true
+    text('Chronos', W / 2, titleY + 34, {
+      align: 'center', size: 38, color: TEXT, display: true
     });
 
     var cueA = 0.35 + Math.sin(t * 3) * 0.2;
@@ -1398,58 +1399,200 @@
     };
   }
 
-  function drawPlaceMarker(place, sx, sy, focused) {
-    var key = hitKey('mode', place.id);
-    var press = G.pointer.down && G.pressKey === key;
-    var bob = Math.sin(G.time * 2 + place.wx * 10) * (focused ? 3 : 2);
+  function drawWorldProp(place, sx, sy, focused) {
+    var prop = place.prop || 'stone';
+    var press = G.pointer.down && G.pressKey === hitKey('mode', place.id);
+    var bob = Math.sin(G.time * 1.8 + place.wx * 9) * (focused ? 2.5 : 1.2);
     sy += bob;
-    var r = (place.r || 48) * (focused ? 1.08 : 0.92) * (press ? 0.9 : 1);
-    beginInteract(sx, sy, press ? 0.92 : focused ? 1.06 : 1);
-    // soft ground glow
-    var grd = ctx.createRadialGradient(sx, sy, 4, sx, sy, r);
-    grd.addColorStop(0, focused ? 'rgba(94,224,208,0.32)' : 'rgba(212,160,90,0.16)');
-    grd.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grd;
+    var sc = press ? 0.9 : focused ? 1.08 : 1;
+    beginInteract(sx, sy, sc);
+
+    // ground contact shadow — sells the prop as in-world
+    var shadowR = (place.r || 48) * (focused ? 0.55 : 0.4);
+    var sg = ctx.createRadialGradient(sx, sy + 18, 2, sx, sy + 18, shadowR);
+    sg.addColorStop(0, focused ? 'rgba(94,224,208,0.22)' : 'rgba(0,0,0,0.45)');
+    sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
     ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 18, shadowR, shadowR * 0.35, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (focused) drawFocusAura(sx, sy, r * 0.7, true);
-    // stone ring
-    ctx.beginPath();
-    ctx.arc(sx, sy, focused ? 14 : 10, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(8,6,10,0.72)';
-    ctx.fill();
-    ctx.strokeStyle = focused ? CORE : COPPER;
-    ctx.lineWidth = focused ? 2.5 : 1.5;
-    ctx.shadowColor = focused ? CORE_DIM : COPPER_DIM;
-    ctx.shadowBlur = focused ? 16 : 8;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    // core pip
-    ctx.beginPath();
-    ctx.arc(sx, sy, focused ? 4 : 3, 0, Math.PI * 2);
-    ctx.fillStyle = focused ? CORE : COPPER;
-    ctx.fill();
-    text(place.label, sx, sy + (focused ? 34 : 28), {
-      align: 'center',
-      size: focused ? 14 : 11,
-      color: focused ? TEXT : 'rgba(242,235,224,0.75)',
-      display: !!place.primary,
-      glow: focused,
-      glowColor: CORE_DIM
-    });
-    if (focused) {
-      text(place.hint, sx, sy + 50, {
-        align: 'center', size: 11, color: TEXT_DIM, shadow: false
-      });
-      // interactive cue ring
+
+    if (focused) drawFocusAura(sx, sy - 8, place.r * 0.55, true);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.shadowColor = focused ? CORE_DIM : 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = focused ? 18 : 8;
+    var fill = focused ? 'rgba(20,18,22,0.92)' : 'rgba(12,10,14,0.78)';
+    var stroke = focused ? CORE : 'rgba(212,160,90,0.55)';
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = focused ? 2.2 : 1.4;
+
+    if (prop === 'chronolith') {
+      // crystal pillar
       ctx.beginPath();
-      ctx.arc(sx, sy, 22 + Math.sin(G.time * 4) * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(94,224,208,0.35)';
+      ctx.moveTo(0, -36);
+      ctx.lineTo(14, -8);
+      ctx.lineTo(10, 22);
+      ctx.lineTo(-10, 22);
+      ctx.lineTo(-14, -8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = focused ? 'rgba(94,224,208,0.55)' : 'rgba(94,224,208,0.28)';
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(6, -4);
+      ctx.lineTo(0, 12);
+      ctx.lineTo(-6, -4);
+      ctx.closePath();
+      ctx.fill();
+      // orbiting motes
+      for (var m = 0; m < 3; m++) {
+        var ang = G.time * 1.4 + m * 2.1;
+        ctx.fillStyle = CORE;
+        ctx.globalAlpha = 0.5 + Math.sin(G.time * 3 + m) * 0.3;
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * 26, Math.sin(ang) * 14 - 6, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else if (prop === 'anvil') {
+      ctx.fillRect(-22, -4, 44, 14);
+      ctx.strokeRect(-22, -4, 44, 14);
+      ctx.fillRect(-10, -18, 20, 16);
+      ctx.strokeRect(-10, -18, 20, 16);
+      ctx.fillRect(-28, 10, 56, 8);
+      // heat glow
+      ctx.shadowBlur = 0;
+      var heat = ctx.createRadialGradient(0, -8, 2, 0, -8, 22);
+      heat.addColorStop(0, 'rgba(255,120,60,' + (focused ? 0.45 : 0.18) + ')');
+      heat.addColorStop(1, 'rgba(255,80,20,0)');
+      ctx.fillStyle = heat;
+      ctx.beginPath(); ctx.arc(0, -8, 22, 0, Math.PI * 2); ctx.fill();
+    } else if (prop === 'stars') {
+      ctx.shadowBlur = focused ? 16 : 6;
+      for (var s = 0; s < 5; s++) {
+        var sa = -Math.PI / 2 + s * (Math.PI * 2 / 5);
+        var sr = 10 + (s % 2) * 10;
+        var sx2 = Math.cos(sa) * sr, sy2 = Math.sin(sa) * sr;
+        ctx.beginPath();
+        ctx.arc(sx2, sy2, focused ? 3.5 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = focused ? CORE : COPPER;
+        ctx.fill();
+        if (s > 0) {
+          ctx.strokeStyle = 'rgba(94,224,208,0.35)';
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(-Math.PI / 2) * 10, Math.sin(-Math.PI / 2) * 10);
+          ctx.lineTo(sx2, sy2);
+          ctx.stroke();
+        }
+      }
+    } else if (prop === 'arch') {
+      ctx.beginPath();
+      ctx.moveTo(-24, 20);
+      ctx.lineTo(-24, -6);
+      ctx.quadraticCurveTo(-24, -32, 0, -32);
+      ctx.quadraticCurveTo(24, -32, 24, -6);
+      ctx.lineTo(24, 20);
+      ctx.lineTo(16, 20);
+      ctx.lineTo(16, -4);
+      ctx.quadraticCurveTo(16, -22, 0, -22);
+      ctx.quadraticCurveTo(-16, -22, -16, -4);
+      ctx.lineTo(-16, 20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = focused ? 'rgba(94,224,208,0.2)' : 'rgba(94,224,208,0.08)';
+      ctx.fillRect(-12, -8, 24, 28);
+    } else if (prop === 'dial') {
+      ctx.beginPath();
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(G.time * 0.4) * 16, Math.sin(G.time * 0.4) * 16);
+      ctx.strokeStyle = focused ? CORE : COPPER;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      for (var t = 0; t < 8; t++) {
+        var ta = t * Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ta) * 16, Math.sin(ta) * 16);
+        ctx.lineTo(Math.cos(ta) * 20, Math.sin(ta) * 20);
+        ctx.stroke();
+      }
+    } else if (prop === 'reeds') {
+      ctx.shadowBlur = 0;
+      for (var r = -2; r <= 2; r++) {
+        ctx.strokeStyle = focused ? CORE : 'rgba(90,140,110,0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(r * 8, 16);
+        ctx.quadraticCurveTo(r * 8 + Math.sin(G.time * 2 + r) * 6, -4, r * 8 + 2, -22);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(40,80,90,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(0, 14, 28, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (prop === 'tablet') {
+      roundRect(-16, -24, 32, 40, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = focused ? CORE_DIM : 'rgba(212,160,90,0.35)';
       ctx.lineWidth = 1.5;
+      for (var ln = 0; ln < 4; ln++) {
+        ctx.beginPath();
+        ctx.moveTo(-10, -12 + ln * 8);
+        ctx.lineTo(10, -12 + ln * 8);
+        ctx.stroke();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
     }
+    ctx.restore();
+
+    // whisper only when focused — never a floating button label
+    if (focused) {
+      var wa = 0.75 + Math.sin(G.time * 3) * 0.15;
+      text(place.label, sx, sy + 44, {
+        align: 'center', size: 13, color: 'rgba(242,235,224,' + wa + ')',
+        display: true, glow: true, glowColor: CORE_DIM
+      });
+      text(place.hint, sx, sy + 62, {
+        align: 'center', size: 11, color: TEXT_DIM, shadow: false
+      });
+    }
     endInteract();
+  }
+
+  function drawHubMist() {
+    var g = ctx.createLinearGradient(0, H * 0.55, 0, H);
+    g.addColorStop(0, 'rgba(6,5,8,0)');
+    g.addColorStop(0.55, 'rgba(6,5,8,0.25)');
+    g.addColorStop(1, 'rgba(6,5,8,0.7)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, H * 0.55, W, H * 0.45);
+    // drifting ash band
+    for (var i = 0; i < 6; i++) {
+      var ax = ((G.time * 12 + i * 70) % (W + 80)) - 40;
+      var ay = H * 0.62 + Math.sin(G.time * 0.7 + i) * 18 + i * 12;
+      ctx.globalAlpha = 0.04 + (i % 3) * 0.02;
+      ctx.fillStyle = COPPER;
+      ctx.beginPath();
+      ctx.ellipse(ax, ay, 60 + i * 8, 10, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawHub() {
@@ -1465,39 +1608,40 @@
     coverImg('hub', wr.x, wr.y, wr.w, wr.h, 0.5, 0.42);
     ctx.restore();
 
-    drawEmbers(0.9);
+    drawEmbers(1.15);
+    drawHubMist();
 
-    // discover places in the world
+    // discover places in the world — props, not buttons
     var focus = null;
     var bestD = 1e9;
     HUB_PLACES.forEach(function (p) {
       var pos = placeScreenPos(p, wr);
       var d = Math.hypot(G.pointer.x - pos.x, G.pointer.y - pos.y);
-      if (d < p.r + 20 && d < bestD) { bestD = d; focus = p; }
+      if (d < p.r + 12 && d < bestD) { bestD = d; focus = p; }
     });
     G.hubFocus = focus ? focus.id : null;
 
     HUB_PLACES.forEach(function (p) {
       var pos = placeScreenPos(p, wr);
       var focused = focus && focus.id === p.id;
-      drawPlaceMarker(p, pos.x, pos.y, focused);
-      hit('mode', pos.x - p.r, pos.y - p.r, p.r * 2, p.r * 2 + 36, p.id);
+      drawWorldProp(p, pos.x, pos.y, focused);
+      hit('mode', pos.x - p.r, pos.y - p.r, p.r * 2, p.r * 2, p.id);
     });
 
-    // HUD chrome — minimal, fixed to screen
-    var top = ctx.createLinearGradient(0, 0, 0, 90);
-    top.addColorStop(0, 'rgba(6,5,8,0.65)');
+    // HUD chrome — fade only, no dashboard
+    var top = ctx.createLinearGradient(0, 0, 0, 70);
+    top.addColorStop(0, 'rgba(6,5,8,0.55)');
     top.addColorStop(1, 'rgba(6,5,8,0)');
     ctx.fillStyle = top;
-    ctx.fillRect(0, 0, W, 90);
+    ctx.fillRect(0, 0, W, 70);
 
-    var bot = ctx.createLinearGradient(0, H * 0.78, 0, H);
+    var bot = ctx.createLinearGradient(0, H * 0.82, 0, H);
     bot.addColorStop(0, 'rgba(6,5,8,0)');
-    bot.addColorStop(1, 'rgba(6,5,8,0.85)');
+    bot.addColorStop(1, 'rgba(6,5,8,0.88)');
     ctx.fillStyle = bot;
-    ctx.fillRect(0, H * 0.78, W, H * 0.22);
+    ctx.fillRect(0, H * 0.82, W, H * 0.18);
 
-    var px = 16, py = 18, pr = 28;
+    var px = 14, py = 14, pr = 26;
     var whoHot = isHot('who') || pointerInCircle(px + pr, py + pr, pr + 6);
     var whoSc = isPressed('who') ? 0.9 : whoHot ? 1.08 : 1;
     beginInteract(px + pr, py + pr, whoSc);
@@ -1515,19 +1659,19 @@
     ctx.beginPath();
     ctx.arc(px + pr, py + pr, pr + 2, 0, Math.PI * 2);
     ctx.strokeStyle = whoHot ? CORE : (w.accent || CORE);
-    ctx.lineWidth = whoHot ? 4 : 3;
+    ctx.lineWidth = whoHot ? 3.5 : 2.5;
     ctx.stroke();
     endInteract();
     hit('who', px, py, pr * 2, pr * 2);
 
-    text('CHRONO', W - 18, 28, { align: 'right', size: 11, color: TEXT_DIM, shadow: false });
-    text(String(Math.round(G.chronoDisp || G.P.chrono)), W - 18, 56, {
-      align: 'right', size: 30, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
+    // chrono as etched metal count — not a webpage stat
+    text(String(Math.round(G.chronoDisp || G.P.chrono)), W - 18, 42, {
+      align: 'right', size: 26, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
     });
 
-    // one diegetic battle slab — always available
-    var bw = Math.min(W * 0.78, 300), bh = 60;
-    var bx = (W - bw) / 2, by = H - 108;
+    // one diegetic battle slab
+    var bw = Math.min(W * 0.78, 300), bh = 58;
+    var bx = (W - bw) / 2, by = H - 96;
     var pop = (G.enterPop > 0 ? G.enterPop : 1) * (G.scenePop || 1);
     ctx.save();
     ctx.translate(W / 2, by + bh / 2);
@@ -1536,10 +1680,6 @@
     drawStoneCta(bx, by, bw, bh, 'ENTER THE HOLD', 'enter');
     ctx.restore();
     hit('enter', bx, by, bw, bh);
-
-    text('Drag to look  ·  Tap a place', W / 2, H - 28, {
-      align: 'center', size: 11, color: 'rgba(154,144,128,0.85)', shadow: false
-    });
 
     if (G.storyOpen != null) drawStoryModal();
   }
@@ -1944,23 +2084,24 @@
     ctx.translate(-W / 2, -H / 2);
     coverImg(key, 0, 0, W, H, 0.5, 0.4);
     ctx.restore();
+    // light mist — keep the art readable, not a webpage overlay
     var veil = ctx.createLinearGradient(0, 0, 0, H);
-    veil.addColorStop(0, 'rgba(6,5,8,0.58)');
-    veil.addColorStop(0.4, 'rgba(6,5,8,0.2)');
-    veil.addColorStop(1, 'rgba(6,5,8,0.78)');
+    veil.addColorStop(0, 'rgba(6,5,8,0.42)');
+    veil.addColorStop(0.35, 'rgba(6,5,8,0.12)');
+    veil.addColorStop(0.75, 'rgba(6,5,8,0.35)');
+    veil.addColorStop(1, 'rgba(6,5,8,0.82)');
     ctx.fillStyle = veil;
     ctx.fillRect(0, 0, W, H);
-    // soft chronolith wash at top
-    var wash = ctx.createRadialGradient(W / 2, 20, 10, W / 2, 40, W * 0.45);
-    wash.addColorStop(0, 'rgba(94,224,208,0.08)');
-    wash.addColorStop(1, 'rgba(6,5,8,0)');
-    ctx.fillStyle = wash;
-    ctx.fillRect(0, 0, W, 120);
-    drawEmbers(0.35);
-    text(title, W / 2, 46, {
-      align: 'center', size: 30, color: TEXT, display: true, glow: true, glowColor: CORE_DIM
+    drawEmbers(0.45);
+    // title sits in the mist, not a header bar
+    text(title, W / 2, 52, {
+      align: 'center', size: 26, color: TEXT, display: true, glow: true, glowColor: 'rgba(0,0,0,0.9)', blur: 10
     });
-    if (sub) text(sub, W / 2, 70, { align: 'center', size: 13, color: COPPER, shadow: false });
+    if (sub) {
+      text(sub, W / 2, 76, {
+        align: 'center', size: 12, color: 'rgba(212,160,90,0.85)', shadow: false
+      });
+    }
     closeSeal(W - 28, 28);
     hit('hub', W - 46, 10, 36, 36);
   }
