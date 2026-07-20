@@ -33,9 +33,17 @@ try {
   await page.goto(BASE + '/index.html', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
   await page.waitForFunction(
-    () => window.VoidlineChronos && window.VoidlineChronos.getScene() === 'who',
+    () => window.VoidlineChronos,
     null,
     { timeout: 15000 }
+  );
+  await page.evaluate(() => {
+    if (window.VoidlineChronos.skipIntro) window.VoidlineChronos.skipIntro();
+  });
+  await page.waitForFunction(
+    () => window.VoidlineChronos.getScene() === 'who',
+    null,
+    { timeout: 10000 }
   );
 
   const canvas = await page.locator('#game').count();
