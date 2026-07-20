@@ -46,11 +46,9 @@
     fishCast: false,
     time: 0,
     whoIndex: 0,
-    campOpen: false,
-    campT: 0,
     chronoDisp: 0,
     embers: [],
-    pointer: { x: 0, y: 0, down: false, sx: 0, sy: 0 },
+    pointer: { x: 0, y: 0, down: false, sx: 0, sy: 0, moved: false },
     remoteVersion: 0,
     fade: 1,
     fadeTarget: 0,
@@ -60,7 +58,12 @@
     whoPrevIndex: 0,
     ctaSquash: 1,
     enterPop: 0,
-    bootPulse: 0
+    bootPulse: 0,
+    hubCamX: 0,
+    hubCamY: 0,
+    hubVelX: 0,
+    hubVelY: 0,
+    hubFocus: null
   };
 
   var canvas, ctx, W = 390, H = 844, dpr = 1;
@@ -69,7 +72,7 @@
   var bc = null;
   var audioCtx = null;
 
-  /* Chronolith studio palette — warm ash, copper, cyan core */
+  /* Art bible — ash / copper / chronolith cyan. One lighting language. */
   var INK = '#060508';
   var PANEL = 'rgba(12,10,14,0.78)';
   var COPPER = '#d4a05a';
@@ -80,6 +83,17 @@
   var TEXT_DIM = '#9a9080';
   var FONT_UI = 'Arial Black, Impact, Haettenschweiler, sans-serif';
   var FONT_DISPLAY = 'Impact, "Arial Black", Haettenschweiler, sans-serif';
+
+  /* Places in the hub world (normalized coords on the vista) */
+  var HUB_PLACES = [
+    { id: 'tower', label: 'THE HOLD', hint: 'Hold the Chronolith', wx: 0.50, wy: 0.40, r: 78, primary: true },
+    { id: 'forge', label: 'FORGE', hint: 'Fuse relics', wx: 0.16, wy: 0.58, r: 52 },
+    { id: 'tree', label: 'STARS', hint: 'Spend skill', wx: 0.84, wy: 0.52, r: 52 },
+    { id: 'gate', label: 'GATE', hint: 'Extract exotics', wx: 0.80, wy: 0.70, r: 50 },
+    { id: 'era', label: 'AGES', hint: 'Timeline', wx: 0.20, wy: 0.45, r: 48 },
+    { id: 'life', label: 'SHORE', hint: 'Fish & garden', wx: 0.32, wy: 0.80, r: 48 },
+    { id: 'story', label: 'LORE', hint: 'Transmissions', wx: 0.68, wy: 0.80, r: 48 }
+  ];
 
   /* ── Animation engine ── */
   var tweens = [];
@@ -144,9 +158,13 @@
     if (scene === 'hub' && G.tower) endTower(false);
     G.scene = scene;
     G.forge = [null, null];
-    if (scene !== 'hub') G.campOpen = false;
     if (scene === 'hub') {
       G.enterPop = 0;
+      G.hubCamX = 0;
+      G.hubCamY = 0;
+      G.hubVelX = 0;
+      G.hubVelY = 0;
+      G.hubFocus = null;
       tweenTo(G, 'enterPop', 1, 0.45, easeOutBack);
       if (G.P) G.chronoDisp = G.P.chrono;
     }
@@ -956,7 +974,6 @@
     ctx.translate(x + w / 2, y + h / 2);
     ctx.scale(pulse * squash, (2 - pulse) * squash);
     ctx.translate(-(x + w / 2), -(y + h / 2));
-    // carved chronolith slab — not a web button / banner asset
     var g = ctx.createLinearGradient(x, y, x, y + h);
     g.addColorStop(0, '#2a221c');
     g.addColorStop(0.45, '#141014');
@@ -967,73 +984,138 @@
     ctx.strokeStyle = 'rgba(212,160,90,0.65)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    // inner cyan seam
     ctx.strokeStyle = 'rgba(94,224,208,0.35)';
     ctx.lineWidth = 1;
     roundRect(x + 5, y + 5, w - 10, h - 10, 7);
     ctx.stroke();
-    // soft core glow behind label
     var cg = ctx.createRadialGradient(x + w / 2, y + h / 2, 4, x + w / 2, y + h / 2, w * 0.35);
     cg.addColorStop(0, 'rgba(94,224,208,0.18)');
     cg.addColorStop(1, 'rgba(94,224,208,0)');
     ctx.fillStyle = cg;
     ctx.fillRect(x, y, w, h);
     text(label, x + w / 2, y + h * 0.62, {
-      align: 'center', size: Math.min(24, Math.floor(h * 0.36)), color: TEXT,
+      align: 'center', size: Math.min(22, Math.floor(h * 0.34)), color: TEXT,
       display: true, glow: true, glowColor: CORE_DIM
     });
     ctx.restore();
   }
 
-  function drawWaypoint(cx, cy, label, hot) {
-    var bob = Math.sin(G.time * 2.2 + cx * 0.02) * 2;
-    cy += bob;
-    // pin
+  function hubWorldRect() {
+    var scale = 1.22;
+    var ww = W * scale, wh = H * scale;
+    return {
+      x: (W - ww) / 2 + G.hubCamX,
+      y: (H - wh) / 2 + G.hubCamY,
+      w: ww,
+      h: wh,
+      maxX: (ww - W) / 2,
+      maxY: (wh - H) / 2
+    };
+  }
+
+  function clampHubCam() {
+    var wr = hubWorldRect();
+    var maxX = Math.max(8, (wr.w - W) / 2);
+    var maxY = Math.max(8, (wr.h - H) / 2);
+    G.hubCamX = Math.max(-maxX, Math.min(maxX, G.hubCamX));
+    G.hubCamY = Math.max(-maxY, Math.min(maxY, G.hubCamY));
+  }
+
+  function placeScreenPos(place, wr) {
+    return {
+      x: wr.x + place.wx * wr.w,
+      y: wr.y + place.wy * wr.h
+    };
+  }
+
+  function drawPlaceMarker(place, sx, sy, focused) {
+    var bob = Math.sin(G.time * 2 + place.wx * 10) * (focused ? 3 : 2);
+    sy += bob;
+    var r = (place.r || 48) * (focused ? 1.08 : 0.92);
+    // soft ground glow
+    var grd = ctx.createRadialGradient(sx, sy, 4, sx, sy, r);
+    grd.addColorStop(0, focused ? 'rgba(94,224,208,0.28)' : 'rgba(212,160,90,0.16)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
     ctx.beginPath();
-    ctx.arc(cx, cy, hot ? 6 : 5, 0, Math.PI * 2);
-    ctx.fillStyle = hot ? CORE : COPPER;
-    ctx.shadowColor = hot ? CORE_DIM : COPPER_DIM;
-    ctx.shadowBlur = 12;
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
+    // stone ring
     ctx.beginPath();
-    ctx.arc(cx, cy, 11, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(242,235,224,0.28)';
-    ctx.lineWidth = 1;
+    ctx.arc(sx, sy, focused ? 14 : 10, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8,6,10,0.72)';
+    ctx.fill();
+    ctx.strokeStyle = focused ? CORE : COPPER;
+    ctx.lineWidth = focused ? 2.5 : 1.5;
+    ctx.shadowColor = focused ? CORE_DIM : COPPER_DIM;
+    ctx.shadowBlur = focused ? 14 : 8;
     ctx.stroke();
-    text(label, cx, cy + 22, {
-      align: 'center', size: 12, color: TEXT, shadow: true, blur: 6
+    ctx.shadowBlur = 0;
+    // core pip
+    ctx.beginPath();
+    ctx.arc(sx, sy, focused ? 4 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = focused ? CORE : COPPER;
+    ctx.fill();
+    text(place.label, sx, sy + (focused ? 34 : 28), {
+      align: 'center',
+      size: focused ? 14 : 11,
+      color: focused ? TEXT : 'rgba(242,235,224,0.75)',
+      display: !!place.primary,
+      glow: focused,
+      glowColor: CORE_DIM
     });
+    if (focused) {
+      text(place.hint, sx, sy + 50, {
+        align: 'center', size: 11, color: TEXT_DIM, shadow: false
+      });
+    }
   }
 
   function drawHub() {
     var w = warband(G.activeId);
-    var breathe = 1 + Math.sin(G.time * 0.28) * 0.014;
-    var drift = Math.sin(G.time * 0.11) * 0.016;
+    var wr = hubWorldRect();
+    var breathe = 1 + Math.sin(G.time * 0.25) * 0.01;
 
+    // WORLD — oversized vista, camera pans
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(breathe, breathe);
-    ctx.translate(-W / 2 + drift * 22, -H / 2);
-    coverImg('hub', -W * 0.03, -H * 0.02, W * 1.06, H * 1.04, 0.5 + drift, 0.42);
+    ctx.translate(-W / 2, -H / 2);
+    coverImg('hub', wr.x, wr.y, wr.w, wr.h, 0.5, 0.42);
     ctx.restore();
 
-    drawEmbers(0.85);
+    drawEmbers(0.9);
 
-    // edge veils only
-    var top = ctx.createLinearGradient(0, 0, 0, 100);
-    top.addColorStop(0, 'rgba(6,5,8,0.6)');
+    // discover places in the world
+    var focus = null;
+    var bestD = 1e9;
+    HUB_PLACES.forEach(function (p) {
+      var pos = placeScreenPos(p, wr);
+      var d = Math.hypot(G.pointer.x - pos.x, G.pointer.y - pos.y);
+      if (d < p.r + 20 && d < bestD) { bestD = d; focus = p; }
+    });
+    G.hubFocus = focus ? focus.id : null;
+
+    HUB_PLACES.forEach(function (p) {
+      var pos = placeScreenPos(p, wr);
+      var focused = focus && focus.id === p.id;
+      drawPlaceMarker(p, pos.x, pos.y, focused);
+      hit('mode', pos.x - p.r, pos.y - p.r, p.r * 2, p.r * 2 + 36, p.id);
+    });
+
+    // HUD chrome — minimal, fixed to screen
+    var top = ctx.createLinearGradient(0, 0, 0, 90);
+    top.addColorStop(0, 'rgba(6,5,8,0.65)');
     top.addColorStop(1, 'rgba(6,5,8,0)');
     ctx.fillStyle = top;
-    ctx.fillRect(0, 0, W, 100);
+    ctx.fillRect(0, 0, W, 90);
 
-    var bot = ctx.createLinearGradient(0, H * 0.68, 0, H);
+    var bot = ctx.createLinearGradient(0, H * 0.78, 0, H);
     bot.addColorStop(0, 'rgba(6,5,8,0)');
-    bot.addColorStop(1, 'rgba(6,5,8,0.8)');
+    bot.addColorStop(1, 'rgba(6,5,8,0.85)');
     ctx.fillStyle = bot;
-    ctx.fillRect(0, H * 0.68, W, H * 0.32);
+    ctx.fillRect(0, H * 0.78, W, H * 0.22);
 
-    // pilot — framed stone circle
     var px = 16, py = 18, pr = 28;
     var fr = img('uiFrame');
     if (fr && fr.complete && fr.naturalWidth) {
@@ -1053,16 +1135,13 @@
     hit('who', px, py, pr * 2, pr * 2);
 
     text('CHRONO', W - 18, 28, { align: 'right', size: 11, color: TEXT_DIM, shadow: false });
-    var chronoShow = Math.round(G.chronoDisp || G.P.chrono);
-    text(String(chronoShow), W - 18, 56, {
+    text(String(Math.round(G.chronoDisp || G.P.chrono)), W - 18, 56, {
       align: 'right', size: 30, color: COPPER, display: true, glow: true, glowColor: COPPER_DIM
     });
 
-    // primary action — stone slab CTA
-    var campT = G.campT || 0;
-    var bw = Math.min(W * 0.78, 300), bh = 64;
-    var bx = (W - bw) / 2;
-    var by = lerp(H - 128, H - 248, campT);
+    // one diegetic battle slab — always available
+    var bw = Math.min(W * 0.78, 300), bh = 60;
+    var bx = (W - bw) / 2, by = H - 108;
     var pop = G.enterPop > 0 ? G.enterPop : 1;
     ctx.save();
     ctx.translate(W / 2, by + bh / 2);
@@ -1072,44 +1151,11 @@
     ctx.restore();
     hit('enter', bx, by, bw, bh);
 
-    // chronolith tap zone
-    hit('mode', W * 0.32, H * 0.2, W * 0.36, H * 0.35, 'tower');
-
-    // camp toggle — text, not an icon badge
-    var sealY = H - 36;
-    text(campT > 0.5 ? 'CLOSE MAP' : 'OPEN MAP', W / 2, sealY, {
-      align: 'center', size: 12, color: COPPER, glow: true, glowColor: COPPER_DIM
+    text('Drag to look  ·  Tap a place', W / 2, H - 28, {
+      align: 'center', size: 11, color: 'rgba(154,144,128,0.85)', shadow: false
     });
-    hit('camp', W / 2 - 70, sealY - 22, 140, 36);
-
-    // waypoints — place names + pins, zero icon sheet
-    if (campT > 0.02) {
-      var spots = [
-        { id: 'forge', label: 'FORGE', x: 0.18, y: 0.74 },
-        { id: 'tree', label: 'TREE', x: 0.38, y: 0.7 },
-        { id: 'gate', label: 'GATE', x: 0.62, y: 0.7 },
-        { id: 'era', label: 'ERA', x: 0.82, y: 0.74 },
-        { id: 'life', label: 'LIFE', x: 0.28, y: 0.82 },
-        { id: 'story', label: 'LORE', x: 0.72, y: 0.82 }
-      ];
-      spots.forEach(function (s, i) {
-        var rise = easeOutBack(Math.min(1, campT * 1.25 - i * 0.05));
-        if (rise <= 0) return;
-        var cx = W * s.x;
-        var cy = lerp(H + 30, H * s.y, rise);
-        ctx.globalAlpha = Math.max(0, rise);
-        drawWaypoint(cx, cy, s.label, false);
-        ctx.globalAlpha = 1;
-        if (rise > 0.65) hit('mode', cx - 36, cy - 16, 72, 48, s.id);
-      });
-    }
 
     if (G.storyOpen != null) drawStoryModal();
-  }
-
-  function drawMedallion(med, x, y, s) {
-    // legacy no-op kept for safety — hub no longer uses icon sheets
-    drawWaypoint(x + s / 2, y + s / 2, '', false);
   }
 
   function drawStoryModal() {
@@ -1530,12 +1576,27 @@
     var rect = canvas.getBoundingClientRect();
     var x = (clientX - rect.left) * (W / rect.width);
     var y = (clientY - rect.top) * (H / rect.height);
+    var prevX = G.pointer.x;
+    var prevY = G.pointer.y;
     G.pointer.x = x; G.pointer.y = y;
     if (type === 'down') {
       G.pointer.down = true;
       G.pointer.sx = x;
       G.pointer.sy = y;
+      G.pointer.moved = false;
       G.ctaSquash = 0.94;
+      G.hubVelX = 0;
+      G.hubVelY = 0;
+    }
+    if (type === 'move' && G.pointer.down && G.scene === 'hub') {
+      var mdx = x - prevX;
+      var mdy = y - prevY;
+      if (Math.abs(x - G.pointer.sx) > 10 || Math.abs(y - G.pointer.sy) > 10) G.pointer.moved = true;
+      G.hubCamX += mdx;
+      G.hubCamY += mdy;
+      G.hubVelX = mdx * 18;
+      G.hubVelY = mdy * 18;
+      clampHubCam();
     }
     if (type === 'up') {
       G.pointer.down = false;
@@ -1546,6 +1607,7 @@
         slideWho(dx < 0 ? 1 : -1);
         return;
       }
+      if (G.scene === 'hub' && G.pointer.moved) return;
       var h = hitAt(x, y);
       if (h) handleHit(h);
     }
@@ -1556,12 +1618,6 @@
     var id = h.id, d = h.data;
     if (id === 'who-prev') { slideWho(-1); return; }
     if (id === 'who-next') { slideWho(1); return; }
-    if (id === 'camp') {
-      G.campOpen = !G.campOpen;
-      beep(200, 0.05);
-      buzz(10);
-      return;
-    }
     if (id === 'pick') pickPlayer(d);
     else if (id === 'who') {
       savePlayer();
@@ -1646,7 +1702,6 @@
   /* ── Loop ── */
   function update(dt) {
     G.time += dt;
-    G.hits = [];
     updateTweens(dt);
 
     // scene fade machine
@@ -1654,7 +1709,15 @@
     else if (G.fadeTarget < G.fade) G.fade = Math.max(G.fadeTarget, G.fade - dt * 3.2);
     if (G.fadeScene && G.fade >= 0.98) finishTransition();
 
-    G.campT = approach(G.campT, G.campOpen ? 1 : 0, 4.5, dt);
+    if (G.scene === 'hub' && !G.pointer.down) {
+      G.hubCamX += G.hubVelX * dt;
+      G.hubCamY += G.hubVelY * dt;
+      G.hubVelX *= Math.pow(0.05, dt);
+      G.hubVelY *= Math.pow(0.05, dt);
+      if (Math.abs(G.hubVelX) < 2) G.hubVelX = 0;
+      if (Math.abs(G.hubVelY) < 2) G.hubVelY = 0;
+      clampHubCam();
+    }
     if (G.P) G.chronoDisp = approach(G.chronoDisp || 0, G.P.chrono, 120, dt);
     if (!G.pointer.down) G.ctaSquash = approach(G.ctaSquash || 1, 1, 8, dt);
 
@@ -1698,6 +1761,7 @@
   function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    G.hits = [];
 
     var sx = 0, sy = 0;
     if (G.shake > 0) {
@@ -1800,6 +1864,7 @@
     window.addEventListener('resize', resize);
 
     canvas.addEventListener('pointerdown', function (e) { onPointer('down', e.clientX, e.clientY); });
+    canvas.addEventListener('pointermove', function (e) { onPointer('move', e.clientX, e.clientY); });
     canvas.addEventListener('pointerup', function (e) { onPointer('up', e.clientX, e.clientY); });
     canvas.addEventListener('pointercancel', function () { G.pointer.down = false; });
 
@@ -1854,8 +1919,12 @@
     if (scene === 'hub' && G.tower) endTower(false);
     G.scene = scene;
     G.forge = [null, null];
-    if (scene !== 'hub') G.campOpen = false;
-    if (scene === 'hub') G.enterPop = 1;
+    if (scene === 'hub') {
+      G.enterPop = 1;
+      G.hubCamX = 0;
+      G.hubCamY = 0;
+      G.hubFocus = null;
+    }
   }
 
   window.VoidlineChronos = {
