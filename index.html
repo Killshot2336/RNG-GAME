@@ -7,8 +7,16 @@
   <title>Syndicate Swarm</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root {
+      --crt-cyan: #22d3ee;
+      --crt-amber: #fbbf24;
+      --crt-void: #02040a;
+    }
+
+    * { box-sizing: border-box; }
+
     body {
-      background-color: #02040a;
+      background-color: var(--crt-void);
       color: #f3f4f6;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
       overflow: hidden;
@@ -16,12 +24,15 @@
       -webkit-user-select: none;
       touch-action: none;
     }
+
     .cyber-bg {
       background-image:
-        linear-gradient(rgba(6, 182, 212, 0.045) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(6, 182, 212, 0.045) 1px, transparent 1px);
-      background-size: 32px 32px;
+        radial-gradient(ellipse at 50% 0%, rgba(6, 182, 212, 0.12), transparent 55%),
+        linear-gradient(rgba(6, 182, 212, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6, 182, 212, 0.04) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
     }
+
     .glass-panel {
       background: rgba(6, 11, 25, 0.85);
       backdrop-filter: blur(16px);
@@ -29,6 +40,7 @@
       border: 1px solid rgba(6, 182, 212, 0.25);
       box-shadow: inset 0 0 15px rgba(6, 182, 212, 0.1), 0 0 25px rgba(0, 0, 0, 0.6);
     }
+
     .rarity-Common { border-color: #4b5563; background: rgba(31, 41, 55, 0.35); }
     .rarity-Rare { border-color: #2563eb; background: rgba(29, 78, 216, 0.15); box-shadow: 0 0 15px rgba(37, 99, 235, 0.2); }
     .rarity-Epic { border-color: #9333ea; background: rgba(126, 34, 206, 0.15); box-shadow: 0 0 20px rgba(147, 51, 234, 0.3); }
@@ -38,35 +50,143 @@
       box-shadow: 0 0 30px rgba(34, 211, 238, 0.5);
       animation: divinePulse 2.5s infinite ease-in-out;
     }
+
     @keyframes divinePulse {
       0%, 100% { transform: scale(1); border-color: #22d3ee; box-shadow: 0 0 30px rgba(34, 211, 238, 0.5); }
       50% { transform: scale(1.02); border-color: #ec4899; box-shadow: 0 0 45px rgba(236, 72, 153, 0.7); }
     }
+
     .downed-overlay {
       background: rgba(10, 2, 2, 0.9);
       backdrop-filter: blur(12px) contrast(150%) hue-rotate(40deg);
       animation: flashPulse 1s infinite alternate;
     }
+
     @keyframes flashPulse {
       0% { opacity: 0.9; }
       100% { opacity: 1; box-shadow: inset 0 0 120px rgba(239, 68, 68, 0.3); }
     }
+
     #toast {
-      position: fixed; left: 50%; top: 14%; transform: translateX(-50%);
-      z-index: 80; padding: 10px 18px; border-radius: 999px;
-      background: rgba(2, 8, 16, 0.92); border: 1px solid rgba(6, 182, 212, 0.5);
-      color: #22d3ee; font-size: 11px; font-weight: 800; letter-spacing: 0.12em;
-      text-transform: uppercase; opacity: 0; pointer-events: none;
+      position: fixed;
+      left: 50%;
+      top: 14%;
+      transform: translateX(-50%);
+      z-index: 80;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(2, 8, 16, 0.92);
+      border: 1px solid rgba(6, 182, 212, 0.5);
+      color: #22d3ee;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0;
+      pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
     }
-    #toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-6px);
+    }
+
+    /* —— CRT arcade monitor overlay —— */
+    #crt-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    #crt-overlay::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0) 0px,
+        rgba(0, 0, 0, 0) 2px,
+        rgba(0, 0, 0, 0.18) 2px,
+        rgba(0, 0, 0, 0.18) 3px
+      );
+      opacity: 0.55;
+      mix-blend-mode: multiply;
+    }
+
+    #crt-overlay::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+        linear-gradient(
+          180deg,
+          rgba(34, 211, 238, 0.04) 0%,
+          transparent 40%,
+          transparent 60%,
+          rgba(236, 72, 153, 0.03) 100%
+        );
+      box-shadow: inset 0 0 80px rgba(6, 182, 212, 0.12), inset 0 0 160px rgba(0, 0, 0, 0.65);
+      animation: crtFlicker 4.5s infinite steps(1);
+    }
+
+    @keyframes crtFlicker {
+      0%, 100% { opacity: 1; }
+      92% { opacity: 1; }
+      93% { opacity: 0.92; }
+      94% { opacity: 1; }
+      97% { opacity: 0.96; }
+      98% { opacity: 1; }
+    }
+
+    .crt-scanbeam {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 18%;
+      background: linear-gradient(
+        to bottom,
+        transparent,
+        rgba(34, 211, 238, 0.045),
+        transparent
+      );
+      animation: scanDrift 7s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes scanDrift {
+      0% { top: -20%; }
+      100% { top: 110%; }
+    }
+
+    #combat-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: inherit;
+    }
+
+    #combatCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+    }
   </style>
 </head>
 <body class="w-screen h-screen flex flex-col justify-between p-3 sm:p-4 select-none cyber-bg">
 
+  <div id="crt-overlay" aria-hidden="true">
+    <div class="crt-scanbeam"></div>
+  </div>
+
   <div class="w-full max-w-4xl mx-auto glass-panel rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between items-stretch sm:items-center z-10">
     <div>
-      <h1 class="text-[10px] tracking-[0.2em] text-cyan-400 font-extrabold uppercase">⚡ Syndicate Swarm · System Core</h1>
+      <h1 class="text-[10px] tracking-[0.2em] text-cyan-400 font-extrabold uppercase">⚡ Syndicate Swarm · Arcade Core</h1>
       <div class="flex items-center gap-2 mt-1">
         <span id="hud-name" class="font-black text-xl text-white tracking-wide">Aden</span>
         <span id="hud-level" class="text-xs bg-cyan-950/80 text-cyan-400 px-2.5 py-0.5 rounded border border-cyan-700 font-mono font-bold">LV 1</span>
@@ -88,10 +208,12 @@
     </div>
   </div>
 
-  <div class="w-full max-w-4xl mx-auto flex-1 my-3 relative rounded-2xl overflow-hidden border-2 border-slate-800 bg-[#030611] min-h-0">
+  <div class="w-full max-w-4xl mx-auto flex-1 my-3 relative rounded-2xl overflow-hidden border-2 border-slate-800 bg-[#030611] min-h-0 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
 
     <div id="tab-view-combat" class="w-full h-full relative">
-      <canvas id="combatCanvas" class="w-full h-full block"></canvas>
+      <div id="combat-stage">
+        <canvas id="combatCanvas"></canvas>
+      </div>
 
       <div id="downed-screen" class="hidden absolute inset-0 downed-overlay flex flex-col items-center justify-center p-6 z-20">
         <h2 class="text-red-500 font-black text-4xl sm:text-6xl tracking-tighter mb-2 drop-shadow-[0_0_25px_rgba(239,68,68,0.8)] text-center">SYSTEM CRITICAL: DOWNED</h2>
@@ -183,6 +305,7 @@
   'use strict';
 
   var SAVE_KEY = 'swarm_save_v2_data';
+  var TRAIL_MAX = 10;
   var RANDOM_WEAPON_NAMES = [
     'Vortex Laser Shredder', 'Plasma Splinter Railgun', 'Neutron Arc Dispenser',
     'Nebula Fusion Repeater', 'Singularity Beam Splitter', 'Quantum Reaper Gatling'
@@ -391,6 +514,7 @@
     if (el) el.textContent = (sec * 3 * store.state.outpost.portalLevel) + '¤';
   }, 1000);
 
+  /* ========== COMBAT ENGINE ========== */
   var canvas = document.getElementById('combatCanvas');
   var ctx = canvas.getContext('2d');
   var player = { x: 400, y: 300, radius: 15, speed: 4.5, isDowned: false };
@@ -399,6 +523,7 @@
   var powerups = [];
   var particles = [];
   var splatters = [];
+  var floatTexts = [];
   var keys = {};
   var attackCooldown = 0;
   var attackSpeedInterval = 18;
@@ -407,7 +532,46 @@
   var combatPaused = false;
   var tacticalUpgrades = { multishotEnabled: false, magnetReach: 40 };
 
-  window.addEventListener('keydown', function (e) { keys[e.key.toLowerCase()] = true; });
+  /* Screen shake matrix */
+  var shake = { x: 0, y: 0, trauma: 0 };
+
+  function triggerScreenShake(intensity) {
+    shake.trauma = Math.min(1, shake.trauma + intensity);
+  }
+
+  function updateScreenShake() {
+    if (shake.trauma > 0) {
+      var amount = shake.trauma * shake.trauma;
+      shake.x = (Math.random() * 2 - 1) * amount * 28;
+      shake.y = (Math.random() * 2 - 1) * amount * 28;
+      shake.trauma = Math.max(0, shake.trauma - 0.045);
+    } else {
+      shake.x = 0;
+      shake.y = 0;
+    }
+  }
+
+  /* Text pop interface */
+  function spawnFloatText(x, y, label, color, scale) {
+    floatTexts.push({
+      x: x + (Math.random() * 16 - 8),
+      y: y,
+      text: label,
+      color: color,
+      alpha: 1,
+      scale: scale || 1,
+      vy: -1.6 - Math.random() * 0.8,
+      life: 0,
+      maxLife: 48
+    });
+  }
+
+  window.addEventListener('keydown', function (e) {
+    keys[e.key.toLowerCase()] = true;
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].indexOf(e.key.toLowerCase()) >= 0) {
+      e.preventDefault();
+    }
+  });
   window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
 
   function fitCanvas() {
@@ -428,9 +592,22 @@
         radius: 11 + Math.random() * 5,
         speed: 1.4 + Math.random() * 0.7 + activeWave * 0.08,
         hp: 1 + Math.floor(activeWave * 0.5),
-        maxHp: 1 + Math.floor(activeWave * 0.5)
+        maxHp: 1 + Math.floor(activeWave * 0.5),
+        hue: 0
       });
     }
+  }
+
+  function emitBullet(angle, offset, dmgWeight) {
+    projectiles.push({
+      x: player.x,
+      y: player.y,
+      vx: Math.cos(angle + offset) * 9.5,
+      vy: Math.sin(angle + offset) * 9.5,
+      radius: 5,
+      dmg: dmgWeight,
+      trail: [{ x: player.x, y: player.y }]
+    });
   }
 
   function processAutoWeaponFires() {
@@ -447,20 +624,10 @@
     var angle = Math.atan2(nearest.y - player.y, nearest.x - player.x);
     var p = window.gameStore.getActive();
     var dmgWeight = 10 + Math.floor(10 * (p.weaponMod / 100));
-    function emitBullet(offset) {
-      projectiles.push({
-        x: player.x,
-        y: player.y,
-        vx: Math.cos(angle + offset) * 9.5,
-        vy: Math.sin(angle + offset) * 9.5,
-        radius: 5,
-        dmg: dmgWeight
-      });
-    }
-    emitBullet(0);
+    emitBullet(angle, 0, dmgWeight);
     if (tacticalUpgrades.multishotEnabled) {
-      emitBullet(-0.22);
-      emitBullet(0.22);
+      emitBullet(angle, -0.22, dmgWeight);
+      emitBullet(angle, 0.22, dmgWeight);
     }
   }
 
@@ -505,23 +672,36 @@
   }
 
   function igniteDeathParticles(x, y, hue) {
-    for (var i = 0; i < 14; i++) {
+    for (var i = 0; i < 18; i++) {
       var angle = Math.random() * Math.PI * 2;
-      var force = 1.5 + Math.random() * 4.5;
+      var force = 1.5 + Math.random() * 5;
       particles.push({
         x: x, y: y,
         vx: Math.cos(angle) * force,
         vy: Math.sin(angle) * force,
         alpha: 1,
-        fadeRate: 0.025 + Math.random() * 0.02,
+        fadeRate: 0.022 + Math.random() * 0.02,
+        radius: 2 + Math.random() * 3,
         color: hue
       });
     }
-    splatters.push({ x: x, y: y, radius: 8 + Math.random() * 8, alpha: 0.4 });
+    splatters.push({ x: x, y: y, radius: 10 + Math.random() * 12, alpha: 0.45 });
   }
 
   function computeCombatEngineFrame() {
-    if (window.gameStore.state.activeTab !== 'combat' || player.isDowned || combatPaused) return;
+    updateScreenShake();
+
+    if (window.gameStore.state.activeTab !== 'combat' || player.isDowned || combatPaused) {
+      for (var ft = floatTexts.length - 1; ft >= 0; ft--) {
+        var f = floatTexts[ft];
+        f.y += f.vy;
+        f.life++;
+        f.alpha = 1 - (f.life / f.maxLife);
+        f.scale += 0.012;
+        if (f.life >= f.maxLife) floatTexts.splice(ft, 1);
+      }
+      return;
+    }
 
     var dx = 0, dy = 0;
     if (keys.w || keys.arrowup) dy = -1;
@@ -542,7 +722,11 @@
       var pr = projectiles[i];
       pr.x += pr.vx;
       pr.y += pr.vy;
-      if (pr.x < 0 || pr.x > canvas.width || pr.y < 0 || pr.y > canvas.height) projectiles.splice(i, 1);
+      pr.trail.push({ x: pr.x, y: pr.y });
+      if (pr.trail.length > TRAIL_MAX) pr.trail.shift();
+      if (pr.x < -40 || pr.x > canvas.width + 40 || pr.y < -40 || pr.y > canvas.height + 40) {
+        projectiles.splice(i, 1);
+      }
     }
 
     if (!enemies.length) {
@@ -560,8 +744,10 @@
 
       if (dist < player.radius + e.radius - 2) {
         player.isDowned = true;
+        triggerScreenShake(0.95);
         document.getElementById('downed-screen').classList.remove('hidden');
         window.gameStore.addCredits(killCounter * 3);
+        spawnFloatText(player.x, player.y - 20, 'DOWNED', '#ef4444', 1.6);
         toast('DOWNED · BANKED');
       }
 
@@ -571,13 +757,17 @@
         var by = e.y - b.y;
         var bdist = Math.sqrt(bx * bx + by * by);
         if (bdist < e.radius + b.radius) {
+          var hitDmg = b.dmg;
           projectiles.splice(j, 1);
           e.hp -= 1;
+          spawnFloatText(e.x, e.y - e.radius, '-' + hitDmg, '#f472b6', 1.15);
           if (e.hp <= 0) {
             igniteDeathParticles(e.x, e.y, '#ef4444');
+            triggerScreenShake(0.55 + Math.min(0.35, activeWave * 0.02));
+            spawnFloatText(e.x, e.y, 'BLOWN', '#fb7185', 1.35);
             if (Math.random() < 0.45) {
               powerups.push({
-                x: e.x, y: e.y, radius: 8,
+                x: e.x, y: e.y, radius: 9,
                 type: Math.random() < 0.15 ? 'Overdrive' : 'Coin',
                 floatCycle: 0
               });
@@ -602,11 +792,14 @@
         pow.y += (py / pdist) * 6.5;
       }
       if (pdist < player.radius + pow.radius) {
-        if (pow.type === 'Coin') window.gameStore.addCredits(20);
-        else if (pow.type === 'Overdrive') {
+        if (pow.type === 'Coin') {
+          window.gameStore.addCredits(20);
+          spawnFloatText(pow.x, pow.y, '+20¤', '#fbbf24', 1.4);
+        } else if (pow.type === 'Overdrive') {
           var prev = attackSpeedInterval;
           attackSpeedInterval = Math.max(3, attackSpeedInterval - 10);
           setTimeout(function () { attackSpeedInterval = Math.max(prev, 10); }, 5000);
+          spawnFloatText(pow.x, pow.y, 'OVERDRIVE', '#ec4899', 1.5);
           toast('OVERDRIVE');
         }
         powerups.splice(pi, 1);
@@ -617,96 +810,213 @@
       var pt = particles[ti];
       pt.x += pt.vx;
       pt.y += pt.vy;
+      pt.vx *= 0.96;
+      pt.vy *= 0.96;
       pt.alpha -= pt.fadeRate;
       if (pt.alpha <= 0) particles.splice(ti, 1);
     }
+
+    for (var si = splatters.length - 1; si >= 0; si--) {
+      splatters[si].alpha -= 0.0015;
+      if (splatters[si].alpha <= 0) splatters.splice(si, 1);
+    }
+
+    for (var fti = floatTexts.length - 1; fti >= 0; fti--) {
+      var ft2 = floatTexts[fti];
+      ft2.y += ft2.vy;
+      ft2.life++;
+      ft2.alpha = Math.max(0, 1 - (ft2.life / ft2.maxLife));
+      ft2.scale += 0.015;
+      if (ft2.life >= ft2.maxLife) floatTexts.splice(fti, 1);
+    }
+  }
+
+  function drawBloomOrb(x, y, radius, core, mid, rim) {
+    var g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    g.addColorStop(0, core);
+    g.addColorStop(0.45, mid);
+    g.addColorStop(1, rim);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawProjectileTrail(pr) {
+    if (!pr.trail || pr.trail.length < 2) return;
+    for (var t = 0; t < pr.trail.length - 1; t++) {
+      var a = pr.trail[t];
+      var b = pr.trail[t + 1];
+      var fade = (t + 1) / pr.trail.length;
+      ctx.save();
+      ctx.globalAlpha = fade * 0.75;
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = Math.max(1, pr.radius * fade * 1.4);
+      ctx.lineCap = 'round';
+      ctx.shadowBlur = 12 * fade;
+      ctx.shadowColor = '#06b6d4';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawFloatTexts() {
+    floatTexts.forEach(function (ft) {
+      ctx.save();
+      ctx.globalAlpha = ft.alpha;
+      ctx.translate(ft.x, ft.y);
+      ctx.scale(ft.scale, ft.scale);
+      ctx.font = '900 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = ft.color;
+      ctx.fillStyle = ft.color;
+      ctx.fillText(ft.text, 0, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = ft.alpha * 0.55;
+      ctx.fillText(ft.text, 0, 0);
+      ctx.restore();
+    });
   }
 
   function drawCombatEngineFrame() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    var bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    bg.addColorStop(0, '#030611');
-    bg.addColorStop(1, '#05020a');
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
+
+    var bg = ctx.createRadialGradient(
+      canvas.width * 0.5, canvas.height * 0.45, 20,
+      canvas.width * 0.5, canvas.height * 0.5, Math.max(canvas.width, canvas.height) * 0.75
+    );
+    bg.addColorStop(0, '#0a1528');
+    bg.addColorStop(0.55, '#030611');
+    bg.addColorStop(1, '#010208');
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(-40, -40, canvas.width + 80, canvas.height + 80);
+
+    /* subtle floor grid */
+    ctx.save();
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.06)';
+    ctx.lineWidth = 1;
+    var grid = 40;
+    for (var gx = 0; gx < canvas.width + grid; gx += grid) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, canvas.height);
+      ctx.stroke();
+    }
+    for (var gy = 0; gy < canvas.height + grid; gy += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(canvas.width, gy);
+      ctx.stroke();
+    }
+    ctx.restore();
 
     splatters.forEach(function (s) {
       ctx.save();
       ctx.globalAlpha = s.alpha;
-      ctx.fillStyle = '#1e0505';
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-      ctx.fill();
+      drawBloomOrb(s.x, s.y, s.radius, 'rgba(127, 29, 29, 0.9)', 'rgba(69, 10, 10, 0.5)', 'rgba(0,0,0,0)');
       ctx.restore();
     });
 
     powerups.forEach(function (pow) {
+      var py = pow.y + Math.sin(pow.floatCycle) * 4;
       ctx.save();
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = pow.type === 'Coin' ? '#fbbf24' : '#ec4899';
-      ctx.fillStyle = pow.type === 'Coin' ? '#d97706' : '#db2777';
-      ctx.beginPath();
-      ctx.arc(pow.x, pow.y + Math.sin(pow.floatCycle) * 4, pow.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.shadowBlur = 22;
+      if (pow.type === 'Coin') {
+        ctx.shadowColor = '#fbbf24';
+        drawBloomOrb(pow.x, py, pow.radius * 2.2, '#fff7ed', '#fbbf24', 'rgba(245, 158, 11, 0)');
+        drawBloomOrb(pow.x, py, pow.radius, '#ffffff', '#f59e0b', 'rgba(180, 83, 9, 0.2)');
+      } else {
+        ctx.shadowColor = '#ec4899';
+        drawBloomOrb(pow.x, py, pow.radius * 2.4, '#fce7f3', '#ec4899', 'rgba(219, 39, 119, 0)');
+        drawBloomOrb(pow.x, py, pow.radius, '#ffffff', '#db2777', 'rgba(157, 23, 77, 0.2)');
+      }
       ctx.restore();
     });
 
     projectiles.forEach(function (p) {
+      drawProjectileTrail(p);
       ctx.save();
-      ctx.shadowBlur = 14;
-      ctx.shadowColor = '#06b6d4';
-      ctx.fillStyle = '#ccfbf1';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#22d3ee';
+      drawBloomOrb(p.x, p.y, p.radius * 2.4, '#ecfeff', '#22d3ee', 'rgba(6, 182, 212, 0)');
+      drawBloomOrb(p.x, p.y, p.radius, '#ffffff', '#67e8f9', 'rgba(8, 145, 178, 0.15)');
       ctx.restore();
     });
 
     enemies.forEach(function (e) {
       ctx.save();
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = 24;
       ctx.shadowColor = '#ef4444';
-      var radialGrad = ctx.createRadialGradient(e.x, e.y, 1, e.x, e.y, e.radius);
-      radialGrad.addColorStop(0, '#f87171');
-      radialGrad.addColorStop(0.6, '#b91c1c');
-      radialGrad.addColorStop(1, '#450a0a');
-      ctx.fillStyle = radialGrad;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
+      drawBloomOrb(
+        e.x, e.y, e.radius * 2.6,
+        'rgba(254, 202, 202, 0.95)',
+        'rgba(239, 68, 68, 0.85)',
+        'rgba(127, 29, 29, 0)'
+      );
+      drawBloomOrb(
+        e.x, e.y, e.radius,
+        '#fecaca',
+        '#dc2626',
+        'rgba(69, 10, 10, 0.35)'
+      );
       ctx.restore();
     });
 
     particles.forEach(function (pt) {
       ctx.save();
       ctx.globalAlpha = pt.alpha;
-      ctx.fillStyle = pt.color;
-      ctx.fillRect(pt.x, pt.y, 3, 3);
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = pt.color;
+      drawBloomOrb(pt.x, pt.y, pt.radius * 2, '#ffffff', pt.color, 'rgba(0,0,0,0)');
       ctx.restore();
     });
 
     if (!player.isDowned) {
       ctx.save();
-      ctx.shadowBlur = 25;
+      ctx.shadowBlur = 30;
       ctx.shadowColor = '#06b6d4';
-      ctx.fillStyle = '#ffffff';
+      drawBloomOrb(
+        player.x, player.y, player.radius * 2.8,
+        'rgba(207, 250, 254, 0.9)',
+        'rgba(6, 182, 212, 0.55)',
+        'rgba(8, 145, 178, 0)'
+      );
+      drawBloomOrb(
+        player.x, player.y, player.radius,
+        '#ffffff',
+        '#a5f3fc',
+        'rgba(14, 116, 144, 0.4)'
+      );
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#0891b2';
-      ctx.lineWidth = 4;
+      ctx.arc(player.x, player.y, player.radius + 2, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
-    ctx.fillStyle = 'rgba(6, 182, 212, 0.85)';
+    drawFloatTexts();
+
+    ctx.fillStyle = 'rgba(6, 182, 212, 0.9)';
     ctx.font = '900 11px monospace';
     ctx.textAlign = 'left';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#06b6d4';
     ctx.fillText('THREAT VECTOR: ' + activeWave, 24, 34);
     ctx.fillText('ELIMINATIONS: ' + killCounter, 24, 50);
-    var p = window.gameStore.getActive();
-    ctx.fillText('MATRIX: ' + p.weapon, 24, 66);
+    var profile = window.gameStore.getActive();
+    ctx.fillText('MATRIX: ' + profile.weapon, 24, 66);
+
+    ctx.restore();
   }
 
   function executeMainLoop() {
@@ -718,6 +1028,9 @@
   window.resetCombatLoop = function () {
     player.isDowned = false;
     combatPaused = false;
+    shake.trauma = 0;
+    shake.x = 0;
+    shake.y = 0;
     fitCanvas();
     player.x = canvas.width / 2 || 400;
     player.y = canvas.height / 2 || 300;
@@ -725,6 +1038,7 @@
     enemies = [];
     powerups = [];
     particles = [];
+    floatTexts = [];
     activeWave = Math.max(1, activeWave);
     document.getElementById('downed-screen').classList.add('hidden');
     document.getElementById('level-up-screen').classList.add('hidden');
