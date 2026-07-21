@@ -8,10 +8,19 @@ import { getState } from '../store/gameStore.js'
 import { eraById } from '../data/eras.js'
 import { multiplayerEngine } from './multiplayerEngine.js'
 
-const ISO_YAW = Math.PI / 4
-const ISO_PITCH = Math.atan(1 / Math.sqrt(2))
 const FRUSTUM = 12
 const PLAYER_BODY_Y = 0.42
+/** Roblox-style iso rig — equal offset on all axes, 45° high angle. */
+const CAM_ISO_X = 60
+const CAM_ISO_Y = 60
+const CAM_ISO_Z = 60
+/** Keyboard movement iso projection (unchanged from prior loop). */
+const ISO_YAW = Math.PI / 4
+/** Glowing cyan vector combat grid (world units). */
+const GRID_EXTENT = 120
+const GRID_DIVISIONS = 40
+const GRID_COLOR_MAIN = 0x06b6d4
+const GRID_COLOR_SUB = 0x111827
 const BURST_COUNT = 14
 const BURST_POOL_CAP = BURST_COUNT * 12
 
@@ -22,6 +31,7 @@ const _v3Dir = new THREE.Vector3()
 const _v3Up = new THREE.Vector3(0, 1, 0)
 
 function createRenderer(canvas) {
+  // WebGL pipeline bound to #combat-canvas — no 2D ctx drawing on the battle surface.
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
@@ -138,26 +148,42 @@ function createPlayerRig() {
 export function createCombatEngine(canvas, hudCanvas) {
   const renderer = createRenderer(canvas)
   const scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x030712, 0.038)
+  scene.fog = new THREE.FogExp2(0x030712, 0.022)
   scene.background = new THREE.Color(0x030712)
 
-  const camera = new THREE.OrthographicCamera(-FRUSTUM, FRUSTUM, FRUSTUM, -FRUSTUM, 0.1, 220)
-  camera.rotation.order = 'YXZ'
+  const camera = new THREE.OrthographicCamera(-FRUSTUM, FRUSTUM, FRUSTUM, -FRUSTUM, 0.1, 500)
+  camera.position.set(CAM_ISO_X, CAM_ISO_Y, CAM_ISO_Z)
+  camera.lookAt(0, 0, 0)
 
-  const ambientLight = new THREE.AmbientLight(0x1e3a5f, 0.52)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
   scene.add(ambientLight)
+
+  const overheadLight = new THREE.DirectionalLight(0x22d3ee, 1.5)
+  overheadLight.position.set(0, 60, 0)
+  overheadLight.castShadow = true
+  overheadLight.shadow.mapSize.set(1024, 1024)
+  overheadLight.shadow.camera.left = -40
+  overheadLight.shadow.camera.right = 40
+  overheadLight.shadow.camera.top = 40
+  overheadLight.shadow.camera.bottom = -40
+  scene.add(overheadLight)
 
   const playerLight = new THREE.PointLight(0x67e8f9, 1.85, 30, 1.8)
   playerLight.castShadow = true
   playerLight.shadow.mapSize.set(512, 512)
   scene.add(playerLight)
 
-  const fillLight = new THREE.DirectionalLight(0xfff1e0, 0.35)
-  fillLight.position.set(-8, 16, 6)
-  scene.add(fillLight)
-
   const arenaGroup = new THREE.Group()
   scene.add(arenaGroup)
+
+  const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
+  combatGrid.position.y = 0.01
+  const gridMats = Array.isArray(combatGrid.material) ? combatGrid.material : [combatGrid.material]
+  gridMats.forEach((m) => {
+    m.transparent = true
+    m.opacity = 0.85
+  })
+  arenaGroup.add(combatGrid)
 
   const player = {
     mesh: null,
@@ -256,60 +282,28 @@ export function createCombatEngine(canvas, hudCanvas) {
   function rebuildArena() {
     while (arenaGroup.children.length) {
       const c = arenaGroup.children.pop()
+      if (c.type === 'GridHelper') continue
       disposeMesh(c)
     }
 
     const era = eraById(getState().eraId)
-    const accent = new THREE.Color(era.palette.accent)
     scene.background = new THREE.Color(era.palette.ground).multiplyScalar(0.12)
     scene.fog.color = new THREE.Color(0x030712)
 
-    const floor = new THREE.Mesh(
-      markOwned(new THREE.PlaneGeometry(34, 34)),
-      markOwned(
-        new THREE.MeshStandardMaterial({
-          color: 0x080c14,
-          metalness: 0.88,
-          roughness: 0.2,
-          envMapIntensity: 0.9,
-        })
-      )
-    )
-    floor.rotation.x = -Math.PI / 2
-    floor.receiveShadow = true
-    arenaGroup.add(floor)
-
-    const grid = new THREE.GridHelper(32, 32, accent.getHex(), 0x1e293b)
-    grid.position.y = 0.012
-    const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
-    gridMats.forEach((m) => {
-      m.transparent = true
-      m.opacity = 0.42
-    })
-    arenaGroup.add(grid)
-
-    const rim = new THREE.Mesh(
-      markOwned(new THREE.RingGeometry(15.4, 16, 72)),
-      markOwned(
-        new THREE.MeshStandardMaterial({
-          color: accent,
-          emissive: accent,
-          emissiveIntensity: 0.4,
-          metalness: 0.6,
-          roughness: 0.3,
-          side: THREE.DoubleSide,
-          transparent: true,
-          opacity: 0.75,
-        })
-      )
-    )
-    rim.rotation.x = -Math.PI / 2
-    rim.position.y = 0.02
-    arenaGroup.add(rim)
+    if (!arenaGroup.children.some((c) => c.type === 'GridHelper')) {
+      const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
+      combatGrid.position.y = 0.01
+      const gridMats = Array.isArray(combatGrid.material) ? combatGrid.material : [combatGrid.material]
+      gridMats.forEach((m) => {
+        m.transparent = true
+        m.opacity = 0.85
+      })
+      arenaGroup.add(combatGrid)
+    }
 
     if (player.mesh?.userData?.neonRing) {
-      player.mesh.userData.neonRing.material.emissive.set(accent)
-      player.mesh.userData.neonRing.material.color.set(accent)
+      player.mesh.userData.neonRing.material.emissive.set(era.palette.accent)
+      player.mesh.userData.neonRing.material.color.set(era.palette.accent)
     }
   }
 
@@ -600,17 +594,12 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function applyCamera() {
-    const dist = 22
     const shake = cameraJolt.strength
     const jx = cameraJolt.x * shake
     const jy = cameraJolt.y * shake
     const jz = cameraJolt.z * shake
-    camera.position.set(
-      player.x + dist * Math.sin(ISO_YAW),
-      dist * Math.sin(ISO_PITCH) * 1.35,
-      player.z + dist * Math.cos(ISO_YAW)
-    )
-    camera.lookAt(player.x + jx, 0.48 + jy, player.z + jz)
+    camera.position.set(player.x + CAM_ISO_X, CAM_ISO_Y, player.z + CAM_ISO_Z)
+    camera.lookAt(player.x + jx, jy, player.z + jz)
   }
 
   function killEnemy(e, state, ei) {
