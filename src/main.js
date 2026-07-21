@@ -140,7 +140,7 @@ async function boot() {
   setPanelByIndex(1)
   paint()
 
-  document.querySelectorAll('.tab-btn').forEach((btn) => {
+  document.querySelectorAll('nav [data-go]').forEach((btn) => {
     btn.addEventListener('click', () => setPanelByName(btn.getAttribute('data-go')))
   })
 
