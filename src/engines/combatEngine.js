@@ -103,24 +103,6 @@ function styleCombatGrid(grid) {
   grid.renderOrder = 2
 }
 
-function createMetallicFloor() {
-  const floor = new THREE.Mesh(
-    markOwned(new THREE.PlaneGeometry(120, 120)),
-    markOwned(
-      new THREE.MeshStandardMaterial({
-        color: 0x070c19,
-        roughness: 0.15,
-        metalness: 0.85,
-      })
-    )
-  )
-  floor.rotation.x = -Math.PI / 2
-  floor.position.y = 0
-  floor.receiveShadow = true
-  floor.userData.arenaFloor = true
-  return floor
-}
-
 function createPlayerRig() {
   const rig = new THREE.Group()
 
@@ -169,28 +151,37 @@ export function createCombatEngine(canvas, hudCanvas) {
   camera.position.set(CAM_ISO_X, CAM_ISO_Y, CAM_ISO_Z)
   camera.lookAt(0, 0, 0)
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.45)
+  const floorGeo = new THREE.PlaneGeometry(200, 200)
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x060b13,
+    roughness: 0.2,
+    metalness: 0.8,
+    side: THREE.DoubleSide,
+  })
+  const floorMesh = new THREE.Mesh(floorGeo, floorMat)
+  floorMesh.rotation.x = -Math.PI / 2
+  floorMesh.position.y = 0
+  floorMesh.receiveShadow = true
+  scene.add(floorMesh)
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
   scene.add(ambientLight)
 
-  const overheadLight = new THREE.DirectionalLight(0x22d3ee, 1.8)
-  overheadLight.position.set(0, 60, 0)
-  overheadLight.castShadow = true
-  overheadLight.shadow.mapSize.set(1024, 1024)
-  overheadLight.shadow.camera.left = -40
-  overheadLight.shadow.camera.right = 40
-  overheadLight.shadow.camera.top = 40
-  overheadLight.shadow.camera.bottom = -40
-  scene.add(overheadLight)
+  const mainDirectional = new THREE.DirectionalLight(0x00ffff, 1.8)
+  mainDirectional.position.set(40, 100, 40)
+  mainDirectional.castShadow = true
+  mainDirectional.shadow.mapSize.set(1024, 1024)
+  mainDirectional.shadow.camera.left = -60
+  mainDirectional.shadow.camera.right = 60
+  mainDirectional.shadow.camera.top = 60
+  mainDirectional.shadow.camera.bottom = -60
+  scene.add(mainDirectional)
 
-  const playerLight = new THREE.PointLight(0x67e8f9, 1.85, 30, 1.8)
-  playerLight.castShadow = true
-  playerLight.shadow.mapSize.set(512, 512)
-  scene.add(playerLight)
+  const playerPointLight = new THREE.PointLight(0xffaa00, 2.5, 30)
+  scene.add(playerPointLight)
 
   const arenaGroup = new THREE.Group()
   scene.add(arenaGroup)
-
-  arenaGroup.add(createMetallicFloor())
 
   const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
   styleCombatGrid(combatGrid)
@@ -301,8 +292,6 @@ export function createCombatEngine(canvas, hudCanvas) {
     scene.background = new THREE.Color(SCENE_BG)
     scene.fog.color = new THREE.Color(SCENE_BG)
     scene.fog.density = FOG_DENSITY
-
-    arenaGroup.add(createMetallicFloor())
 
     if (existingGrid) {
       styleCombatGrid(existingGrid)
@@ -579,6 +568,10 @@ export function createCombatEngine(canvas, hudCanvas) {
     camera.updateProjectionMatrix()
   }
 
+  function syncPlayerPointLight() {
+    if (player.mesh) playerPointLight.position.copy(player.mesh.position)
+  }
+
   function applyCamera() {
     const shake = cameraJolt.strength
     const jx = cameraJolt.x * shake
@@ -615,7 +608,7 @@ export function createCombatEngine(canvas, hudCanvas) {
     if (player.downed) {
       updateParticles(dt)
       updateRemotePlayers(dt)
-      playerLight.position.set(player.x, 1.6, player.z)
+      syncPlayerPointLight()
       applyCamera()
       return
     }
@@ -648,8 +641,7 @@ export function createCombatEngine(canvas, hudCanvas) {
       player.mesh.rotation.y = player.yaw
     }
 
-    playerLight.position.set(player.x, 1.85, player.z)
-    playerLight.intensity = 1.65 + Math.sin(performance.now() * 0.005) * 0.25
+    syncPlayerPointLight()
 
     ensureWave()
 
@@ -816,6 +808,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function renderFrame() {
+    syncPlayerPointLight()
     renderer.render(scene, camera)
     if (!hudCtx || !hudCanvas) return
     hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height)
