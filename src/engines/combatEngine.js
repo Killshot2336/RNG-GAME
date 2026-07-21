@@ -1,7 +1,7 @@
 /**
  * High-fidelity 3D isometric combat field (Three.js WebGL).
- * Orthographic iso camera, metallic dungeon grid, Vector3 proximity targeting,
- * box-mesh death bursts, and camera jolt on heavy impacts.
+ * Orthographic iso camera, metallic dungeon floor, neon grid, Vector3
+ * proximity auto-aim, box-mesh death bursts, and camera jolt on impacts.
  */
 import * as THREE from 'three'
 import { getState } from '../store/gameStore.js'
@@ -10,44 +10,17 @@ import { multiplayerEngine } from './multiplayerEngine.js'
 
 const FRUSTUM = 12
 const PLAYER_BODY_Y = 0.42
-/** Roblox-style iso rig — equal offset on all axes, 45° high angle. */
 const CAM_ISO_X = 60
 const CAM_ISO_Y = 60
 const CAM_ISO_Z = 60
-/** Keyboard movement iso projection (unchanged from prior loop). */
 const ISO_YAW = Math.PI / 4
-/** Glowing cyan vector combat grid (world units). */
-const GRID_EXTENT = 120
-const GRID_DIVISIONS = 40
-const GRID_COLOR_MAIN = 0x00ffff
-const GRID_COLOR_SUB = 0x0a3d52
-const SCENE_BG = 0x02050f
-const FOG_DENSITY = 0.012
 const BURST_COUNT = 14
 const BURST_POOL_CAP = BURST_COUNT * 12
 
-/** Reusable math scratch — avoids per-frame allocations. */
 const _v3A = new THREE.Vector3()
 const _v3B = new THREE.Vector3()
 const _v3Dir = new THREE.Vector3()
 const _v3Up = new THREE.Vector3(0, 1, 0)
-
-function createRenderer(canvas) {
-  // WebGL pipeline bound to #combat-canvas — no 2D ctx drawing on the battle surface.
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: false,
-    powerPreference: 'high-performance',
-  })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-  renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.05
-  return renderer
-}
 
 function makeFloatingText() {
   return {
@@ -90,19 +63,6 @@ function markOwned(geoOrMat) {
   return geoOrMat
 }
 
-function styleCombatGrid(grid) {
-  const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
-  gridMats.forEach((m, i) => {
-    m.transparent = true
-    m.opacity = 0.6
-    m.depthWrite = false
-    m.blending = THREE.AdditiveBlending
-    m.color.setHex(i === 0 ? GRID_COLOR_MAIN : GRID_COLOR_SUB)
-  })
-  grid.position.y = 0.015
-  grid.renderOrder = 2
-}
-
 function createPlayerRig() {
   const rig = new THREE.Group()
 
@@ -142,8 +102,10 @@ function createPlayerRig() {
 }
 
 export function createCombatEngine(canvas, hudCanvas) {
-  const canvasEl = canvas
-  const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: false })
+  // ——— COMPACT 3D WORLD BUILDER MATRIX ———
+  // Canvas is injected from main.js (#combat-canvas); keep that contract.
+  const canvasEl = canvas || document.getElementById('combat-canvas')
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true })
   renderer.setSize(canvasEl.clientWidth || 640, canvasEl.clientHeight || 480)
   renderer.setPixelRatio(window.devicePixelRatio || 1)
   renderer.shadowMap.enabled = true
@@ -151,6 +113,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
+
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x02050c)
   scene.fog = new THREE.FogExp2(0x02050c, 0.01)
@@ -159,46 +122,51 @@ export function createCombatEngine(canvas, hudCanvas) {
   camera.position.set(CAM_ISO_X, CAM_ISO_Y, CAM_ISO_Z)
   camera.lookAt(0, 0, 0)
 
-  const floorGeo = new THREE.PlaneGeometry(300, 300)
-  // MeshStandardMaterial can fail or look near-black under software WebGL fallback.
-  // MeshBasicMaterial is self-lit and guarantees visible floor geometry.
-  const floorMat = new THREE.MeshBasicMaterial({
-    color: 0x0b2a55,
-    side: THREE.DoubleSide,
+  // ——— RIGID GROUND GEOMETRY INJECTION ———
+  const groundGeo = new THREE.PlaneGeometry(300, 300)
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x070d1a,
+    roughness: 0.15,
+    metalness: 0.85,
   })
-  const floorMesh = new THREE.Mesh(floorGeo, floorMat)
-  floorMesh.rotation.x = -Math.PI / 2
-  floorMesh.position.y = 0
-  floorMesh.receiveShadow = false
-  scene.add(floorMesh)
+  const groundMesh = new THREE.Mesh(groundGeo, groundMat)
+  groundMesh.rotation.x = -Math.PI / 2
+  groundMesh.position.y = 0
+  groundMesh.receiveShadow = true
+  scene.add(groundMesh)
 
-  const globalAmbient = new THREE.AmbientLight(0xffffff, 0.55)
+  const neonGrid = new THREE.GridHelper(300, 60, 0x00ffff, 0x111827)
+  neonGrid.position.y = 0.02
+  if (Array.isArray(neonGrid.material)) {
+    neonGrid.material.forEach((m) => {
+      m.transparent = true
+      m.opacity = 0.5
+    })
+  } else {
+    neonGrid.material.transparent = true
+    neonGrid.material.opacity = 0.5
+  }
+  scene.add(neonGrid)
+
+  // ——— DYNAMIC AMBIENT & POINT LIGHTING MATRIX ———
+  const globalAmbient = new THREE.AmbientLight(0xffffff, 0.5)
   scene.add(globalAmbient)
 
-  const directionalSpot = new THREE.DirectionalLight(0x22d3ee, 1.8)
-  directionalSpot.position.set(50, 120, 50)
-  directionalSpot.castShadow = false
+  const directionalSpot = new THREE.DirectionalLight(0x22d3ee, 1.5)
+  directionalSpot.position.set(40, 100, 40)
+  directionalSpot.castShadow = true
+  directionalSpot.shadow.mapSize.width = 1024
+  directionalSpot.shadow.mapSize.height = 1024
+  directionalSpot.shadow.camera.near = 1
+  directionalSpot.shadow.camera.far = 250
+  directionalSpot.shadow.camera.left = -40
+  directionalSpot.shadow.camera.right = 40
+  directionalSpot.shadow.camera.top = 40
+  directionalSpot.shadow.camera.bottom = -40
   scene.add(directionalSpot)
 
-  const playerPointLight = new THREE.PointLight(0xffaa00, 2.5, 30)
-  scene.add(playerPointLight)
-
-  const arenaGroup = new THREE.Group()
-  scene.add(arenaGroup)
-
-  const neonGrid = new THREE.GridHelper(300, 60, 0x00ffff, 0x1e293b)
-  neonGrid.position.y = 0.02 // Elevated minutely above floor to prevent z-fighting flicker
-  const neonGridMats = Array.isArray(neonGrid.material) ? neonGrid.material : [neonGrid.material]
-  neonGridMats.forEach((m) => {
-    m.transparent = true
-    m.opacity = 1.0
-    m.depthWrite = false
-    if ('blending' in m) m.blending = THREE.AdditiveBlending
-    if (m.color) m.color.setHex(0x00ffff)
-    if ('emissive' in m && m.emissive) m.emissive.setHex(0x00ffff)
-    if ('emissiveIntensity' in m) m.emissiveIntensity = 1.0
-  })
-  scene.add(neonGrid)
+  const trackingLight = new THREE.PointLight(0x22d3ee, 2, 25)
+  scene.add(trackingLight)
 
   const player = {
     mesh: null,
@@ -300,6 +268,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   function ensurePlayerMesh() {
     if (player.mesh) return
     player.mesh = createPlayerRig()
+    player.mesh.castShadow = true
     scene.add(player.mesh)
   }
 
@@ -343,7 +312,9 @@ export function createCombatEngine(canvas, hudCanvas) {
     wave += 1
     getState().setWave(wave)
     const count = 5 + wave * 2
-    for (let i = 0; i < count; i++) spawnEnemy()
+    for (let i = 0; i < count; i++) {
+      spawnEnemy()
+    }
   }
 
   function triggerCameraJolt(intensity = 0.42) {
@@ -439,7 +410,6 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     const dir = _v3Dir.subVectors(_v3B, _v3A).normalize()
     if (!sharedLaserGeo) {
-      // Thicker than before so lasers remain visible under degraded/software WebGL rendering.
       sharedLaserGeo = new THREE.CylinderGeometry(0.06, 0.04, 2.5, 10)
     }
 
@@ -469,10 +439,6 @@ export function createCombatEngine(canvas, hudCanvas) {
     }
   }
 
-  /**
-   * Auto-shoot target sort — squared horizontal distance (dx² + dy²) on the arena plane.
-   * dy maps to depth (world Z) so the closest enemy node is picked every refresh tick.
-   */
   function processAutoWeaponFires() {
     frameCounter++
     if (frameCounter % 3 === 0 || !cachedTarget || cachedTarget.hp <= 0) {
@@ -541,12 +507,12 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function resize() {
-    const parent = canvas.parentElement
-    const w = parent.clientWidth || 640
-    const h = parent.clientHeight || 480
+    const parent = canvasEl.parentElement
+    const w = (parent && parent.clientWidth) || canvasEl.clientWidth || 640
+    const h = (parent && parent.clientHeight) || canvasEl.clientHeight || 480
     renderer.setSize(w, h, false)
-    canvas.width = w
-    canvas.height = h
+    canvasEl.width = w
+    canvasEl.height = h
     if (hudCanvas) {
       hudCanvas.width = w
       hudCanvas.height = h
@@ -557,10 +523,6 @@ export function createCombatEngine(canvas, hudCanvas) {
     camera.top = FRUSTUM
     camera.bottom = -FRUSTUM
     camera.updateProjectionMatrix()
-  }
-
-  function syncPlayerPointLight() {
-    if (player.mesh) playerPointLight.position.copy(player.mesh.position)
   }
 
   function applyCamera() {
@@ -588,166 +550,6 @@ export function createCombatEngine(canvas, hudCanvas) {
     enemies.splice(ei, 1)
     state.bumpKill()
     state.addCredits(3)
-  }
-
-  function update(dt) {
-    const state = getState()
-    if (state.skillViewOpen || state.panel !== 'hub') return
-
-    updateCameraJolt(dt)
-
-    if (player.downed) {
-      updateParticles(dt)
-      updateRemotePlayers(dt)
-      syncPlayerPointLight()
-      applyCamera()
-      return
-    }
-
-    const mods = state.skillMods()
-    let mx = 0
-    let mz = 0
-    if (keys.w || keys.arrowup) mz -= 1
-    if (keys.s || keys.arrowdown) mz += 1
-    if (keys.a || keys.arrowleft) mx -= 1
-    if (keys.d || keys.arrowright) mx += 1
-    if (mx || mz) {
-      const lenSq = mx * mx + mz * mz
-      const invLen = lenSq > 0 ? 1 / Math.sqrt(lenSq) : 1
-      mx *= invLen
-      mz *= invLen
-      const ang = -ISO_YAW
-      const rx = mx * Math.cos(ang) - mz * Math.sin(ang)
-      const rz = mx * Math.sin(ang) + mz * Math.cos(ang)
-      player.x += rx * player.speed * dt
-      player.z += rz * player.speed * dt
-      const lim = 14
-      player.x = Math.max(-lim, Math.min(lim, player.x))
-      player.z = Math.max(-lim, Math.min(lim, player.z))
-      player.yaw = Math.atan2(rx, rz)
-    }
-
-    if (player.mesh) {
-      player.mesh.position.set(player.x, PLAYER_BODY_Y, player.z)
-      player.mesh.rotation.y = player.yaw
-    }
-
-    syncPlayerPointLight()
-
-    ensureWave()
-
-    player.fireCd -= dt
-    fireAtNearest()
-
-    const now = performance.now()
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-      const p = projectiles[i]
-      p.mesh.position.x += p.vx * dt
-      p.mesh.position.y += p.vy * dt
-      p.mesh.position.z += p.vz * dt
-      orientLaser(p.mesh, _v3Dir.set(p.vx, p.vy, p.vz), p.speed)
-      p.life -= dt
-      let hit = false
-      for (let ei = enemies.length - 1; ei >= 0; ei--) {
-        const e = enemies[ei]
-        const ep = e.mesh.position
-        const dx = ep.x - p.mesh.position.x
-        const dy = ep.y - p.mesh.position.y
-        const dz = ep.z - p.mesh.position.z
-        const rad = e.radius + 0.22
-        if (dx * dx + dy * dy + dz * dz < rad * rad) {
-          e.hp -= p.dmg
-          floating.spawn(ep.x, ep.y + 0.5, ep.z, `-${Math.round(p.dmg * 10)}`, '#f472b6')
-          hit = true
-          if (e.hp <= 0) killEnemy(e, state, ei)
-          break
-        }
-      }
-      if (hit || p.life <= 0) {
-        removeFromScene(p.mesh)
-        disposeMesh(p.mesh)
-        projectiles.splice(i, 1)
-      }
-    }
-
-    const contactR = 0.42
-    for (let ei = 0; ei < enemies.length; ei++) {
-      const e = enemies[ei]
-      const ep = e.mesh.position
-      const dx = player.x - ep.x
-      const dz = player.z - ep.z
-      const d2 = dx * dx + dz * dz
-      const contact = e.radius + contactR
-      if (d2 > 0.0001) {
-        const inv = 1 / Math.sqrt(d2)
-        ep.x += dx * inv * e.speed * dt
-        ep.z += dz * inv * e.speed * dt
-      }
-      const breath = 1 + Math.sin(now * 0.006 + e.breathePhase) * 0.12
-      e.mesh.scale.setScalar(e.baseScale * breath)
-      e.mesh.rotation.y += dt * 2.2
-      e.mesh.rotation.x = Math.sin(now * 0.004 + e.breathePhase) * 0.15
-
-      if (d2 < contact * contact) {
-        player.hp -= 18 * dt
-        if (player.hp <= 0 && !player.downed) {
-          player.downed = true
-          player.hp = 0
-          state.setMatch({ downed: true })
-          triggerCameraJolt(0.65)
-          multiplayerEngine.publishCombatState(
-            { x: player.x, y: 0.2, z: player.z, vx: 0, vz: 0, downed: true, hp: 0 },
-            { force: true }
-          )
-          floating.spawn(player.x, 1.5, player.z, 'DOWNED', '#ef4444')
-          state.toast('You are down — wait for revive or re-enter')
-        }
-      }
-    }
-
-    const magnet = 2.8 * mods.magnet
-    const magnetSq = magnet * magnet
-    for (let i = coins.length - 1; i >= 0; i--) {
-      const c = coins[i]
-      c.spin += dt * 4
-      c.mesh.rotation.z = c.spin
-      const dx = player.x - c.mesh.position.x
-      const dz = player.z - c.mesh.position.z
-      const d2 = dx * dx + dz * dz
-      if (d2 < magnetSq && d2 > 0.0001) {
-        const inv = 1 / Math.sqrt(d2)
-        c.mesh.position.x += dx * inv * 10 * dt
-        c.mesh.position.z += dz * inv * 10 * dt
-      }
-      if (d2 < 0.3025) {
-        state.addCredits(c.value)
-        floating.spawn(c.mesh.position.x, 1, c.mesh.position.z, `+${c.value}¤`, '#fbbf24')
-        removeFromScene(c.mesh)
-        disposeMesh(c.mesh)
-        coins.splice(i, 1)
-      }
-    }
-
-    updateParticles(dt)
-    updateRemotePlayers(dt)
-    applyCamera()
-
-    syncAccum += dt
-    if (syncAccum > 0.1) {
-      syncAccum = 0
-      if (state.inMatch) {
-        multiplayerEngine.publishCombatState({
-          x: player.x,
-          y: PLAYER_BODY_Y,
-          z: player.z,
-          vx: mx,
-          vz: mz,
-          downed: player.downed,
-          hp: player.hp,
-          aimYaw: player.yaw,
-        })
-      }
-    }
   }
 
   function updateRemotePlayers(dt) {
@@ -798,8 +600,186 @@ export function createCombatEngine(canvas, hudCanvas) {
     entry.downed = !!payload.downed
   }
 
+  function update(dt) {
+    const state = getState()
+    if (state.skillViewOpen || state.panel !== 'hub') return
+
+    updateCameraJolt(dt)
+
+    if (player.downed) {
+      updateParticles(dt)
+      updateRemotePlayers(dt)
+      if (hudCtx && hudCanvas) {
+        hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height)
+        floating.update(dt, projectToHud, drawHudText)
+      }
+      if (player.mesh) {
+        trackingLight.position.copy(player.mesh.position)
+      }
+      applyCamera()
+      return
+    }
+
+    const mods = state.skillMods()
+
+    // Keyboard vector checkers
+    let mx = 0
+    let mz = 0
+    if (keys.w || keys.arrowup) mz -= 1
+    if (keys.s || keys.arrowdown) mz += 1
+    if (keys.a || keys.arrowleft) mx -= 1
+    if (keys.d || keys.arrowright) mx += 1
+    if (mx || mz) {
+      const lenSq = mx * mx + mz * mz
+      const invLen = lenSq > 0 ? 1 / Math.sqrt(lenSq) : 1
+      mx *= invLen
+      mz *= invLen
+      const ang = -ISO_YAW
+      const rx = mx * Math.cos(ang) - mz * Math.sin(ang)
+      const rz = mx * Math.sin(ang) + mz * Math.cos(ang)
+      player.x += rx * player.speed * dt
+      player.z += rz * player.speed * dt
+      const lim = 14
+      player.x = Math.max(-lim, Math.min(lim, player.x))
+      player.z = Math.max(-lim, Math.min(lim, player.z))
+      player.yaw = Math.atan2(rx, rz)
+    }
+
+    // Player movement mesh sync
+    if (player.mesh) {
+      player.mesh.position.set(player.x, PLAYER_BODY_Y, player.z)
+      player.mesh.rotation.y = player.yaw
+      trackingLight.position.copy(player.mesh.position)
+    }
+
+    ensureWave()
+
+    player.fireCd -= dt
+    fireAtNearest()
+
+    const now = performance.now()
+
+    // Automatic projectile spawning arrays / flight + hit tests
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const p = projectiles[i]
+      p.mesh.position.x += p.vx * dt
+      p.mesh.position.y += p.vy * dt
+      p.mesh.position.z += p.vz * dt
+      orientLaser(p.mesh, _v3Dir.set(p.vx, p.vy, p.vz), p.speed)
+      p.life -= dt
+      let hit = false
+      for (let ei = enemies.length - 1; ei >= 0; ei--) {
+        const e = enemies[ei]
+        const ep = e.mesh.position
+        const dx = ep.x - p.mesh.position.x
+        const dy = ep.y - p.mesh.position.y
+        const dz = ep.z - p.mesh.position.z
+        const rad = e.radius + 0.22
+        if (dx * dx + dy * dy + dz * dz < rad * rad) {
+          e.hp -= p.dmg
+          floating.spawn(ep.x, ep.y + 0.5, ep.z, `-${Math.round(p.dmg * 10)}`, '#f472b6')
+          hit = true
+          if (e.hp <= 0) killEnemy(e, state, ei)
+          break
+        }
+      }
+      if (hit || p.life <= 0) {
+        removeFromScene(p.mesh)
+        disposeMesh(p.mesh)
+        projectiles.splice(i, 1)
+      }
+    }
+
+    // Enemy tracking math — chase player, breathe, contact damage
+    const contactR = 0.42
+    for (let ei = 0; ei < enemies.length; ei++) {
+      const e = enemies[ei]
+      const ep = e.mesh.position
+      const dx = player.x - ep.x
+      const dz = player.z - ep.z
+      const d2 = dx * dx + dz * dz
+      const contact = e.radius + contactR
+      if (d2 > 0.0001) {
+        const inv = 1 / Math.sqrt(d2)
+        ep.x += dx * inv * e.speed * dt
+        ep.z += dz * inv * e.speed * dt
+      }
+      const breath = 1 + Math.sin(now * 0.006 + e.breathePhase) * 0.12
+      e.mesh.scale.setScalar(e.baseScale * breath)
+      e.mesh.rotation.y += dt * 2.2
+      e.mesh.rotation.x = Math.sin(now * 0.004 + e.breathePhase) * 0.15
+
+      if (d2 < contact * contact) {
+        player.hp -= 18 * dt
+        if (player.hp <= 0 && !player.downed) {
+          player.downed = true
+          player.hp = 0
+          state.setMatch({ downed: true })
+          triggerCameraJolt(0.65)
+          multiplayerEngine.publishCombatState(
+            { x: player.x, y: 0.2, z: player.z, vx: 0, vz: 0, downed: true, hp: 0 },
+            { force: true }
+          )
+          floating.spawn(player.x, 1.5, player.z, 'DOWNED', '#ef4444')
+          state.toast('You are down — wait for revive or re-enter')
+        }
+      }
+    }
+
+    // Coin magnet + pickup
+    const magnet = 2.8 * mods.magnet
+    const magnetSq = magnet * magnet
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const c = coins[i]
+      c.spin += dt * 4
+      c.mesh.rotation.z = c.spin
+      const dx = player.x - c.mesh.position.x
+      const dz = player.z - c.mesh.position.z
+      const d2 = dx * dx + dz * dz
+      if (d2 < magnetSq && d2 > 0.0001) {
+        const inv = 1 / Math.sqrt(d2)
+        c.mesh.position.x += dx * inv * 10 * dt
+        c.mesh.position.z += dz * inv * 10 * dt
+      }
+      if (d2 < 0.3025) {
+        state.addCredits(c.value)
+        floating.spawn(c.mesh.position.x, 1, c.mesh.position.z, `+${c.value}¤`, '#fbbf24')
+        removeFromScene(c.mesh)
+        disposeMesh(c.mesh)
+        coins.splice(i, 1)
+      }
+    }
+
+    updateParticles(dt)
+    updateRemotePlayers(dt)
+    if (hudCtx && hudCanvas) {
+      hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height)
+      floating.update(dt, projectToHud, drawHudText)
+    }
+    applyCamera()
+
+    syncAccum += dt
+    if (syncAccum > 0.1) {
+      syncAccum = 0
+      if (state.inMatch) {
+        multiplayerEngine.publishCombatState({
+          x: player.x,
+          y: PLAYER_BODY_Y,
+          z: player.z,
+          vx: mx,
+          vz: mz,
+          downed: player.downed,
+          hp: player.hp,
+          aimYaw: player.yaw,
+        })
+      }
+    }
+  }
+
   function renderFrame() {
-    syncPlayerPointLight()
+    if (player.mesh) {
+      trackingLight.position.copy(player.mesh.position)
+    }
     renderer.render(scene, camera)
   }
 
@@ -828,6 +808,9 @@ export function createCombatEngine(canvas, hudCanvas) {
       ensurePlayerMesh()
       rebuildArena()
       resize()
+      if (player.mesh) {
+        trackingLight.position.copy(player.mesh.position)
+      }
       window.addEventListener('resize', resize)
       window.addEventListener('keydown', (e) => onKey(e, true))
       window.addEventListener('keyup', (e) => onKey(e, false))
@@ -876,12 +859,24 @@ export function createCombatEngine(canvas, hudCanvas) {
       this.stop()
       unsubCombat()
       window.removeEventListener('resize', resize)
-      ;[...enemies, ...projectiles.map((p) => p.mesh), ...coins.map((c) => c.mesh)].forEach(disposeMesh)
+      for (let i = 0; i < enemies.length; i++) {
+        disposeMesh(enemies[i].mesh)
+      }
+      for (let i = 0; i < projectiles.length; i++) {
+        disposeMesh(projectiles[i].mesh)
+      }
+      for (let i = 0; i < coins.length; i++) {
+        disposeMesh(coins[i].mesh)
+      }
       enemies.length = 0
       projectiles.length = 0
       coins.length = 0
-      particles.forEach(releaseBurst)
+      for (let i = 0; i < particles.length; i++) {
+        releaseBurst(particles[i])
+      }
       particles.length = 0
+      groundGeo.dispose()
+      groundMat.dispose()
       renderer.dispose()
     },
 
@@ -953,7 +948,9 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     auditParticlePool(steps = 90, stepDt = 1 / 60) {
       const before = particles.length
-      for (let s = 0; s < steps; s++) updateParticles(stepDt)
+      for (let s = 0; s < steps; s++) {
+        updateParticles(stepDt)
+      }
       let leaked = 0
       for (let i = 0; i < particles.length; i++) {
         if (particles[i].alpha <= 0) leaked++
