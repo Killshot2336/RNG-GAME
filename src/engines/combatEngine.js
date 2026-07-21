@@ -142,40 +142,43 @@ function createPlayerRig() {
 }
 
 export function createCombatEngine(canvas, hudCanvas) {
-  const renderer = createRenderer(canvas)
+  const canvasEl = canvas
+  const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: false })
+  renderer.setSize(canvasEl.clientWidth || 640, canvasEl.clientHeight || 480)
+  renderer.setPixelRatio(window.devicePixelRatio || 1)
+  renderer.shadowMap.enabled = true
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.05
   const scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(SCENE_BG, FOG_DENSITY)
-  scene.background = new THREE.Color(SCENE_BG)
+  scene.background = new THREE.Color(0x02050c)
+  scene.fog = new THREE.FogExp2(0x02050c, 0.01)
 
-  const camera = new THREE.OrthographicCamera(-FRUSTUM, FRUSTUM, FRUSTUM, -FRUSTUM, 0.1, 500)
+  const camera = new THREE.OrthographicCamera(-FRUSTUM, FRUSTUM, FRUSTUM, -FRUSTUM, 0.01, 500)
   camera.position.set(CAM_ISO_X, CAM_ISO_Y, CAM_ISO_Z)
   camera.lookAt(0, 0, 0)
 
-  const floorGeo = new THREE.PlaneGeometry(200, 200)
-  const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x060b13,
-    roughness: 0.2,
-    metalness: 0.8,
+  const floorGeo = new THREE.PlaneGeometry(300, 300)
+  // MeshStandardMaterial can fail or look near-black under software WebGL fallback.
+  // MeshBasicMaterial is self-lit and guarantees visible floor geometry.
+  const floorMat = new THREE.MeshBasicMaterial({
+    color: 0x0b2a55,
     side: THREE.DoubleSide,
   })
   const floorMesh = new THREE.Mesh(floorGeo, floorMat)
   floorMesh.rotation.x = -Math.PI / 2
   floorMesh.position.y = 0
-  floorMesh.receiveShadow = true
+  floorMesh.receiveShadow = false
   scene.add(floorMesh)
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
-  scene.add(ambientLight)
+  const globalAmbient = new THREE.AmbientLight(0xffffff, 0.55)
+  scene.add(globalAmbient)
 
-  const mainDirectional = new THREE.DirectionalLight(0x00ffff, 1.8)
-  mainDirectional.position.set(40, 100, 40)
-  mainDirectional.castShadow = true
-  mainDirectional.shadow.mapSize.set(1024, 1024)
-  mainDirectional.shadow.camera.left = -60
-  mainDirectional.shadow.camera.right = 60
-  mainDirectional.shadow.camera.top = 60
-  mainDirectional.shadow.camera.bottom = -60
-  scene.add(mainDirectional)
+  const directionalSpot = new THREE.DirectionalLight(0x22d3ee, 1.8)
+  directionalSpot.position.set(50, 120, 50)
+  directionalSpot.castShadow = false
+  scene.add(directionalSpot)
 
   const playerPointLight = new THREE.PointLight(0xffaa00, 2.5, 30)
   scene.add(playerPointLight)
@@ -183,9 +186,19 @@ export function createCombatEngine(canvas, hudCanvas) {
   const arenaGroup = new THREE.Group()
   scene.add(arenaGroup)
 
-  const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
-  styleCombatGrid(combatGrid)
-  arenaGroup.add(combatGrid)
+  const neonGrid = new THREE.GridHelper(300, 60, 0x00ffff, 0x1e293b)
+  neonGrid.position.y = 0.02 // Elevated minutely above floor to prevent z-fighting flicker
+  const neonGridMats = Array.isArray(neonGrid.material) ? neonGrid.material : [neonGrid.material]
+  neonGridMats.forEach((m) => {
+    m.transparent = true
+    m.opacity = 1.0
+    m.depthWrite = false
+    if ('blending' in m) m.blending = THREE.AdditiveBlending
+    if (m.color) m.color.setHex(0x00ffff)
+    if ('emissive' in m && m.emissive) m.emissive.setHex(0x00ffff)
+    if ('emissiveIntensity' in m) m.emissiveIntensity = 1.0
+  })
+  scene.add(neonGrid)
 
   const player = {
     mesh: null,
@@ -278,30 +291,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function rebuildArena() {
-    let existingGrid = null
-    while (arenaGroup.children.length) {
-      const c = arenaGroup.children.pop()
-      if (c.type === 'GridHelper') {
-        existingGrid = c
-        continue
-      }
-      disposeMesh(c)
-    }
-
     const era = eraById(getState().eraId)
-    scene.background = new THREE.Color(SCENE_BG)
-    scene.fog.color = new THREE.Color(SCENE_BG)
-    scene.fog.density = FOG_DENSITY
-
-    if (existingGrid) {
-      styleCombatGrid(existingGrid)
-      arenaGroup.add(existingGrid)
-    } else {
-      const grid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
-      styleCombatGrid(grid)
-      arenaGroup.add(grid)
-    }
-
     if (player.mesh?.userData?.neonRing) {
       player.mesh.userData.neonRing.material.color.set(era.palette.accent)
     }
@@ -449,7 +439,8 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     const dir = _v3Dir.subVectors(_v3B, _v3A).normalize()
     if (!sharedLaserGeo) {
-      sharedLaserGeo = new THREE.CylinderGeometry(0.02, 0.012, 1.5, 8)
+      // Thicker than before so lasers remain visible under degraded/software WebGL rendering.
+      sharedLaserGeo = new THREE.CylinderGeometry(0.06, 0.04, 2.5, 10)
     }
 
     const makeBolt = (yawOffset) => {
@@ -810,21 +801,6 @@ export function createCombatEngine(canvas, hudCanvas) {
   function renderFrame() {
     syncPlayerPointLight()
     renderer.render(scene, camera)
-    if (!hudCtx || !hudCanvas) return
-    hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height)
-    floating.update(1 / 60, projectToHud, drawHudText)
-    const s = getState()
-    hudCtx.fillStyle = 'rgba(245,197,66,0.95)'
-    hudCtx.font = '800 12px Segoe UI, sans-serif'
-    hudCtx.textAlign = 'left'
-    hudCtx.fillText(`WAVE ${wave}  ·  ${eraById(s.eraId).name}`, 16, 28)
-    hudCtx.fillText(`HP ${Math.ceil(player.hp)}`, 16, 48)
-    if (player.downed) {
-      hudCtx.fillStyle = 'rgba(239,68,68,0.9)'
-      hudCtx.font = '900 28px Segoe UI, sans-serif'
-      hudCtx.textAlign = 'center'
-      hudCtx.fillText('DOWNED', hudCanvas.width / 2, hudCanvas.height / 2)
-    }
   }
 
   function loop(now) {
