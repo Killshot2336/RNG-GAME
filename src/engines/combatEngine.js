@@ -95,10 +95,11 @@ function createPlayerRig() {
     markOwned(new THREE.SphereGeometry(0.42, 32, 32)),
     markOwned(
       new THREE.MeshStandardMaterial({
-        color: 0xc8d0dc,
-        metalness: 0.94,
-        roughness: 0.16,
-        envMapIntensity: 1.1,
+        color: 0xffffff,
+        emissive: 0xe2e8f0,
+        emissiveIntensity: 0.55,
+        metalness: 0.92,
+        roughness: 0.1,
       })
     )
   )
@@ -106,15 +107,28 @@ function createPlayerRig() {
   core.receiveShadow = true
   rig.add(core)
 
+  const wireShell = new THREE.Mesh(
+    markOwned(new THREE.SphereGeometry(0.44, 20, 20)),
+    markOwned(
+      new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.92,
+      })
+    )
+  )
+  rig.add(wireShell)
+
   const ring = new THREE.Mesh(
     markOwned(new THREE.TorusGeometry(0.58, 0.045, 16, 64)),
     markOwned(
       new THREE.MeshStandardMaterial({
         color: 0x22d3ee,
-        emissive: 0x06b6d4,
-        emissiveIntensity: 1.35,
-        metalness: 0.55,
-        roughness: 0.18,
+        emissive: 0x22d3ee,
+        emissiveIntensity: 1.6,
+        metalness: 0.4,
+        roughness: 0.15,
       })
     )
   )
@@ -322,12 +336,12 @@ export function createCombatEngine(canvas, hudCanvas) {
       sharedIcosaGeo,
       markOwned(
         new THREE.MeshStandardMaterial({
-          color: 0xef4444,
-          emissive: 0xb91c1c,
-          emissiveIntensity: 0.5,
+          color: 0xff3333,
+          emissive: 0xff1111,
+          emissiveIntensity: 1.4,
           flatShading: true,
-          metalness: 0.38,
-          roughness: 0.48,
+          metalness: 0.15,
+          roughness: 0.35,
         })
       )
     )
@@ -453,7 +467,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   function orientLaser(mesh, dir, speed) {
     _v3Dir.copy(dir).normalize()
     mesh.quaternion.setFromUnitVectors(_v3Up, _v3Dir)
-    const stretch = 1 + Math.min(speed, 24) * 0.065
+    const stretch = 1.8 + Math.min(speed, 24) * 0.14
     mesh.scale.set(1, stretch, 1)
   }
 
@@ -467,19 +481,17 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     const dir = _v3Dir.subVectors(_v3B, _v3A).normalize()
     if (!sharedLaserGeo) {
-      sharedLaserGeo = new THREE.CylinderGeometry(0.06, 0.04, 0.55, 10)
+      sharedLaserGeo = new THREE.CylinderGeometry(0.022, 0.014, 1.35, 8)
     }
 
     const makeBolt = (yawOffset) => {
       const d = dir.clone().applyAxisAngle(_v3Up, yawOffset)
       const speed = era.projectile.speed
       const mat = markOwned(
-        new THREE.MeshStandardMaterial({
+        new THREE.MeshBasicMaterial({
           color: 0x22d3ee,
-          emissive: 0x06b6d4,
-          emissiveIntensity: 1.1,
-          metalness: 0.25,
-          roughness: 0.15,
+          transparent: true,
+          opacity: 0.95,
         })
       )
       const mesh = new THREE.Mesh(sharedLaserGeo, mat)
@@ -505,21 +517,22 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   /**
-   * Vector3 proximity scan — full dx/dy/dz squared distance to enemy mesh centers.
+   * Auto-shoot target sort — squared horizontal distance (dx² + dy²) on the arena plane.
+   * dy maps to depth (world Z) so the closest enemy node is picked every refresh tick.
    */
   function processAutoWeaponFires() {
     frameCounter++
     if (frameCounter % 3 === 0 || !cachedTarget || cachedTarget.hp <= 0) {
       let best = null
       let bestD2 = Infinity
-      _v3A.set(player.x, PLAYER_BODY_Y, player.z)
+      const px = player.x
+      const pz = player.z
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i]
         const p = e.mesh.position
-        const dx = p.x - _v3A.x
-        const dy = p.y - _v3A.y
-        const dz = p.z - _v3A.z
-        const d2 = dx * dx + dy * dy + dz * dz
+        const dx = p.x - px
+        const dy = p.z - pz
+        const d2 = dx * dx + dy * dy
         if (d2 < bestD2) {
           bestD2 = d2
           best = e
