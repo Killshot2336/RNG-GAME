@@ -189,10 +189,10 @@ function ensureHud() {
       </dl>
       <p class="sdh-status" data-sdh="status">Idle · Ctrl+Shift+D</p>
       <div class="sdh-actions">
-        <button type="button" data-sdh-act="mp">MP Sim ×2</button>
-        <button type="button" data-sdh-act="horde">Horde ×120</button>
-        <button type="button" data-sdh-act="loot">Loot ×5k</button>
-        <button type="button" data-sdh-act="stop">Stop All</button>
+        <button type="button" data-sdh-act="mp" onclick="window.runMultiplayerSimulation && window.runMultiplayerSimulation(2)">MP Sim ×2</button>
+        <button type="button" data-sdh-act="horde" onclick="window.runHordeStressTest && window.runHordeStressTest(120)">Horde ×120</button>
+        <button type="button" data-sdh-act="loot" onclick="window.runLootSanityCheck && window.runLootSanityCheck(5000)">Loot ×5k</button>
+        <button type="button" data-sdh-act="stop" onclick="window.stopDiagnosticSandbox && window.stopDiagnosticSandbox()">Stop All</button>
       </div>
       <p class="sdh-foot">Isolated from live vault / family RTDB · swipe & skill pan safe</p>
     </div>
@@ -692,6 +692,8 @@ function onKeyDown(e) {
  */
 export function mountSystemDiagnosticSandbox(combat) {
   combatRef = combat
+  // Always rebuild HUD so HMR / re-mount picks up fresh handlers.
+  document.getElementById(HUD_ID)?.remove()
   ensureHud()
 
   window.runMultiplayerSimulation = runMultiplayerSimulation
@@ -702,9 +704,8 @@ export function mountSystemDiagnosticSandbox(combat) {
 
   window.addEventListener('keydown', onKeyDown)
 
-  console.info(
-    '%c[sandbox] System Diagnostic ready — Ctrl+Shift+D · runMultiplayerSimulation() · runHordeStressTest() · runLootSanityCheck()',
-    'color:#67e8f9;font-weight:bold'
+  console.log(
+    '[sandbox] System Diagnostic ready — Ctrl+Shift+D · runMultiplayerSimulation() · runHordeStressTest() · runLootSanityCheck()'
   )
 
   return {
