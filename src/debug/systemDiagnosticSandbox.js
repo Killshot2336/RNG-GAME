@@ -113,6 +113,17 @@ function ensureStyles() {
     #${HUD_ID} .sdh-grid dd.warn { color: #fbbf24; }
     #${HUD_ID} .sdh-grid dd.crit { color: #f87171; }
     #${HUD_ID} .sdh-grid dd.ok { color: #34d399; }
+    #${HUD_ID} .sdh-status {
+      margin: 8px 0 0;
+      font-size: 10px;
+      color: #94a3b8;
+      line-height: 1.35;
+      min-height: 2.6em;
+      word-break: break-word;
+    }
+    #${HUD_ID} .sdh-status.is-ok { color: #34d399; }
+    #${HUD_ID} .sdh-status.is-warn { color: #fbbf24; }
+    #${HUD_ID} .sdh-status.is-err { color: #f87171; }
     #${HUD_ID} .sdh-actions {
       display: flex;
       flex-wrap: wrap;
@@ -151,6 +162,10 @@ function ensureStyles() {
 function ensureHud() {
   ensureStyles()
   let root = document.getElementById(HUD_ID)
+  if (root && !root.querySelector('[data-sdh="status"]')) {
+    root.remove()
+    root = null
+  }
   if (root) return root
   root = document.createElement('aside')
   root.id = HUD_ID
@@ -172,23 +187,39 @@ function ensureHud() {
         <div><dt>Ping</dt><dd data-sdh="ping">—</dd></div>
         <div><dt>Sim Peers</dt><dd data-sdh="peers">0</dd></div>
       </dl>
+      <p class="sdh-status" data-sdh="status">Idle · Ctrl+Shift+D</p>
       <div class="sdh-actions">
         <button type="button" data-sdh-act="mp">MP Sim ×2</button>
         <button type="button" data-sdh-act="horde">Horde ×120</button>
         <button type="button" data-sdh-act="loot">Loot ×5k</button>
         <button type="button" data-sdh-act="stop">Stop All</button>
       </div>
-      <p class="sdh-foot">Ctrl+Shift+D toggle · isolated from live vault / family RTDB</p>
+      <p class="sdh-foot">Isolated from live vault / family RTDB · swipe & skill pan safe</p>
     </div>
   `
   root.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-sdh-act]')
     if (!btn) return
     const act = btn.getAttribute('data-sdh-act')
-    if (act === 'mp') window.runMultiplayerSimulation(2)
-    else if (act === 'horde') window.runHordeStressTest(120)
-    else if (act === 'loot') window.runLootSanityCheck(5000)
-    else if (act === 'stop') window.stopDiagnosticSandbox()
+    try {
+      if (act === 'mp') window.runMultiplayerSimulation(2)
+      else if (act === 'horde') {
+        Promise.resolve(window.runHordeStressTest(120)).catch((err) => {
+          console.error('[sandbox] horde failed', err)
+          setStatus(`Horde ERROR: ${err?.message || err}`, 'err')
+        })
+      } else if (act === 'loot') {
+        try {
+          window.runLootSanityCheck(5000)
+        } catch (err) {
+          console.error('[sandbox] loot failed', err)
+          setStatus(`Loot ERROR: ${err?.message || err}`, 'err')
+        }
+      } else if (act === 'stop') window.stopDiagnosticSandbox()
+    } catch (err) {
+      console.error('[sandbox] action failed', err)
+      setStatus(`ERROR: ${err?.message || err}`, 'err')
+    }
   })
   // Prevent swipe / skill-canvas gestures from stealing the HUD.
   root.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true })
@@ -207,6 +238,15 @@ function setHudVisible(visible) {
 
 function toggleHud() {
   setHudVisible(!sandbox.hudVisible)
+}
+
+function setStatus(msg, tone = '') {
+  const root = document.getElementById(HUD_ID)
+  const el = root?.querySelector('[data-sdh="status"]')
+  if (!el) return
+  el.textContent = msg
+  el.classList.remove('is-ok', 'is-warn', 'is-err')
+  if (tone) el.classList.add(`is-${tone}`)
 }
 
 function classifyFps(fps) {
@@ -434,7 +474,8 @@ function runMultiplayerSimulation(playerCount = 2) {
     peers: [...sandbox.mpPeers.keys()],
     note: 'Injecting into Zustand presence + combat listeners only (no Firebase writes)',
   }
-  console.info('[sandbox] multiplayer simulation started', sandbox.lastMpReport)
+  console.log('[sandbox] multiplayer simulation started', sandbox.lastMpReport)
+  setStatus(`MP sim · peers ${sandbox.mpPeers.size} (Edward/Jamie)`, 'ok')
   if (!sandbox.hudVisible) setHudVisible(true)
   return sandbox.lastMpReport
 }
@@ -453,13 +494,21 @@ function runMultiplayerSimulation(playerCount = 2) {
 async function runHordeStressTest(enemyCount = 120) {
   if (!combatRef) {
     console.error('[sandbox] combat engine not bound — call mountSystemDiagnosticSandbox(combat) first')
+    setStatus('Horde ERROR: combat not bound', 'err')
+    return null
+  }
+  if (typeof combatRef.spawnSandboxHorde !== 'function') {
+    console.error('[sandbox] combat engine missing spawnSandboxHorde — hard-refresh required')
+    setStatus('Horde ERROR: missing spawnSandboxHorde (hard-refresh)', 'err')
     return null
   }
 
+  setStatus(`Horde spawning ×${enemyCount}…`, 'warn')
   const count = Math.max(1, Math.floor(enemyCount) || 120)
   combatRef.clearSandboxHorde()
   const spawned = combatRef.spawnSandboxHorde(count)
   sandbox.hordeActive = true
+  console.log(`[sandbox] spawned ${spawned} sandbox enemies`)
 
   // Let a few real frames land so FPS EMA reflects the load.
   const fpsSamples = []
@@ -508,9 +557,9 @@ async function runHordeStressTest(enemyCount = 120) {
     report.checks.particlePoolClean && report.checks.euclideanSortScales
 
   sandbox.lastHordeReport = report
-  console.groupCollapsed(
-    `%c[sandbox] horde stress ×${count} — ${report.passed ? 'PASS' : 'WARN'}`,
-    report.passed ? 'color:#34d399' : 'color:#fbbf24'
+  console.log(
+    `[sandbox] horde stress ×${count} — ${report.passed ? 'PASS' : 'WARN'}`,
+    report
   )
   console.table({
     spawned: report.spawned,
@@ -522,8 +571,10 @@ async function runHordeStressTest(enemyCount = 120) {
     particlesAfter: particleAudit.after,
     leakedAlphaZero: particleAudit.leakedAlphaZero,
   })
-  console.log('checks', report.checks)
-  console.groupEnd()
+  setStatus(
+    `Horde ×${spawned} · FPS ${report.avgFps} · sort ${sortBench.avgMs.toFixed(2)}ms · ${report.passed ? 'PASS' : 'WARN'}`,
+    report.passed ? 'ok' : 'warn'
+  )
 
   if (!sandbox.hudVisible) setHudVisible(true)
   return report
@@ -540,6 +591,7 @@ async function runHordeStressTest(enemyCount = 120) {
  */
 function runLootSanityCheck(rolls = 5000) {
   const n = Math.max(100, Math.floor(rolls) || 5000)
+  setStatus(`Loot rolling ×${n}…`, 'warn')
   const vaultBefore = structuredClone(getState().inventory)
   const creditsBefore = getState().credits
 
@@ -584,16 +636,19 @@ function runLootSanityCheck(rolls = 5000) {
   }
 
   sandbox.lastLootReport = report
-  console.groupCollapsed(
-    `%c[sandbox] loot sanity ×${n} — ${report.passed ? 'PASS' : 'FAIL'}`,
-    report.passed ? 'color:#34d399' : 'color:#f87171'
+  console.log(
+    `[sandbox] loot sanity ×${n} — ${report.passed ? 'PASS' : 'FAIL'}`,
+    report.percentages,
+    { divine: counts.divine, vaultUntouched, elapsedMs: report.elapsedMs }
   )
   console.table(report.percentages)
   console.log(
-    `Divine drops: ${counts.divine}/${n} (${report.percentages.divine}%) · expected index ${expectedDivinePct}%`
+    `Divine drops: ${counts.divine}/${n} (${report.percentages.divine}%) · expected index ${expectedDivinePct}% · vault untouched: ${vaultUntouched}`
   )
-  console.log(`sharedVault untouched: ${vaultUntouched} · ${elapsedMs.toFixed(1)}ms`)
-  console.groupEnd()
+  setStatus(
+    `Loot ×${n} · C ${report.percentages.common}% R ${report.percentages.rare}% E ${report.percentages.epic}% D ${report.percentages.divine}% · ${report.passed ? 'PASS' : 'FAIL'}`,
+    report.passed ? 'ok' : 'err'
+  )
 
   if (!sandbox.hudVisible) setHudVisible(true)
   return report
@@ -607,7 +662,7 @@ function stopDiagnosticSandbox() {
   stopMultiplayerSimulation()
   if (combatRef?.clearSandboxHorde) {
     const removed = combatRef.clearSandboxHorde()
-    console.info(`[sandbox] cleared ${removed} sandbox horde enemies`)
+    console.log(`[sandbox] cleared ${removed} sandbox horde enemies`)
   }
   sandbox.hordeActive = false
   if (sandbox.pingTimer) {
@@ -615,7 +670,8 @@ function stopDiagnosticSandbox() {
     sandbox.pingTimer = 0
   }
   stopHudLoop()
-  console.info('[sandbox] all diagnostics stopped')
+  setStatus('Stopped · sandbox cleared', 'ok')
+  console.log('[sandbox] all diagnostics stopped')
   return {
     loot: sandbox.lastLootReport,
     horde: sandbox.lastHordeReport,
