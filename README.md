@@ -1,26 +1,21 @@
-# Syndicate Swarm
+# Syndicate Swarm (single-file)
 
-3-player local co-op rogue-lite wave survival + slow-life outpost.
+One portable `index.html` — markup, CSS, state machine, and canvas combat. No build step required to play.
 
-## Stack
-- HTML5 shell (`index.html`)
-- TypeScript (`src/`)
-- Zustand vanilla store
-- Canvas combat engine (rAF)
-- Outpost simulation interval
-- Tailwind CDN + custom AAA CSS (`src/index.css` → `assets/swarm.css`)
-- esbuild bundle (no React / no Vite app wrapper)
+## Play
+Open `index.html` or run `npx serve .`
+
+- **WASD / arrows** — move  
+- Auto-fires at nearest enemy  
+- Tabs: Combat · Outpost · Shared Vault · Profiles  
+- Flippers: Aden / Edward / Jamie  
 
 ## Commands
 ```bash
-npm run build:swarm   # bundle TS → assets/swarm.js
-npm run build         # swarm + copy dist (includes /chronos archive)
-npm run smoke         # Syndicate Swarm e2e
-npm run smoke:chronos # legacy Chronos at /chronos/
+npm run build          # copy to dist/
+npm run smoke          # single-file e2e
+npm run smoke:chronos  # legacy Chronos at /chronos/
 ```
 
-## Tabs
-Combat · Outpost Farm · Shared Vault · Profiles
-
 ## Legacy
-Voidline Chronos preserved at `/chronos/`.
+Voidline Chronos remains at `/chronos/`.

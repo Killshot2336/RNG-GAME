@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawnSync } from 'child_process';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const dist = path.join(root, 'dist');
@@ -22,21 +21,14 @@ function cpDir(srcDir, destDir) {
   }
 }
 
-const built = spawnSync(process.execPath, [path.join(root, 'scripts/build-swarm.mjs')], {
-  cwd: root,
-  stdio: 'inherit'
-});
-if (built.status !== 0) process.exit(built.status || 1);
-
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
 
 cp(path.join(root, 'index.html'), path.join(dist, 'index.html'));
-cpDir(path.join(root, 'assets'), path.join(dist, 'assets'));
 cpDir(path.join(root, 'chronos'), path.join(dist, 'chronos'));
 cpDir(path.join(root, 'public'), path.join(dist, 'public'));
 cpDir(path.join(root, 'api'), path.join(dist, 'api'));
 cpDir(path.join(root, 'docs'), path.join(dist, 'docs'));
 cpDir(path.join(root, 'legacy'), path.join(dist, 'legacy'));
 
-console.log('dist ready: Syndicate Swarm + /chronos archive');
+console.log('dist ready: single-file Syndicate Swarm + /chronos');

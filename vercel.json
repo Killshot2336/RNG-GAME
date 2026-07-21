@@ -4,16 +4,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/chronos/(.*)", "destination": "/chronos/$1" },
     { "source": "/public/(.*)", "destination": "/public/$1" },
     { "source": "/legacy/(.*)", "destination": "/legacy/$1" },
-    { "source": "/api/chronos/(.*)", "destination": "/api/chronos/$1" },
-    { "source": "/((?!api/|assets/|chronos/|public/|legacy/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|chronos/|public/|legacy/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/index.html",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]

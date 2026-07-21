@@ -1,27 +1,22 @@
 {
   "name": "syndicate-swarm",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "Syndicate Swarm — 3-player local co-op rogue-lite + slow-life outpost",
+  "description": "Syndicate Swarm — single-file co-op rogue-lite + outpost",
   "type": "module",
   "scripts": {
-    "build:swarm": "node scripts/build-swarm.mjs",
     "build": "node scripts/copy-static.mjs",
-    "typecheck": "tsc -p tsconfig.swarm.json",
-    "dev": "node scripts/build-swarm.mjs && npx serve .",
+    "dev": "npx serve .",
     "preview": "npx serve dist",
     "smoke": "node scripts/e2e-swarm-smoke.mjs",
     "smoke:chronos": "node scripts/e2e-chronos-smoke.mjs",
     "audit": "npm run smoke"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0",
-    "zustand": "^5.0.3"
+    "@supabase/supabase-js": "^2.49.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
-    "esbuild": "^0.25.4",
-    "playwright": "^1.61.1",
-    "typescript": "~5.8.3"
+    "playwright": "^1.61.1"
   }
 }

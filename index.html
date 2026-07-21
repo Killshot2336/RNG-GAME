@@ -1,19 +1,1097 @@
 ﻿<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#060508" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>Syndicate Swarm</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/assets/swarm.css?v=1" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05060a" />
+<title>Syndicate Swarm</title>
+<style>
+:root {
+  --ink: #05060a;
+  --panel: rgba(10, 12, 18, 0.78);
+  --cyan: #39ffe0;
+  --magenta: #ff3d9a;
+  --copper: #ffc14d;
+  --text: #eef6ff;
+  --dim: #7f8ba3;
+  --danger: #ff3355;
+  --grid: rgba(57, 255, 224, 0.06);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--ink); color: var(--text);
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(57,255,224,0.16), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(255,61,154,0.1), transparent 45%),
+    var(--ink);
+}
+#app {
+  height: 100%; max-width: 560px; margin: 0 auto;
+  display: grid; grid-template-rows: auto auto 1fr auto;
+  position: relative;
+}
+#app::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(#000 0%, transparent 28%, transparent 72%, #000);
+}
+.glass {
+  position: relative; z-index: 1;
+  background: var(--panel);
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid rgba(57,255,224,0.28);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset, 0 12px 40px rgba(0,0,0,0.55), 0 0 28px rgba(57,255,224,0.08);
+}
+#status {
+  margin: 10px 10px 0; padding: 10px 12px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+#brand { font-size: 13px; letter-spacing: 0.14em; color: var(--cyan); text-shadow: 0 0 12px rgba(57,255,224,0.45); }
+#credits { font-size: 22px; color: var(--copper); text-shadow: 0 0 10px rgba(255,193,77,0.35); }
+#flippers {
+  margin: 8px 10px 0; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; z-index: 1; position: relative;
+}
+#flippers button, .tabbar button, .cta {
+  appearance: none; cursor: pointer; border-radius: 999px;
+  border: 1px solid rgba(57,255,224,0.35);
+  background: rgba(6,8,14,0.9); color: var(--text);
+  font: 700 11px Impact, Haettenschweiler, sans-serif;
+  letter-spacing: 0.08em; padding: 10px 12px;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, color .12s ease;
+}
+#flippers button.active, .tabbar button.active {
+  color: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 18px rgba(57,255,224,0.28);
+}
+#flippers button:active, .tabbar button:active, .cta:active { transform: scale(0.96); }
+#viewport {
+  margin: 8px 10px; border-radius: 16px; overflow: hidden; min-height: 0; z-index: 1; position: relative;
+}
+#track {
+  display: flex; width: 400%; height: 100%;
+  transition: transform .36s cubic-bezier(.22,1,.36,1);
+}
+#track[data-tab="combat"] { transform: translateX(0%); }
+#track[data-tab="outpost"] { transform: translateX(-25%); }
+#track[data-tab="vault"] { transform: translateX(-50%); }
+#track[data-tab="profiles"] { transform: translateX(-75%); }
+.panel { width: 25%; height: 100%; overflow: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+#combat-panel { padding: 0; background: #05070f; position: relative; }
+#game { display: block; width: 100%; height: 100%; cursor: crosshair; }
+.panel h2 { font-size: 20px; letter-spacing: 0.08em; margin-bottom: 6px; color: var(--text); }
+.panel .lead { color: var(--dim); font-size: 12px; letter-spacing: 0.04em; margin-bottom: 12px; font-family: Arial Narrow, sans-serif; font-weight: 700; }
+.row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; letter-spacing: 0.05em; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cta.copper { border-color: rgba(255,193,77,0.55); box-shadow: 0 0 14px rgba(255,193,77,0.15); }
+.loot-grid { display: grid; gap: 10px; }
+.loot-card {
+  border-radius: 12px; padding: 12px; background: rgba(8,10,16,0.92);
+  border: 1px solid rgba(127,139,163,0.35); position: relative; overflow: hidden;
+}
+.loot-card::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .15;
+  background-image: radial-gradient(circle, #fff 0.5px, transparent 0.7px);
+  background-size: 4px 4px; mix-blend-mode: soft-light;
+}
+.loot-card .name { font-size: 15px; letter-spacing: 0.05em; }
+.loot-card .meta { color: var(--dim); font-size: 11px; margin-top: 4px; font-family: Arial Narrow, sans-serif; font-weight: 700; }
+.loot-card.Common { border-color: rgba(180,190,200,0.4); }
+.loot-card.Rare { border-color: rgba(70,160,255,0.7); box-shadow: 0 0 16px rgba(70,160,255,0.2); }
+.loot-card.Epic { border-color: rgba(190,90,255,0.75); box-shadow: 0 0 18px rgba(190,90,255,0.25); }
+.loot-card.Divine {
+  border-color: rgba(57,255,224,0.9);
+  animation: divinePulse 2.2s ease-in-out infinite, chromaShift 3s linear infinite;
+}
+@keyframes divinePulse {
+  0%,100% { box-shadow: 0 0 12px rgba(57,255,224,0.25), 0 0 0 1px rgba(57,255,224,0.3) inset; }
+  50% { box-shadow: 0 0 28px rgba(57,255,224,0.55), 0 0 0 1px rgba(255,193,77,0.4) inset; }
+}
+@keyframes chromaShift {
+  0% { filter: hue-rotate(0deg) saturate(1.1); }
+  50% { filter: hue-rotate(20deg) saturate(1.4); }
+  100% { filter: hue-rotate(0deg) saturate(1.1); }
+}
+.tabbar {
+  margin: 0 10px 10px; padding: 8px; border-radius: 16px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.tabbar button { border-radius: 12px; padding: 12px 4px; color: var(--dim); text-transform: uppercase; }
+#toast {
+  position: fixed; left: 50%; top: 16%; transform: translateX(-50%);
+  z-index: 40; padding: 10px 16px; border-radius: 999px;
+  background: rgba(6,8,14,0.92); border: 1px solid rgba(57,255,224,0.45);
+  color: var(--cyan); letter-spacing: 0.1em; font-size: 12px;
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+#downed-fx {
+  pointer-events: none; position: absolute; inset: 0; z-index: 5; opacity: 0;
+  mix-blend-mode: screen;
+  background:
+    linear-gradient(90deg, rgba(255,51,85,0.25), transparent 30%, transparent 70%, rgba(57,255,224,0.25)),
+    linear-gradient(0deg, rgba(255,61,154,0.15), transparent);
+  animation: none;
+}
+#downed-fx.on {
+  opacity: 1;
+  animation: downedChroma 0.45s steps(2, end) infinite;
+}
+@keyframes downedChroma {
+  0% { transform: translate(0,0); filter: hue-rotate(0deg); }
+  50% { transform: translate(3px,-2px); filter: hue-rotate(25deg); }
+  100% { transform: translate(-2px,2px); filter: hue-rotate(-15deg); }
+}
+@media (min-width: 900px) { #app { max-width: 720px; } }
+</style>
 </head>
-<body class="bg-black text-white antialiased">
-  <div id="app" class="min-h-screen"></div>
-  <script type="module" src="/assets/swarm.js?v=1"></script>
+<body>
+<div id="app">
+  <header id="status" class="glass">
+    <div>
+      <div id="brand">SYNDICATE SWARM</div>
+      <div id="active-label" style="font-size:12px;color:var(--dim);letter-spacing:.06em;margin-top:2px">ADEN · LV 1</div>
+    </div>
+    <div id="credits">120¤</div>
+  </header>
+  <div id="flippers">
+    <button type="button" data-nav="prev">◀ ADEN</button>
+    <button type="button" data-profile="edward">EDWARD</button>
+    <button type="button" data-nav="next">JAMIE ▶</button>
+  </div>
+  <main id="viewport" class="glass">
+    <div id="downed-fx"></div>
+    <div id="track" data-tab="combat">
+      <section class="panel" id="combat-panel"><canvas id="game"></canvas></section>
+      <section class="panel" id="outpost-panel"></section>
+      <section class="panel" id="vault-panel"></section>
+      <section class="panel" id="profiles-panel"></section>
+    </div>
+  </main>
+  <nav class="tabbar glass">
+    <button type="button" data-tab="combat" class="active">Combat</button>
+    <button type="button" data-tab="outpost">Outpost</button>
+    <button type="button" data-tab="vault">Shared Vault</button>
+    <button type="button" data-tab="profiles">Profiles</button>
+  </nav>
+</div>
+<div id="toast"></div>
+<script>
+(function () {
+  'use strict';
+
+  var SAVE_KEY = 'syndicate_swarm_single_v1';
+  var ORDER = ['aden', 'edward', 'jamie'];
+  var NAMES = { aden: 'ADEN', edward: 'EDWARD', jamie: 'JAMIE' };
+
+  function freshProfiles() {
+    return {
+      aden: { id: 'aden', name: 'Aden', level: 1, xp: 0, credits: 120, badges: [], activeWeapon: 'Pulse Edge', weaponPower: 1.1 },
+      edward: { id: 'edward', name: 'Edward', level: 1, xp: 0, credits: 120, badges: [], activeWeapon: 'Ward Lance', weaponPower: 1.05 },
+      jamie: { id: 'jamie', name: 'Jamie', level: 1, xp: 0, credits: 120, badges: [], activeWeapon: 'Bulwark Cleaver', weaponPower: 1.08 }
+    };
+  }
+
+  function loadRaw() {
+    try {
+      var raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+
+  function mulberry32(seed) {
+    var t = seed >>> 0;
+    return function () {
+      t += 0x6d2b79f5;
+      var r = Math.imul(t ^ (t >>> 15), 1 | t);
+      r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashSeed(parts) {
+    var h = 2166136261;
+    var s = parts.join('|');
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  var POOLS = {
+    Common: [
+      { name: 'Scrap Blade', type: 'Weapon', power: 1.05 },
+      { name: 'Iron Seed', type: 'Seed', power: 1.02 },
+      { name: 'Ash Fiber', type: 'Resource', power: 1.01 },
+      { name: 'Patrol Badge', type: 'Badge', power: 1.03 }
+    ],
+    Rare: [
+      { name: 'Pulse Rifle', type: 'Weapon', power: 1.18 },
+      { name: 'Chrono Seed', type: 'Seed', power: 1.12 },
+      { name: 'Volt Core', type: 'Resource', power: 1.1 },
+      { name: 'Strike Badge', type: 'Badge', power: 1.15 }
+    ],
+    Epic: [
+      { name: 'Rift Cannon', type: 'Weapon', power: 1.4 },
+      { name: 'Portal Seed', type: 'Seed', power: 1.3 },
+      { name: 'Syndicate Badge', type: 'Badge', power: 1.35 },
+      { name: 'Null Ore', type: 'Resource', power: 1.28 }
+    ],
+    Divine: [
+      { name: 'Swarm Crown', type: 'Badge', power: 2.0 },
+      { name: 'Final Edge', type: 'Weapon', power: 2.2 },
+      { name: 'Worldseed', type: 'Seed', power: 1.9 }
+    ]
+  };
+
+  function rollRarity(rng, luck) {
+    luck = Math.max(0, Math.min(0.25, luck || 0));
+    var weights = [
+      ['Common', 70 * (1 - luck * 0.5)],
+      ['Rare', 24 * (1 + luck * 0.4)],
+      ['Epic', 5.99 * (1 + luck * 1.2)],
+      ['Divine', 0.01 * (1 + luck * 4)]
+    ];
+    var total = 0;
+    for (var i = 0; i < weights.length; i++) total += weights[i][1];
+    var roll = rng() * total;
+    for (var j = 0; j < weights.length; j++) {
+      roll -= weights[j][1];
+      if (roll <= 0) return weights[j][0];
+    }
+    return 'Common';
+  }
+
+  function openLootChest(chestRarity, profileId, luck, salt) {
+    var floor = { Common: 0, Rare: 1, Epic: 2, Divine: 3 };
+    var seed = hashSeed([profileId, chestRarity, salt || Date.now()]);
+    var rng = mulberry32(seed);
+    var rarity = rollRarity(rng, luck);
+    if (floor[rarity] < floor[chestRarity]) rarity = chestRarity;
+    if (chestRarity === 'Divine' && rng() < 0.35) rarity = 'Divine';
+    var pool = POOLS[rarity];
+    var pick = pool[Math.floor(rng() * pool.length)];
+    return {
+      id: rarity.toLowerCase() + '_' + seed.toString(36) + '_' + Math.floor(rng() * 1e6).toString(36),
+      name: pick.name,
+      rarity: rarity,
+      type: pick.type,
+      statModifier: +(pick.power + rng() * 0.08).toFixed(3)
+    };
+  }
+
+  function xpToNext(level) {
+    return Math.floor(100 * Math.pow(1.35, level - 1));
+  }
+
+  var saveTimer = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          activeTab: store.activeTab,
+          activeProfileId: store.activeProfileId,
+          profiles: store.profiles,
+          sharedVault: store.sharedVault,
+          outpost: store.outpost
+        }));
+      } catch (e) {}
+    }, 260);
+  }
+
+  var loaded = loadRaw();
+  var store = {
+    activeTab: (loaded && loaded.activeTab) || 'combat',
+    activeProfileId: (loaded && loaded.activeProfileId) || 'aden',
+    profiles: Object.assign(freshProfiles(), (loaded && loaded.profiles) || {}),
+    sharedVault: (loaded && Array.isArray(loaded.sharedVault)) ? loaded.sharedVault : [],
+    outpost: Object.assign({
+      portalLevel: 1,
+      lastHarvest: Date.now(),
+      activeSeeds: ['Iron Seed']
+    }, (loaded && loaded.outpost) || {}),
+
+    getActive: function () {
+      return this.profiles[this.activeProfileId];
+    },
+
+    switchProfile: function (profileId) {
+      if (!this.profiles[profileId]) return;
+      if (this.activeProfileId === profileId) return;
+      this.activeProfileId = profileId;
+      scheduleSave();
+      renderAll();
+      toast('DEPLOY ' + NAMES[profileId]);
+    },
+
+    addCredits: function (profileId, amount) {
+      var p = this.profiles[profileId];
+      if (!p) return;
+      p.credits = Math.max(0, p.credits + amount);
+      scheduleSave();
+      renderHeader();
+    },
+
+    addXp: function (profileId, amount) {
+      var p = this.profiles[profileId];
+      if (!p || amount <= 0) return;
+      p.xp += amount;
+      var guard = 0;
+      while (p.xp >= xpToNext(p.level) && guard < 40) {
+        p.xp -= xpToNext(p.level);
+        p.level += 1;
+        guard += 1;
+      }
+      scheduleSave();
+      renderHeader();
+    },
+
+    luckyStrike: function (profileId) {
+      var p = this.profiles[profileId];
+      if (!p) return 0;
+      return Math.min(0.2, p.badges.length * 0.04 + (p.level - 1) * 0.008);
+    },
+
+    buyGearChest: function (chestRarity) {
+      var costs = { Common: 25, Rare: 80, Epic: 220, Divine: 900 };
+      var p = this.getActive();
+      var cost = costs[chestRarity];
+      if (p.credits < cost) {
+        toast('NEED CREDITS');
+        return null;
+      }
+      p.credits -= cost;
+      var item = openLootChest(chestRarity, p.id, this.luckyStrike(p.id), this.sharedVault.length + p.level);
+      this.sharedVault.push(item);
+      scheduleSave();
+      toast(item.rarity.toUpperCase() + ' · ' + item.name);
+      renderVault();
+      renderHeader();
+      return item;
+    },
+
+    openLootChest: function (chestRarity) {
+      return this.buyGearChest(chestRarity);
+    },
+
+    claimFromVault: function (itemId) {
+      var idx = -1;
+      for (var i = 0; i < this.sharedVault.length; i++) {
+        if (this.sharedVault[i].id === itemId) { idx = i; break; }
+      }
+      if (idx < 0) return;
+      var item = this.sharedVault[idx];
+      this.sharedVault.splice(idx, 1);
+      var p = this.getActive();
+      if (item.type === 'Weapon') {
+        p.activeWeapon = item.name;
+        p.weaponPower = item.statModifier;
+      } else if (item.type === 'Badge') {
+        p.badges.push(item.name);
+        if (p.badges.length > 3) p.badges = p.badges.slice(-3);
+      } else if (item.type === 'Seed') {
+        if (this.outpost.activeSeeds.length < 12) this.outpost.activeSeeds.push(item.name);
+      } else if (item.type === 'Resource') {
+        p.credits += Math.floor(12 * item.statModifier);
+      }
+      scheduleSave();
+      toast('CLAIMED');
+      renderVault();
+      renderProfiles();
+      renderHeader();
+    },
+
+    collectHarvest: function () {
+      var now = Date.now();
+      var elapsed = Math.max(0, now - this.outpost.lastHarvest);
+      var hours = Math.min(24, elapsed / 3600000);
+      var base = 8 + this.outpost.portalLevel * 6;
+      var seedBonus = 1 + this.outpost.activeSeeds.length * 0.12;
+      var credits = Math.floor(base * hours * seedBonus);
+      var seedsGained = Math.floor(hours * (0.4 + this.outpost.portalLevel * 0.15));
+      this.outpost.lastHarvest = now;
+      for (var i = 0; i < seedsGained; i++) {
+        if (this.outpost.activeSeeds.length < 12) this.outpost.activeSeeds.push('Auto Seed ' + this.outpost.portalLevel);
+      }
+      this.addCredits(this.activeProfileId, credits);
+      scheduleSave();
+      toast('HARVEST +' + credits + '¤');
+      renderOutpost();
+      return { credits: credits, seedsGained: seedsGained };
+    },
+
+    bumpPortal: function () {
+      var p = this.getActive();
+      var cost = 100 + this.outpost.portalLevel * 75;
+      if (p.credits < cost) { toast('NEED CREDITS'); return; }
+      p.credits -= cost;
+      this.outpost.portalLevel += 1;
+      scheduleSave();
+      toast('PORTAL LV ' + this.outpost.portalLevel);
+      renderOutpost();
+      renderHeader();
+    },
+
+    plantSeed: function () {
+      if (this.outpost.activeSeeds.length >= 12) { toast('BEDS FULL'); return; }
+      this.outpost.activeSeeds.push('Iron Seed');
+      scheduleSave();
+      toast('SEED PLANTED');
+      renderOutpost();
+    },
+
+    setTab: function (tab) {
+      this.activeTab = tab;
+      document.getElementById('track').dataset.tab = tab;
+      var buttons = document.querySelectorAll('.tabbar button');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.toggle('active', buttons[i].getAttribute('data-tab') === tab);
+      }
+      if (tab === 'combat') Combat.mount();
+      else Combat.unmount();
+      if (tab === 'outpost') renderOutpost();
+      if (tab === 'vault') renderVault();
+      if (tab === 'profiles') renderProfiles();
+      scheduleSave();
+    }
+  };
+
+  window.gameStore = store;
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1500);
+  }
+
+  function renderHeader() {
+    var p = store.getActive();
+    document.getElementById('active-label').textContent = NAMES[p.id] + ' · LV ' + p.level;
+    document.getElementById('credits').textContent = Math.floor(p.credits) + '¤';
+    var idx = ORDER.indexOf(store.activeProfileId);
+    var prev = ORDER[(idx - 1 + ORDER.length) % ORDER.length];
+    var next = ORDER[(idx + 1) % ORDER.length];
+    var flip = document.getElementById('flippers');
+    flip.innerHTML =
+      '<button type="button" data-nav="prev">◀ ' + NAMES[prev] + '</button>' +
+      '<button type="button" data-profile="' + store.activeProfileId + '" class="active">' + NAMES[store.activeProfileId] + '</button>' +
+      '<button type="button" data-nav="next">' + NAMES[next] + ' ▶</button>';
+  }
+
+  function renderOutpost() {
+    var o = store.outpost;
+    var mins = Math.floor((Date.now() - o.lastHarvest) / 60000);
+    var html = '<h2>OUTPOST FARM</h2><p class="lead">Slow-life portal. Seeds cook while the swarm burns.</p>';
+    html += '<div class="row"><span>PORTAL</span><span>LV ' + o.portalLevel + '</span></div>';
+    html += '<div class="row"><span>SEEDS</span><span>' + o.activeSeeds.length + '/12</span></div>';
+    html += '<div class="row"><span>IDLE</span><span>' + mins + 'm</span></div>';
+    html += '<div class="btns">';
+    html += '<button class="cta copper" data-act="harvest">COLLECT HARVEST</button>';
+    html += '<button class="cta" data-act="portal">UPGRADE PORTAL</button>';
+    html += '<button class="cta" data-act="plant">PLANT SEED</button></div><div class="loot-grid">';
+    for (var i = 0; i < o.activeSeeds.length; i++) {
+      html += '<div class="loot-card Common"><div class="name">' + o.activeSeeds[i] + '</div><div class="meta">GROWING</div></div>';
+    }
+    html += '</div>';
+    document.getElementById('outpost-panel').innerHTML = html;
+  }
+
+  function renderVault() {
+    var html = '<h2>SHARED VAULT</h2><p class="lead">Syndicate chests feed every operative.</p><div class="btns">';
+    html += '<button class="cta" data-chest="Common">COMMON 25¤</button>';
+    html += '<button class="cta" data-chest="Rare">RARE 80¤</button>';
+    html += '<button class="cta copper" data-chest="Epic">EPIC 220¤</button>';
+    html += '<button class="cta" data-chest="Divine">DIVINE 900¤</button></div><div class="loot-grid">';
+    if (!store.sharedVault.length) html += '<p class="lead">Vault empty. Buy a chest.</p>';
+    for (var i = 0; i < store.sharedVault.length; i++) {
+      var it = store.sharedVault[i];
+      html += '<div class="loot-card ' + it.rarity + '"><div class="name">' + it.name + '</div>';
+      html += '<div class="meta">' + it.rarity + ' · ' + it.type + ' · ×' + it.statModifier + '</div>';
+      html += '<div class="btns"><button class="cta" data-claim="' + it.id + '">CLAIM</button></div></div>';
+    }
+    html += '</div>';
+    document.getElementById('vault-panel').innerHTML = html;
+  }
+
+  function renderProfiles() {
+    var html = '<h2>PROFILES</h2><p class="lead">Three seats. Instant swap. No cross-contamination.</p><div class="loot-grid">';
+    for (var i = 0; i < ORDER.length; i++) {
+      var p = store.profiles[ORDER[i]];
+      var on = store.activeProfileId === p.id;
+      html += '<div class="loot-card ' + (on ? 'Divine' : 'Rare') + '">';
+      html += '<div class="name">' + NAMES[p.id] + (on ? ' · ACTIVE' : '') + '</div>';
+      html += '<div class="meta">LV ' + p.level + ' · ' + p.xp + ' XP · ' + p.credits + '¤</div>';
+      html += '<div class="meta">WEAPON: ' + p.activeWeapon + ' ×' + p.weaponPower + '</div>';
+      html += '<div class="meta">BADGES: ' + (p.badges.join(', ') || '—') + '</div>';
+      html += '<div class="btns"><button class="cta" data-switch="' + p.id + '">DEPLOY</button></div></div>';
+    }
+    html += '</div>';
+    document.getElementById('profiles-panel').innerHTML = html;
+  }
+
+  function renderAll() {
+    renderHeader();
+    if (store.activeTab === 'outpost') renderOutpost();
+    if (store.activeTab === 'vault') renderVault();
+    if (store.activeTab === 'profiles') renderProfiles();
+  }
+
+  var Combat = {
+    canvas: null,
+    ctx: null,
+    running: false,
+    raf: 0,
+    last: 0,
+    w: 390,
+    h: 700,
+    wave: 1,
+    kills: 0,
+    score: 0,
+    spawnAcc: 0,
+    fireAcc: 0,
+    shake: 0,
+    player: null,
+    enemies: [],
+    bullets: [],
+    pickups: [],
+    particles: [],
+    splashes: [],
+    power: { overdrive: 0, split: 0, magnet: 0 },
+    input: { up: false, down: false, left: false, right: false },
+    uid: 0,
+
+    init: function () {
+      this.canvas = document.getElementById('game');
+      this.ctx = this.canvas.getContext('2d', { alpha: false });
+      var self = this;
+      window.addEventListener('keydown', function (e) { self.onKey(e, true); });
+      window.addEventListener('keyup', function (e) { self.onKey(e, false); });
+      window.addEventListener('resize', function () { if (self.running) self.resize(); });
+      for (var i = 0; i < 240; i++) {
+        this.particles.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0.4, r: 2, color: '#39ffe0' });
+      }
+      for (var s = 0; s < 48; s++) {
+        this.splashes.push({ x: 0, y: 0, text: '', life: 0, max: 0.7, crit: false });
+      }
+    },
+
+    onKey: function (e, down) {
+      var k = e.key.toLowerCase();
+      if (k === 'w' || k === 'arrowup') this.input.up = down;
+      if (k === 's' || k === 'arrowdown') this.input.down = down;
+      if (k === 'a' || k === 'arrowleft') this.input.left = down;
+      if (k === 'd' || k === 'arrowright') this.input.right = down;
+    },
+
+    resize: function () {
+      var parent = this.canvas.parentElement;
+      this.w = Math.max(320, parent.clientWidth || window.innerWidth);
+      this.h = Math.max(420, parent.clientHeight || window.innerHeight);
+      var dpr = Math.min(2, window.devicePixelRatio || 1);
+      this.canvas.width = Math.floor(this.w * dpr);
+      this.canvas.height = Math.floor(this.h * dpr);
+      this.canvas.style.width = '100%';
+      this.canvas.style.height = '100%';
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    },
+
+    nextId: function (p) {
+      this.uid += 1;
+      return p + '_' + this.uid;
+    },
+
+    mount: function () {
+      if (this.running) return;
+      this.resize();
+      this.player = {
+        x: this.w * 0.5, y: this.h * 0.62, r: 14,
+        hp: 100, maxHp: 100, alive: true, vx: 0, vy: 0
+      };
+      this.enemies = [];
+      this.bullets = [];
+      this.pickups = [];
+      this.wave = 1;
+      this.kills = 0;
+      this.score = 0;
+      this.spawnAcc = 0;
+      this.fireAcc = 0;
+      this.power = { overdrive: 0, split: 0, magnet: 0 };
+      document.getElementById('downed-fx').classList.remove('on');
+      this.running = true;
+      this.last = performance.now();
+      var self = this;
+      var loop = function (t) {
+        if (!self.running) return;
+        var dt = Math.min(0.05, (t - self.last) / 1000);
+        self.last = t;
+        self.update(dt);
+        self.draw();
+        self.raf = requestAnimationFrame(loop);
+      };
+      this.raf = requestAnimationFrame(loop);
+    },
+
+    unmount: function () {
+      this.running = false;
+      cancelAnimationFrame(this.raf);
+      document.getElementById('downed-fx').classList.remove('on');
+    },
+
+    nearestEnemy: function () {
+      var best = null;
+      var bestD = 1e9;
+      for (var i = 0; i < this.enemies.length; i++) {
+        var e = this.enemies[i];
+        if (!e.alive) continue;
+        var d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      return best;
+    },
+
+    spawnEnemy: function () {
+      var side = Math.floor(Math.random() * 4);
+      var x = Math.random() * this.w;
+      var y = -20;
+      if (side === 1) { x = this.w + 20; y = Math.random() * this.h * 0.75; }
+      if (side === 2) { x = Math.random() * this.w; y = this.h + 20; }
+      if (side === 3) { x = -20; y = Math.random() * this.h * 0.75; }
+      var boss = this.wave % 5 === 0 && Math.random() > 0.5;
+      var hp = boss ? 100 + this.wave * 30 : 20 + this.wave * 7;
+      this.enemies.push({
+        id: this.nextId('e'),
+        x: x, y: y, r: boss ? 24 : 12 + Math.random() * 4,
+        hp: hp, maxHp: hp, alive: true,
+        tint: boss ? '#ff3355' : '#ff7a3d',
+        boss: boss
+      });
+    },
+
+    fireAt: function (target) {
+      if (!target || !this.player.alive) return;
+      var p = store.getActive();
+      var ang = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+      var count = this.power.split > 0 ? 3 : 1;
+      var spread = this.power.split > 0 ? 0.22 : 0;
+      var dmg = (15 + this.wave * 0.9) * (p.weaponPower || 1.1);
+      for (var i = 0; i < count; i++) {
+        var a = ang + (i - (count - 1) / 2) * spread;
+        this.bullets.push({
+          id: this.nextId('b'),
+          x: this.player.x, y: this.player.y,
+          vx: Math.cos(a) * 540, vy: Math.sin(a) * 540,
+          r: 4, dmg: dmg, ttl: 1.15, alive: true
+        });
+      }
+    },
+
+    burst: function (x, y, n, color) {
+      var used = 0;
+      for (var i = 0; i < this.particles.length; i++) {
+        var p = this.particles[i];
+        if (p.life > 0) continue;
+        var a = Math.random() * Math.PI * 2;
+        var s = 80 + Math.random() * 220;
+        p.x = x; p.y = y;
+        p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
+        p.life = 0.28 + Math.random() * 0.35;
+        p.max = p.life; p.r = 2 + Math.random() * 3.5;
+        p.color = color;
+        used += 1;
+        if (used >= n) break;
+      }
+    },
+
+    splash: function (x, y, text, crit) {
+      for (var i = 0; i < this.splashes.length; i++) {
+        var s = this.splashes[i];
+        if (s.life > 0) continue;
+        s.x = x; s.y = y; s.text = text; s.life = 0.75; s.max = 0.75; s.crit = crit;
+        return;
+      }
+    },
+
+    hit: function (a, b) {
+      var dx = a.x - b.x;
+      var dy = a.y - b.y;
+      var rr = a.r + b.r;
+      return dx * dx + dy * dy <= rr * rr;
+    },
+
+    dropPower: function (x, y) {
+      if (Math.random() > 0.05) return;
+      var kinds = ['OVERDRIVE', 'SPLIT-SHOT', 'COIN MAGNET'];
+      var kind = kinds[Math.floor(Math.random() * kinds.length)];
+      this.pickups.push({
+        id: this.nextId('u'),
+        x: x, y: y, r: 10, kind: kind, life: 8, alive: true,
+        bob: Math.random() * Math.PI * 2
+      });
+    },
+
+    update: function (dt) {
+      if (!this.player.alive) return;
+      if (this.shake > 0) this.shake -= dt;
+      if (this.power.overdrive > 0) this.power.overdrive -= dt;
+      if (this.power.split > 0) this.power.split -= dt;
+      if (this.power.magnet > 0) this.power.magnet -= dt;
+
+      var ix = 0, iy = 0;
+      if (this.input.up) iy -= 1;
+      if (this.input.down) iy += 1;
+      if (this.input.left) ix -= 1;
+      if (this.input.right) ix += 1;
+      var len = Math.hypot(ix, iy) || 1;
+      var speed = 215;
+      this.player.x = Math.max(this.player.r, Math.min(this.w - this.player.r, this.player.x + (ix / len) * speed * dt));
+      this.player.y = Math.max(this.player.r + 50, Math.min(this.h - this.player.r - 70, this.player.y + (iy / len) * speed * dt));
+
+      this.spawnAcc += dt;
+      if (this.spawnAcc >= Math.max(0.32, 1.15 - this.wave * 0.045)) {
+        this.spawnAcc = 0;
+        this.spawnEnemy();
+      }
+
+      this.fireAcc += dt;
+      var fireRate = this.power.overdrive > 0 ? 0.08 : 0.16;
+      if (this.fireAcc >= fireRate) {
+        this.fireAcc = 0;
+        this.fireAt(this.nearestEnemy());
+      }
+
+      for (var b = 0; b < this.bullets.length; b++) {
+        var bullet = this.bullets[b];
+        if (!bullet.alive) continue;
+        bullet.x += bullet.vx * dt;
+        bullet.y += bullet.vy * dt;
+        bullet.ttl -= dt;
+        if (bullet.ttl <= 0 || bullet.x < -50 || bullet.x > this.w + 50 || bullet.y < -50 || bullet.y > this.h + 50) bullet.alive = false;
+      }
+
+      for (var e = 0; e < this.enemies.length; e++) {
+        var en = this.enemies[e];
+        if (!en.alive) continue;
+        var dx = this.player.x - en.x;
+        var dy = this.player.y - en.y;
+        var d = Math.hypot(dx, dy) || 1;
+        var spd = 52 + this.wave * 3.2;
+        en.x += (dx / d) * spd * dt;
+        en.y += (dy / d) * spd * dt;
+        if (this.hit(en, this.player)) {
+          this.player.hp -= (en.boss ? 22 : 9) * dt * 4;
+          this.shake = Math.max(this.shake, 0.16);
+          if (this.player.hp <= 0) {
+            this.player.hp = 0;
+            this.player.alive = false;
+            this.burst(this.player.x, this.player.y, 28, '#ff3355');
+            document.getElementById('downed-fx').classList.add('on');
+            store.addXp(store.activeProfileId, this.kills * 2);
+            store.addCredits(store.activeProfileId, this.kills * 3 + Math.floor(this.score / 10));
+            toast('DOWNED · +' + (this.kills * 3) + '¤');
+          }
+        }
+      }
+
+      for (var i = 0; i < this.bullets.length; i++) {
+        var bu = this.bullets[i];
+        if (!bu.alive) continue;
+        for (var j = 0; j < this.enemies.length; j++) {
+          var enemy = this.enemies[j];
+          if (!enemy.alive) continue;
+          if (!this.hit(bu, enemy)) continue;
+          bu.alive = false;
+          var crit = Math.random() < 0.12;
+          var dmg = Math.floor(bu.dmg * (crit ? 2 : 1));
+          enemy.hp -= dmg;
+          this.score += dmg;
+          this.splash(enemy.x, enemy.y - 12, String(dmg), crit);
+          this.burst(enemy.x, enemy.y, crit ? 8 : 4, enemy.tint);
+          if (enemy.hp <= 0) {
+            enemy.alive = false;
+            this.kills += 1;
+            this.shake = Math.max(this.shake, 0.14);
+            this.burst(enemy.x, enemy.y, 12, '#39ffe0');
+            this.dropPower(enemy.x, enemy.y);
+            if (this.kills % 12 === 0) this.wave += 1;
+          }
+          break;
+        }
+      }
+
+      for (var u = 0; u < this.pickups.length; u++) {
+        var pk = this.pickups[u];
+        if (!pk.alive) continue;
+        pk.life -= dt;
+        pk.bob += dt * 4;
+        if (this.power.magnet > 0) {
+          var mx = this.player.x - pk.x;
+          var my = this.player.y - pk.y;
+          var md = Math.hypot(mx, my) || 1;
+          pk.x += (mx / md) * 220 * dt;
+          pk.y += (my / md) * 220 * dt;
+        }
+        if (pk.life <= 0) pk.alive = false;
+        if (this.hit(pk, this.player)) {
+          pk.alive = false;
+          if (pk.kind === 'OVERDRIVE') this.power.overdrive = 6;
+          if (pk.kind === 'SPLIT-SHOT') this.power.split = 7;
+          if (pk.kind === 'COIN MAGNET') this.power.magnet = 8;
+          this.burst(pk.x, pk.y, 10, '#ffc14d');
+          toast(pk.kind);
+        }
+      }
+
+      this.enemies = this.enemies.filter(function (x) { return x.alive; });
+      this.bullets = this.bullets.filter(function (x) { return x.alive; });
+      this.pickups = this.pickups.filter(function (x) { return x.alive; });
+
+      for (var p = 0; p < this.particles.length; p++) {
+        var pt = this.particles[p];
+        if (pt.life <= 0) continue;
+        pt.life -= dt;
+        pt.x += pt.vx * dt;
+        pt.y += pt.vy * dt;
+        pt.vy += 50 * dt;
+      }
+      for (var s = 0; s < this.splashes.length; s++) {
+        var sp = this.splashes[s];
+        if (sp.life <= 0) continue;
+        sp.life -= dt;
+        sp.y -= 30 * dt;
+      }
+    },
+
+    draw: function () {
+      var ctx = this.ctx;
+      var ox = 0, oy = 0;
+      if (this.shake > 0) {
+        ox = (Math.random() - 0.5) * 12;
+        oy = (Math.random() - 0.5) * 12;
+      }
+      ctx.save();
+      ctx.translate(ox, oy);
+
+      var bg = ctx.createLinearGradient(0, 0, 0, this.h);
+      bg.addColorStop(0, '#05070f');
+      bg.addColorStop(0.55, '#0b1020');
+      bg.addColorStop(1, '#07060c');
+      ctx.fillStyle = bg;
+      ctx.fillRect(-24, -24, this.w + 48, this.h + 48);
+
+      ctx.strokeStyle = 'rgba(57,255,224,0.05)';
+      ctx.lineWidth = 1;
+      for (var gx = 0; gx < this.w; gx += 36) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, this.h); ctx.stroke();
+      }
+      for (var gy = 0; gy < this.h; gy += 36) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(this.w, gy); ctx.stroke();
+      }
+
+      for (var i = 0; i < this.particles.length; i++) {
+        var pt = this.particles[i];
+        if (pt.life <= 0) continue;
+        ctx.globalAlpha = Math.max(0, pt.life / pt.max);
+        ctx.fillStyle = pt.color;
+        ctx.shadowColor = pt.color;
+        ctx.shadowBlur = 15;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+      for (var u = 0; u < this.pickups.length; u++) {
+        var pk = this.pickups[u];
+        var by = pk.y + Math.sin(pk.bob) * 4;
+        ctx.shadowColor = '#ffc14d';
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = '#ffc14d';
+        ctx.beginPath(); ctx.arc(pk.x, by, pk.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#05060a';
+        ctx.font = '700 8px Impact, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(pk.kind.charAt(0), pk.x, by + 3);
+      }
+
+      for (var b = 0; b < this.bullets.length; b++) {
+        var bu = this.bullets[b];
+        var grd = ctx.createRadialGradient(bu.x, bu.y, 0, bu.x, bu.y, 10);
+        grd.addColorStop(0, '#ffffff');
+        grd.addColorStop(0.4, '#39ffe0');
+        grd.addColorStop(1, 'rgba(57,255,224,0)');
+        ctx.fillStyle = grd;
+        ctx.shadowColor = '#39ffe0';
+        ctx.shadowBlur = 15;
+        ctx.beginPath(); ctx.arc(bu.x, bu.y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(57,255,224,0.65)';
+        ctx.lineWidth = 2;
+        ctx.moveTo(bu.x - bu.vx * 0.02, bu.y - bu.vy * 0.02);
+        ctx.lineTo(bu.x, bu.y);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+
+      for (var e = 0; e < this.enemies.length; e++) {
+        var en = this.enemies[e];
+        var eg = ctx.createRadialGradient(en.x, en.y, 2, en.x, en.y, en.r + 8);
+        eg.addColorStop(0, '#fff2e8');
+        eg.addColorStop(0.35, en.tint);
+        eg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = eg;
+        ctx.shadowColor = en.tint;
+        ctx.shadowBlur = 15;
+        ctx.beginPath(); ctx.arc(en.x, en.y, en.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.fillRect(en.x - en.r, en.y + en.r + 4, en.r * 2, 3);
+        ctx.fillStyle = '#ffc14d';
+        ctx.fillRect(en.x - en.r, en.y + en.r + 4, en.r * 2 * Math.max(0, en.hp / en.maxHp), 3);
+      }
+
+      if (this.player.alive) {
+        var target = this.nearestEnemy();
+        var ang = target ? Math.atan2(target.y - this.player.y, target.x - this.player.x) : -Math.PI / 2;
+        ctx.save();
+        ctx.translate(this.player.x, this.player.y);
+        ctx.rotate(ang);
+        var pg = ctx.createRadialGradient(0, 0, 2, 0, 0, 20);
+        pg.addColorStop(0, '#ffffff');
+        pg.addColorStop(0.4, '#39ffe0');
+        pg.addColorStop(1, 'rgba(57,255,224,0)');
+        ctx.fillStyle = pg;
+        ctx.shadowColor = '#39ffe0';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(18, 0); ctx.lineTo(-12, 11); ctx.lineTo(-7, 0); ctx.lineTo(-12, -11);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        ctx.shadowBlur = 0;
+      }
+
+      for (var s = 0; s < this.splashes.length; s++) {
+        var sp = this.splashes[s];
+        if (sp.life <= 0) continue;
+        ctx.globalAlpha = Math.max(0, sp.life / sp.max);
+        ctx.fillStyle = sp.crit ? '#ffc14d' : '#ffffff';
+        ctx.font = (sp.crit ? 20 : 14) + 'px Impact, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(sp.text, sp.x, sp.y);
+      }
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = 'rgba(5,6,10,0.62)';
+      ctx.fillRect(10, 10, 180, 78);
+      ctx.strokeStyle = 'rgba(57,255,224,0.35)';
+      ctx.strokeRect(10.5, 10.5, 179, 77);
+      ctx.fillStyle = '#eef6ff';
+      ctx.font = '16px Impact, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('WAVE ' + this.wave, 22, 34);
+      ctx.fillStyle = '#ffc14d';
+      ctx.fillText('SCORE ' + this.score, 22, 56);
+      ctx.fillStyle = '#39ffe0';
+      ctx.fillText('KILLS ' + this.kills, 22, 76);
+
+      var buffs = [];
+      if (this.power.overdrive > 0) buffs.push('OD ' + this.power.overdrive.toFixed(1));
+      if (this.power.split > 0) buffs.push('SPLIT ' + this.power.split.toFixed(1));
+      if (this.power.magnet > 0) buffs.push('MAG ' + this.power.magnet.toFixed(1));
+      if (buffs.length) {
+        ctx.fillStyle = 'rgba(255,61,154,0.85)';
+        ctx.font = '12px Impact, sans-serif';
+        ctx.fillText(buffs.join('  ·  '), 22, 110);
+      }
+
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(10, this.h - 26, this.w - 20, 10);
+      ctx.fillStyle = '#39ffe0';
+      ctx.fillRect(10, this.h - 26, (this.w - 20) * Math.max(0, this.player.hp / this.player.maxHp), 10);
+
+      if (!this.player.alive) {
+        ctx.fillStyle = 'rgba(5,6,10,0.72)';
+        ctx.fillRect(0, 0, this.w, this.h);
+        ctx.fillStyle = '#ff3355';
+        ctx.font = '32px Impact, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#ff3355';
+        ctx.shadowBlur = 15;
+        ctx.fillText('DOWNED', this.w / 2, this.h * 0.44);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#7f8ba3';
+        ctx.font = '14px Impact, sans-serif';
+        ctx.fillText('OPEN COMBAT TAB TO RETRY', this.w / 2, this.h * 0.44 + 28);
+      }
+      ctx.restore();
+    }
+  };
+
+  document.getElementById('flippers').addEventListener('click', function (e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var idx = ORDER.indexOf(store.activeProfileId);
+    if (btn.getAttribute('data-nav') === 'prev') {
+      store.switchProfile(ORDER[(idx - 1 + ORDER.length) % ORDER.length]);
+    } else if (btn.getAttribute('data-nav') === 'next') {
+      store.switchProfile(ORDER[(idx + 1) % ORDER.length]);
+    } else if (btn.getAttribute('data-profile')) {
+      store.switchProfile(btn.getAttribute('data-profile'));
+    }
+  });
+
+  document.querySelector('.tabbar').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-tab]');
+    if (!btn) return;
+    store.setTab(btn.getAttribute('data-tab'));
+  });
+
+  document.getElementById('outpost-panel').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'harvest') store.collectHarvest();
+    if (act === 'portal') store.bumpPortal();
+    if (act === 'plant') store.plantSeed();
+  });
+
+  document.getElementById('vault-panel').addEventListener('click', function (e) {
+    var chest = e.target.closest('button[data-chest]');
+    if (chest) {
+      store.buyGearChest(chest.getAttribute('data-chest'));
+      return;
+    }
+    var claim = e.target.closest('button[data-claim]');
+    if (claim) store.claimFromVault(claim.getAttribute('data-claim'));
+  });
+
+  document.getElementById('profiles-panel').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-switch]');
+    if (!btn) return;
+    store.switchProfile(btn.getAttribute('data-switch'));
+  });
+
+  setInterval(function () {
+    if (store.activeTab === 'combat') return;
+  }, 1000);
+
+  Combat.init();
+  renderHeader();
+  store.setTab(store.activeTab || 'combat');
+})();
+</script>
 </body>
 </html>
