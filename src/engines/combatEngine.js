@@ -19,8 +19,10 @@ const ISO_YAW = Math.PI / 4
 /** Glowing cyan vector combat grid (world units). */
 const GRID_EXTENT = 120
 const GRID_DIVISIONS = 40
-const GRID_COLOR_MAIN = 0x06b6d4
-const GRID_COLOR_SUB = 0x111827
+const GRID_COLOR_MAIN = 0x00ffff
+const GRID_COLOR_SUB = 0x0a3d52
+const SCENE_BG = 0x02050f
+const FOG_DENSITY = 0.012
 const BURST_COUNT = 14
 const BURST_POOL_CAP = BURST_COUNT * 12
 
@@ -88,6 +90,37 @@ function markOwned(geoOrMat) {
   return geoOrMat
 }
 
+function styleCombatGrid(grid) {
+  const gridMats = Array.isArray(grid.material) ? grid.material : [grid.material]
+  gridMats.forEach((m, i) => {
+    m.transparent = true
+    m.opacity = 0.6
+    m.depthWrite = false
+    m.blending = THREE.AdditiveBlending
+    m.color.setHex(i === 0 ? GRID_COLOR_MAIN : GRID_COLOR_SUB)
+  })
+  grid.position.y = 0.015
+  grid.renderOrder = 2
+}
+
+function createMetallicFloor() {
+  const floor = new THREE.Mesh(
+    markOwned(new THREE.PlaneGeometry(120, 120)),
+    markOwned(
+      new THREE.MeshStandardMaterial({
+        color: 0x070c19,
+        roughness: 0.15,
+        metalness: 0.85,
+      })
+    )
+  )
+  floor.rotation.x = -Math.PI / 2
+  floor.position.y = 0
+  floor.receiveShadow = true
+  floor.userData.arenaFloor = true
+  return floor
+}
+
 function createPlayerRig() {
   const rig = new THREE.Group()
 
@@ -115,15 +148,7 @@ function createPlayerRig() {
   weaponMount.position.set(0, 0.02, 0.38)
   const barrel = new THREE.Mesh(
     markOwned(new THREE.CylinderGeometry(0.045, 0.07, 0.38, 10)),
-    markOwned(
-      new THREE.MeshStandardMaterial({
-        color: 0x0e7490,
-        emissive: 0x22d3ee,
-        emissiveIntensity: 0.65,
-        metalness: 0.88,
-        roughness: 0.2,
-      })
-    )
+    markOwned(new THREE.MeshBasicMaterial({ color: 0x22d3ee }))
   )
   barrel.rotation.x = Math.PI / 2
   weaponMount.add(barrel)
@@ -137,17 +162,17 @@ function createPlayerRig() {
 export function createCombatEngine(canvas, hudCanvas) {
   const renderer = createRenderer(canvas)
   const scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x030712, 0.022)
-  scene.background = new THREE.Color(0x030712)
+  scene.fog = new THREE.FogExp2(SCENE_BG, FOG_DENSITY)
+  scene.background = new THREE.Color(SCENE_BG)
 
   const camera = new THREE.OrthographicCamera(-FRUSTUM, FRUSTUM, FRUSTUM, -FRUSTUM, 0.1, 500)
   camera.position.set(CAM_ISO_X, CAM_ISO_Y, CAM_ISO_Z)
   camera.lookAt(0, 0, 0)
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.45)
   scene.add(ambientLight)
 
-  const overheadLight = new THREE.DirectionalLight(0x22d3ee, 1.5)
+  const overheadLight = new THREE.DirectionalLight(0x22d3ee, 1.8)
   overheadLight.position.set(0, 60, 0)
   overheadLight.castShadow = true
   overheadLight.shadow.mapSize.set(1024, 1024)
@@ -165,13 +190,10 @@ export function createCombatEngine(canvas, hudCanvas) {
   const arenaGroup = new THREE.Group()
   scene.add(arenaGroup)
 
+  arenaGroup.add(createMetallicFloor())
+
   const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
-  combatGrid.position.y = 0.01
-  const gridMats = Array.isArray(combatGrid.material) ? combatGrid.material : [combatGrid.material]
-  gridMats.forEach((m) => {
-    m.transparent = true
-    m.opacity = 0.85
-  })
+  styleCombatGrid(combatGrid)
   arenaGroup.add(combatGrid)
 
   const player = {
@@ -220,12 +242,8 @@ export function createCombatEngine(canvas, hudCanvas) {
     if (burstBoxGeo) return
     burstBoxGeo = new THREE.BoxGeometry(0.07, 0.07, 0.07)
     for (let i = 0; i < BURST_POOL_CAP; i++) {
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xf472b6,
-        emissive: 0xfb7185,
-        emissiveIntensity: 0.9,
-        metalness: 0.4,
-        roughness: 0.35,
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xff66cc,
         transparent: true,
         opacity: 0,
       })
@@ -269,25 +287,30 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function rebuildArena() {
+    let existingGrid = null
     while (arenaGroup.children.length) {
       const c = arenaGroup.children.pop()
-      if (c.type === 'GridHelper') continue
+      if (c.type === 'GridHelper') {
+        existingGrid = c
+        continue
+      }
       disposeMesh(c)
     }
 
     const era = eraById(getState().eraId)
-    scene.background = new THREE.Color(era.palette.ground).multiplyScalar(0.12)
-    scene.fog.color = new THREE.Color(0x030712)
+    scene.background = new THREE.Color(SCENE_BG)
+    scene.fog.color = new THREE.Color(SCENE_BG)
+    scene.fog.density = FOG_DENSITY
 
-    if (!arenaGroup.children.some((c) => c.type === 'GridHelper')) {
-      const combatGrid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
-      combatGrid.position.y = 0.01
-      const gridMats = Array.isArray(combatGrid.material) ? combatGrid.material : [combatGrid.material]
-      gridMats.forEach((m) => {
-        m.transparent = true
-        m.opacity = 0.85
-      })
-      arenaGroup.add(combatGrid)
+    arenaGroup.add(createMetallicFloor())
+
+    if (existingGrid) {
+      styleCombatGrid(existingGrid)
+      arenaGroup.add(existingGrid)
+    } else {
+      const grid = new THREE.GridHelper(GRID_EXTENT, GRID_DIVISIONS, GRID_COLOR_MAIN, GRID_COLOR_SUB)
+      styleCombatGrid(grid)
+      arenaGroup.add(grid)
     }
 
     if (player.mesh?.userData?.neonRing) {
@@ -364,7 +387,6 @@ export function createCombatEngine(canvas, hudCanvas) {
       p.inUse = true
       p.mesh.visible = true
       p.mesh.material.color.setHex(colorHex)
-      p.mesh.material.emissive.setHex(colorHex)
       p.mesh.material.opacity = 1
       p.alpha = 1
       p.mesh.position.set(x, y, z)
@@ -406,15 +428,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   function spawnCoin(x, z) {
     const mesh = new THREE.Mesh(
       markOwned(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 20)),
-      markOwned(
-        new THREE.MeshStandardMaterial({
-          color: 0xf5c542,
-          emissive: 0xf59e0b,
-          emissiveIntensity: 0.7,
-          metalness: 0.92,
-          roughness: 0.22,
-        })
-      )
+      markOwned(new THREE.MeshBasicMaterial({ color: 0xffdd57 }))
     )
     mesh.rotation.x = Math.PI / 2
     mesh.position.set(x, 0.35, z)
@@ -773,13 +787,10 @@ export function createCombatEngine(canvas, hudCanvas) {
       const mesh = new THREE.Mesh(
         markOwned(new THREE.SphereGeometry(0.38, 20, 20)),
         markOwned(
-          new THREE.MeshStandardMaterial({
+          new THREE.MeshBasicMaterial({
             color: 0xf59e0b,
-            emissive: 0xb45309,
-            emissiveIntensity: 0.35,
-            metalness: 0.7,
-            roughness: 0.25,
             transparent: true,
+            opacity: 1,
           })
         )
       )
