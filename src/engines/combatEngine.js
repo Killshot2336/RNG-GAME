@@ -93,44 +93,19 @@ function createPlayerRig() {
 
   const core = new THREE.Mesh(
     markOwned(new THREE.SphereGeometry(0.42, 32, 32)),
-    markOwned(
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0xe2e8f0,
-        emissiveIntensity: 0.55,
-        metalness: 0.92,
-        roughness: 0.1,
-      })
-    )
+    markOwned(new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: false }))
   )
-  core.castShadow = true
-  core.receiveShadow = true
   rig.add(core)
 
   const wireShell = new THREE.Mesh(
-    markOwned(new THREE.SphereGeometry(0.44, 20, 20)),
-    markOwned(
-      new THREE.MeshBasicMaterial({
-        color: 0x22d3ee,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.92,
-      })
-    )
+    markOwned(new THREE.SphereGeometry(0.52, 20, 20)),
+    markOwned(new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }))
   )
   rig.add(wireShell)
 
   const ring = new THREE.Mesh(
     markOwned(new THREE.TorusGeometry(0.58, 0.045, 16, 64)),
-    markOwned(
-      new THREE.MeshStandardMaterial({
-        color: 0x22d3ee,
-        emissive: 0x22d3ee,
-        emissiveIntensity: 1.6,
-        metalness: 0.4,
-        roughness: 0.15,
-      })
-    )
+    markOwned(new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }))
   )
   ring.rotation.x = Math.PI / 2
   ring.position.y = 0.04
@@ -316,7 +291,6 @@ export function createCombatEngine(canvas, hudCanvas) {
     }
 
     if (player.mesh?.userData?.neonRing) {
-      player.mesh.userData.neonRing.material.emissive.set(era.palette.accent)
       player.mesh.userData.neonRing.material.color.set(era.palette.accent)
     }
   }
@@ -334,16 +308,7 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     const mesh = new THREE.Mesh(
       sharedIcosaGeo,
-      markOwned(
-        new THREE.MeshStandardMaterial({
-          color: 0xff3333,
-          emissive: 0xff1111,
-          emissiveIntensity: 1.4,
-          flatShading: true,
-          metalness: 0.15,
-          roughness: 0.35,
-        })
-      )
+      markOwned(new THREE.MeshBasicMaterial({ color: 0xff3333 }))
     )
     mesh.castShadow = true
     const angle = opts.angle ?? Math.random() * Math.PI * 2
@@ -467,7 +432,7 @@ export function createCombatEngine(canvas, hudCanvas) {
   function orientLaser(mesh, dir, speed) {
     _v3Dir.copy(dir).normalize()
     mesh.quaternion.setFromUnitVectors(_v3Up, _v3Dir)
-    const stretch = 1.8 + Math.min(speed, 24) * 0.14
+    const stretch = 2.2 + Math.min(speed, 24) * 0.18
     mesh.scale.set(1, stretch, 1)
   }
 
@@ -481,19 +446,13 @@ export function createCombatEngine(canvas, hudCanvas) {
 
     const dir = _v3Dir.subVectors(_v3B, _v3A).normalize()
     if (!sharedLaserGeo) {
-      sharedLaserGeo = new THREE.CylinderGeometry(0.022, 0.014, 1.35, 8)
+      sharedLaserGeo = new THREE.CylinderGeometry(0.02, 0.012, 1.5, 8)
     }
 
     const makeBolt = (yawOffset) => {
       const d = dir.clone().applyAxisAngle(_v3Up, yawOffset)
       const speed = era.projectile.speed
-      const mat = markOwned(
-        new THREE.MeshBasicMaterial({
-          color: 0x22d3ee,
-          transparent: true,
-          opacity: 0.95,
-        })
-      )
+      const mat = markOwned(new THREE.MeshBasicMaterial({ color: 0x22d3ee }))
       const mesh = new THREE.Mesh(sharedLaserGeo, mat)
       mesh.position.copy(_v3A)
       orientLaser(mesh, d, speed)
