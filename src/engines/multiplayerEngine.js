@@ -364,6 +364,30 @@ export const multiplayerEngine = {
       this._bindInvites(auth.currentUser.uid)
     }
   },
+
+  /**
+   * Sandbox / diagnostics injectors — write into the same Zustand + combat
+   * listener slots live peers use, without touching Firebase or BroadcastChannel.
+   * Safe for local stress tests; never mutates remote RTDB.
+   */
+  injectSimulatedPresence(map) {
+    getState().setPresence(map)
+  },
+
+  injectSimulatedCombat(payload) {
+    if (!payload) return
+    combatListeners.forEach((fn) => fn(payload))
+  },
+
+  injectSimulatedInvite(invite) {
+    if (!invite) return
+    getState().setInvite(invite)
+    inviteListeners.forEach((fn) => fn(invite))
+  },
+
+  clearSimulatedInvite() {
+    getState().clearInvite()
+  },
 }
 
 export default multiplayerEngine

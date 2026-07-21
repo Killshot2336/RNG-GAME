@@ -128,6 +128,11 @@ export function createCombatEngine(canvas, hudCanvas) {
   let cachedTargetId = -1
   let nextEnemyId = 1
   let hudCtx = hudCanvas ? hudCanvas.getContext('2d') : null
+  /** Rolling FPS from delta timestamps (diagnostics only). */
+  let fpsEma = 60
+  let lastFrameMs = 16.67
+  /** Sandbox-spawned enemy ids — cleared without touching live wave spawns. */
+  const sandboxEnemyIds = new Set()
 
   function ensureSparkPool() {
     if (sparkGeo) return
@@ -252,10 +257,10 @@ export function createCombatEngine(canvas, hudCanvas) {
     }
   }
 
-  function spawnEnemy() {
+  function spawnEnemy(opts = {}) {
     const era = eraById(getState().eraId)
-    const angle = Math.random() * Math.PI * 2
-    const dist = 10 + Math.random() * 4
+    const angle = opts.angle ?? Math.random() * Math.PI * 2
+    const dist = opts.dist ?? (10 + Math.random() * 4)
     const geo = new THREE.DodecahedronGeometry(0.55 * era.enemyScale, 0)
     const mat = new THREE.MeshStandardMaterial({
       color: era.palette.enemy,
@@ -266,19 +271,23 @@ export function createCombatEngine(canvas, hudCanvas) {
     })
     const mesh = new THREE.Mesh(geo, mat)
     mesh.castShadow = true
-    const x = Math.cos(angle) * dist
-    const z = Math.sin(angle) * dist
+    const x = opts.x ?? Math.cos(angle) * dist
+    const z = opts.z ?? Math.sin(angle) * dist
     mesh.position.set(x, 0.7 * era.enemyScale, z)
     scene.add(mesh)
     const id = nextEnemyId++
-    enemies.push({
+    const enemy = {
       id,
       mesh,
-      hp: 2 + Math.floor(wave * 0.6) + era.order,
-      maxHp: 2 + Math.floor(wave * 0.6) + era.order,
-      speed: 1.6 + wave * 0.05 + era.order * 0.12,
+      hp: opts.hp ?? (2 + Math.floor(wave * 0.6) + era.order),
+      maxHp: opts.hp ?? (2 + Math.floor(wave * 0.6) + era.order),
+      speed: opts.speed ?? (1.6 + wave * 0.05 + era.order * 0.12),
       radius: 0.55 * era.enemyScale,
-    })
+      sandbox: !!opts.sandbox,
+    }
+    enemies.push(enemy)
+    if (enemy.sandbox) sandboxEnemyIds.add(id)
+    return enemy
   }
 
   function ensureWave() {
@@ -561,6 +570,7 @@ export function createCombatEngine(canvas, hudCanvas) {
             floating.spawn(e.mesh.position.x, e.mesh.position.y + 1.2, e.mesh.position.z, 'BLOWN', '#fb7185')
             scene.remove(e.mesh)
             disposeObject(e.mesh)
+            sandboxEnemyIds.delete(e.id)
             enemies.splice(ei, 1)
             state.bumpKill()
             state.addCredits(3)
@@ -726,7 +736,12 @@ export function createCombatEngine(canvas, hudCanvas) {
   function loop(now) {
     if (!running) return
     const dt = Math.min(0.05, (now - last) / 1000)
+    lastFrameMs = now - last
     last = now
+    if (lastFrameMs > 0) {
+      const instFps = 1000 / lastFrameMs
+      fpsEma = fpsEma * 0.9 + instFps * 0.1
+    }
     update(dt)
     renderFrame()
     raf = requestAnimationFrame(loop)
@@ -796,6 +811,135 @@ export function createCombatEngine(canvas, hudCanvas) {
       unsubCombat()
       window.removeEventListener('resize', resize)
       renderer.dispose()
+    },
+
+    /* ── Diagnostics / sandbox surface (isolated from live match UI) ── */
+
+    getDiagnostics() {
+      let poolInUse = 0
+      for (let i = 0; i < particlePool.length; i++) {
+        if (particlePool[i].inUse) poolInUse++
+      }
+      return {
+        fps: Math.round(fpsEma * 10) / 10,
+        frameMs: Math.round(lastFrameMs * 100) / 100,
+        enemies: enemies.length,
+        projectiles: projectiles.length,
+        particles: particles.length,
+        particlePoolCap: particlePool.length,
+        particlePoolInUse: poolInUse,
+        coins: coins.length,
+        sandboxEnemies: sandboxEnemyIds.size,
+        wave,
+        playerHp: player.hp,
+        playerDowned: player.downed,
+        running,
+      }
+    },
+
+    /** Proximal Euclidean target sort — exposed for stress-test timing. */
+    processAutoWeaponFires,
+
+    /**
+     * Spawn a sandbox horde. Tags entities so clearSandboxHorde() can remove
+     * them without disrupting the current wave's live enemies.
+     */
+    spawnSandboxHorde(count = 100) {
+      ensureSparkPool()
+      const spawned = []
+      const n = Math.max(0, Math.floor(count))
+      for (let i = 0; i < n; i++) {
+        const angle = (i / Math.max(1, n)) * Math.PI * 2 + Math.random() * 0.2
+        const dist = 3 + (i % 12) * 0.85 + Math.random() * 0.4
+        spawned.push(
+          spawnEnemy({
+            sandbox: true,
+            angle,
+            dist,
+            x: Math.cos(angle) * dist,
+            z: Math.sin(angle) * dist,
+            hp: 8,
+            speed: 0.9 + Math.random() * 0.6,
+          })
+        )
+      }
+      return spawned.length
+    },
+
+    clearSandboxHorde() {
+      let removed = 0
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]
+        if (!e.sandbox && !sandboxEnemyIds.has(e.id)) continue
+        if (cachedTargetId === e.id) {
+          cachedTarget = null
+          cachedTargetId = -1
+        }
+        scene.remove(e.mesh)
+        disposeObject(e.mesh)
+        sandboxEnemyIds.delete(e.id)
+        enemies.splice(i, 1)
+        removed++
+      }
+      return removed
+    },
+
+    /**
+     * Force a spark burst and return active particle snapshot for pool audits.
+     */
+    debugBurstSparks(x = 0, z = 0) {
+      spawnSparks(x, 0.9, z, 0x22d3ee)
+      return {
+        active: particles.length,
+        alphas: particles.map((p) => p.alpha),
+      }
+    },
+
+    /**
+     * Sample particle pool hygiene: every active particle must splice out when alpha ≤ 0.
+     * Advances updateParticles by `steps` synthetic ticks.
+     */
+    auditParticlePool(steps = 90, stepDt = 1 / 60) {
+      const before = particles.length
+      for (let s = 0; s < steps; s++) updateParticles(stepDt)
+      let leaked = 0
+      for (let i = 0; i < particles.length; i++) {
+        if (particles[i].alpha <= 0) leaked++
+      }
+      let poolOrphans = 0
+      for (let i = 0; i < particlePool.length; i++) {
+        const p = particlePool[i]
+        if (p.inUse && p.alpha <= 0) poolOrphans++
+      }
+      return {
+        before,
+        after: particles.length,
+        leakedAlphaZero: leaked,
+        poolOrphans,
+        poolInUse: particlePool.filter((p) => p.inUse).length,
+        ok: leaked === 0 && poolOrphans === 0,
+      }
+    },
+
+    /**
+     * Time processAutoWeaponFires over `iterations` with current enemy set.
+     * Returns max/avg ms — used by the horde stress check matrix.
+     */
+    benchmarkTargetSort(iterations = 200) {
+      const samples = []
+      for (let i = 0; i < iterations; i++) {
+        const t0 = performance.now()
+        processAutoWeaponFires()
+        samples.push(performance.now() - t0)
+      }
+      const sum = samples.reduce((a, b) => a + b, 0)
+      return {
+        iterations,
+        enemies: enemies.length,
+        avgMs: sum / samples.length,
+        maxMs: Math.max(...samples),
+        minMs: Math.min(...samples),
+      }
     },
   }
 }

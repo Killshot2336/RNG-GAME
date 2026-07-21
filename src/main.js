@@ -7,6 +7,7 @@ import { multiplayerEngine } from './engines/multiplayerEngine.js'
 import { createCombatEngine } from './engines/combatEngine.js'
 import { createSkillTreeEngine } from './engines/skillTreeEngine.js'
 import { eraEngine } from './engines/eraEngine.js'
+import { mountSystemDiagnosticSandbox } from './debug/systemDiagnosticSandbox.js'
 import {
   renderMarket,
   marketTick,
@@ -136,6 +137,7 @@ async function boot() {
   combat.mount()
   skills.mount()
   combat.start()
+  mountSystemDiagnosticSandbox(combat)
 
   setPanelByIndex(1)
   paint()

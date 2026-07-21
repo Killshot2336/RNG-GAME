@@ -44,6 +44,45 @@ export function rollGear(rarityBias = 0.4) {
   }
 }
 
+/**
+ * Pure loot-chest roll used by market chests and the diagnostic sandbox.
+ * Does NOT mutate inventory / sharedVault — callers decide persistence.
+ *
+ * Tier table (display Divine = data rarity `legendary`):
+ *   Divine  0.02%
+ *   Epic    2.00%
+ *   Rare   18.00%
+ *   Common 79.98%
+ *
+ * Optional `rarityBias` (0–1) soft-boosts non-common odds without changing
+ * the Divine floor of 0.02% (matches the published drop index).
+ */
+export const DIVINE_DROP_RATE = 0.0002
+
+export function openLootChest(opts = {}) {
+  const bias = typeof opts.rarityBias === 'number' ? opts.rarityBias : 0.4
+  const rng = typeof opts.rng === 'function' ? opts.rng : Math.random
+  const roll = rng()
+
+  let rarity = 'common'
+  if (roll < DIVINE_DROP_RATE) {
+    rarity = 'legendary' // Divine tier in UI
+  } else if (roll < DIVINE_DROP_RATE + 0.02 * bias) {
+    rarity = 'epic'
+  } else if (roll < DIVINE_DROP_RATE + 0.02 * bias + 0.18 * bias) {
+    rarity = 'rare'
+  }
+
+  const pool = GEAR_POOL.filter((g) => g.rarity === rarity)
+  const pick = pool[Math.floor(rng() * pool.length)] || GEAR_POOL[0]
+  return {
+    id: `loot_${Date.now()}_${Math.floor(rng() * 1e9)}`,
+    ...pick,
+    rolledAt: Date.now(),
+    displayTier: rarity === 'legendary' ? 'divine' : rarity,
+  }
+}
+
 /** Refresh interval for the 4-slot timed store (ms). */
 export const MARKET_REFRESH_MS = 4 * 60 * 1000
 

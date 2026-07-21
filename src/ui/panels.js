@@ -1,5 +1,5 @@
 import { getState } from '../store/gameStore.js'
-import { CHEST_OFFERS, rollGear, MARKET_REFRESH_MS } from '../data/gearCatalog.js'
+import { CHEST_OFFERS, openLootChest, MARKET_REFRESH_MS } from '../data/gearCatalog.js'
 import { CLAN_MEMBERS } from '../data/clanRoster.js'
 import { eraEngine } from '../engines/eraEngine.js'
 import { multiplayerEngine } from '../engines/multiplayerEngine.js'
@@ -160,7 +160,7 @@ export function renderMarket(root) {
   root.querySelectorAll('[data-buy-chest]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const offer = CHEST_OFFERS.find((c) => c.id === btn.getAttribute('data-buy-chest'))
-      if (offer) getState().buyChest(offer, rollGear)
+      if (offer) getState().buyChest(offer, (bias) => openLootChest({ rarityBias: bias }))
     })
   })
   root.querySelectorAll('[data-equip]').forEach((btn) => {
