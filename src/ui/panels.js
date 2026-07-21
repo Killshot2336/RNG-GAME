@@ -446,7 +446,7 @@ export function renderInviteOverlay(root) {
 }
 
 export function renderToast(root) {
-  const t = getState().toast
+  const t = getState().toastNotice
   if (!t || Date.now() - t.at > 2200) {
     root.classList.remove('show')
     return

@@ -49,13 +49,16 @@ function defaultState() {
     presence: Object.fromEntries(CLAN_MEMBERS.map((m) => [m.id, { online: false, inMatch: false, lastSeen: 0 }])),
     uid: null,
     displayName: null,
-    toast: null,
+    /** Transient notice payload — must NOT share the key name `toast` (the action). */
+    toastNotice: null,
   }
 }
 
 export const gameStore = createStore((set, get) => {
   const saved = loadSave()
-  const initial = saved ? { ...defaultState(), ...saved, inviteOverlay: null, toast: null } : defaultState()
+  const initial = saved
+    ? { ...defaultState(), ...saved, inviteOverlay: null, toastNotice: null }
+    : defaultState()
 
   return {
     ...initial,
@@ -103,7 +106,7 @@ export const gameStore = createStore((set, get) => {
     },
 
     toast(msg) {
-      set({ toast: { msg, at: Date.now() } })
+      set({ toastNotice: { msg, at: Date.now() } })
     },
 
     skillMods() {
