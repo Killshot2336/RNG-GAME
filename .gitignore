@@ -1,8 +1,25 @@
+
+dist
+dist-ssr
+.DS_Store
+# Editor directories and files
 .env
-.env.local
-.env*.local
-node_modules/
-dist/
-tools/mingit/
-.cursor/
-FULL_CODEBASE_BUNDLE.txt
+.env.*
+.idea
+lerna-debug.log*
+*.local
+*.log
+logs
+# Logs
+*.njsproj
+node_modules
+npm-debug.log*
+*.ntvs*
+pnpm-debug.log*
+*.sln
+*.suo
+*.sw?
+.vscode/*
+!.vscode/extensions.json
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-void text-slate-100 font-mono antialiased overflow-hidden;
+    background-image:
+      radial-gradient(ellipse at 50% 0%, rgba(6, 182, 212, 0.14), transparent 55%),
+      linear-gradient(rgba(6, 182, 212, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(6, 182, 212, 0.04) 1px, transparent 1px);
+    background-size: 100% 100%, 32px 32px, 32px 32px;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-2xl border border-cyan-500/25 bg-slate-950/80 backdrop-blur-xl;
+    box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.08), 0 0 40px rgba(0, 0, 0, 0.55);
+  }
+}

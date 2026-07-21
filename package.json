@@ -1,22 +1,22 @@
 {
   "name": "syndicate-swarm",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "Syndicate Swarm — single-file co-op rogue-lite + outpost",
   "type": "module",
+  "description": "Syndicate Swarm — Vite + Tailwind + Zustand + Firebase",
   "scripts": {
-    "build": "node scripts/copy-static.mjs",
-    "dev": "npx serve .",
-    "preview": "npx serve dist",
-    "smoke": "node scripts/e2e-swarm-smoke.mjs",
-    "smoke:chronos": "node scripts/e2e-chronos-smoke.mjs",
-    "audit": "npm run smoke"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.0"
+    "firebase": "^12.16.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
-    "playwright": "^1.61.1"
+    "autoprefixer": "^10.5.4",
+    "postcss": "^8.5.20",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.1.1"
   }
 }
