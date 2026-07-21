@@ -157,12 +157,14 @@ async function boot() {
   })
 
   hubChrome.addEventListener('open-skills', () => {
+    combat.pauseLoop()
     skills.open()
     paint()
   })
 
   document.getElementById('btn-close-skills').addEventListener('click', () => {
     skills.close()
+    combat.resumeLoop()
     paint()
     combat.resize()
   })

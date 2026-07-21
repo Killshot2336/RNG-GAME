@@ -304,15 +304,31 @@ export const multiplayerEngine = {
 
   /**
    * Push combat vector sync during matches.
-   * payload: { seat, x, z, vx, vz, downed, aimYaw, hp, ts }
+   * Debounced: only broadcast when moved > 2 world units (unless force).
+   * payload: { seat, x, y, z, vx, vz, downed, aimYaw, hp, ts }
    */
-  async publishCombatState(payload) {
-    const body = { ...payload, seat: seatKey(), ts: Date.now() }
+  _lastCombatBroadcast: { x: null, y: null, z: null },
+
+  async publishCombatState(payload, opts = {}) {
+    const force = !!opts.force
+    const x = payload.x
+    const y = payload.y ?? 0
+    const z = payload.z
+    const last = this._lastCombatBroadcast
+    if (!force && last.x != null) {
+      const dx = x - last.x
+      const dy = y - last.y
+      const dz = z - last.z
+      if (dx * dx + dy * dy + dz * dz < 4) return false
+    }
+    this._lastCombatBroadcast = { x, y, z }
+    const body = { ...payload, x, y, z, seat: seatKey(), ts: Date.now() }
     if (!configured) {
       localChannel?.postMessage({ type: 'combat', payload: body })
-      return
+      return true
     }
     await set(ref(db, `combat/${roomId}/${seatKey()}`), body)
+    return true
   },
 
   bindCombatRoom() {

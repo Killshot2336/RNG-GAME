@@ -307,16 +307,16 @@ export function createSkillTreeEngine(canvas) {
       targetPanX = 0
       targetPanY = 2
       targetZoom = 14
-      if (!running) {
-        running = true
-        raf = requestAnimationFrame(loop)
-      }
+      cancelAnimationFrame(raf)
+      running = true
+      raf = requestAnimationFrame(loop)
       resize()
     },
     close() {
       getState().setSkillView(false)
       running = false
       cancelAnimationFrame(raf)
+      raf = 0
     },
     isOpen() {
       return getState().skillViewOpen

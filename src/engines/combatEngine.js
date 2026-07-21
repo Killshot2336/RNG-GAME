@@ -106,7 +106,14 @@ export function createCombatEngine(canvas, hudCanvas) {
   const enemies = []
   const projectiles = []
   const coins = []
-  const sparks = []
+  /** Active plasma sparks only — expired entries are spliced instantly. */
+  const particles = []
+  /** Pre-allocated pool backing 14-spark bursts without GC thrash. */
+  const particlePool = []
+  const SPARK_BURST = 14
+  const SPARK_POOL_CAP = SPARK_BURST * 12
+  let sparkGeo = null
+
   const remotePlayers = new Map()
   const keys = Object.create(null)
   const floating = makeFloatingText()
@@ -116,7 +123,52 @@ export function createCombatEngine(canvas, hudCanvas) {
   let raf = 0
   let last = performance.now()
   let syncAccum = 0
+  let frameCounter = 0
+  let cachedTarget = null
+  let cachedTargetId = -1
+  let nextEnemyId = 1
   let hudCtx = hudCanvas ? hudCanvas.getContext('2d') : null
+
+  function ensureSparkPool() {
+    if (sparkGeo) return
+    sparkGeo = new THREE.SphereGeometry(0.08, 6, 6)
+    for (let i = 0; i < SPARK_POOL_CAP; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      })
+      const mesh = new THREE.Mesh(sparkGeo, mat)
+      mesh.visible = false
+      mesh.frustumCulled = false
+      scene.add(mesh)
+      particlePool.push({
+        mesh,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        life: 0,
+        alpha: 0,
+        inUse: false,
+      })
+    }
+  }
+
+  function acquireParticle() {
+    for (let i = 0; i < particlePool.length; i++) {
+      if (!particlePool[i].inUse) return particlePool[i]
+    }
+    return null
+  }
+
+  function releaseParticle(p) {
+    p.inUse = false
+    p.alpha = 0
+    p.life = 0
+    p.mesh.visible = false
+    p.mesh.material.opacity = 0
+  }
 
   function disposeObject(obj) {
     obj.traverse?.((child) => {
@@ -218,7 +270,9 @@ export function createCombatEngine(canvas, hudCanvas) {
     const z = Math.sin(angle) * dist
     mesh.position.set(x, 0.7 * era.enemyScale, z)
     scene.add(mesh)
+    const id = nextEnemyId++
     enemies.push({
+      id,
       mesh,
       hp: 2 + Math.floor(wave * 0.6) + era.order,
       maxHp: 2 + Math.floor(wave * 0.6) + era.order,
@@ -236,25 +290,42 @@ export function createCombatEngine(canvas, hudCanvas) {
   }
 
   function spawnSparks(x, y, z, color) {
-    for (let i = 0; i < 18; i++) {
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06 + Math.random() * 0.05, 6, 6),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 })
-      )
-      mesh.position.set(x, y, z)
-      scene.add(mesh)
-      const dir = new THREE.Vector3(
-        Math.random() * 2 - 1,
-        Math.random() * 1.4,
-        Math.random() * 2 - 1
-      ).normalize()
-      sparks.push({
-        mesh,
-        vx: dir.x * (4 + Math.random() * 6),
-        vy: dir.y * (4 + Math.random() * 6),
-        vz: dir.z * (4 + Math.random() * 6),
-        life: 0.55 + Math.random() * 0.35,
-      })
+    ensureSparkPool()
+    for (let i = 0; i < SPARK_BURST; i++) {
+      const p = acquireParticle()
+      if (!p) break
+      p.inUse = true
+      p.mesh.visible = true
+      p.mesh.material.color.setHex(typeof color === 'number' ? color : 0x22d3ee)
+      p.mesh.material.opacity = 1
+      p.alpha = 1
+      p.mesh.position.set(x, y, z)
+      const angle = Math.random() * Math.PI * 2
+      const elev = Math.random() * 1.2
+      const force = 4 + Math.random() * 6
+      const cosE = Math.cos(elev)
+      p.vx = Math.cos(angle) * cosE * force
+      p.vy = Math.sin(elev) * force + 1.2
+      p.vz = Math.sin(angle) * cosE * force
+      p.life = 0.55 + Math.random() * 0.35
+      particles.push(p)
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const s = particles[i]
+      s.life -= dt
+      s.vy -= 9 * dt
+      s.mesh.position.x += s.vx * dt
+      s.mesh.position.y += s.vy * dt
+      s.mesh.position.z += s.vz * dt
+      s.alpha = Math.max(0, s.life * 2)
+      s.mesh.material.opacity = s.alpha
+      if (s.alpha <= 0 || s.life <= 0 || s.mesh.position.y < 0) {
+        releaseParticle(s)
+        particles.splice(i, 1)
+      }
     }
   }
 
@@ -319,19 +390,53 @@ export function createCombatEngine(canvas, hudCanvas) {
     }
   }
 
-  function nearestEnemy() {
-    let best = null
-    let bestD = Infinity
-    for (const e of enemies) {
-      const dx = e.mesh.position.x - player.x
-      const dz = e.mesh.position.z - player.z
-      const d = dx * dx + dz * dz
-      if (d < bestD) {
-        bestD = d
-        best = e
+  /**
+   * Euclidean closeness cache — squared distances only, refresh every 3 frames.
+   */
+  function processAutoWeaponFires() {
+    frameCounter++
+    if (frameCounter % 3 === 0 || !cachedTarget || cachedTarget.hp <= 0) {
+      let best = null
+      let bestD2 = Infinity
+      const px = player.x
+      const pz = player.z
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i]
+        const dx = e.mesh.position.x - px
+        const dz = e.mesh.position.z - pz
+        const d2 = dx * dx + dz * dz
+        if (d2 < bestD2) {
+          bestD2 = d2
+          best = e
+        }
+      }
+      cachedTarget = best
+      cachedTargetId = best ? best.id : -1
+    } else if (cachedTargetId >= 0) {
+      // Validate cache still points at a live enemy without full scan
+      let alive = false
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i].id === cachedTargetId) {
+          cachedTarget = enemies[i]
+          alive = true
+          break
+        }
+      }
+      if (!alive) {
+        cachedTarget = null
+        cachedTargetId = -1
       }
     }
-    return best
+    return cachedTarget
+  }
+
+  function fireAtNearest() {
+    const target = processAutoWeaponFires()
+    if (!target || player.fireCd > 0) return
+    fireAt(target)
+    const era = eraById(getState().eraId)
+    const mods = getState().skillMods()
+    player.fireCd = (0.38 * mods.fireRate) * (18 / era.projectile.speed)
   }
 
   function projectToHud(x, y, z) {
@@ -389,7 +494,11 @@ export function createCombatEngine(canvas, hudCanvas) {
   function update(dt) {
     const state = getState()
     if (state.skillViewOpen || state.panel !== 'hub') return
-    if (player.downed) return
+    if (player.downed) {
+      updateParticles(dt)
+      updateRemotePlayers(dt)
+      return
+    }
 
     const mods = state.skillMods()
     let mx = 0
@@ -399,10 +508,10 @@ export function createCombatEngine(canvas, hudCanvas) {
     if (keys.a || keys.arrowleft) mx -= 1
     if (keys.d || keys.arrowright) mx += 1
     if (mx || mz) {
-      const len = Math.hypot(mx, mz) || 1
-      mx /= len
-      mz /= len
-      // camera-relative isometric movement
+      const lenSq = mx * mx + mz * mz
+      const invLen = lenSq > 0 ? 1 / Math.sqrt(lenSq) : 1
+      mx *= invLen
+      mz *= invLen
       const ang = -ISO_YAW
       const rx = mx * Math.cos(ang) - mz * Math.sin(ang)
       const rz = mx * Math.sin(ang) + mz * Math.cos(ang)
@@ -422,12 +531,7 @@ export function createCombatEngine(canvas, hudCanvas) {
     ensureWave()
 
     player.fireCd -= dt
-    const target = nearestEnemy()
-    if (target && player.fireCd <= 0) {
-      fireAt(target)
-      const era = eraById(state.eraId)
-      player.fireCd = (0.38 * mods.fireRate) * (18 / era.projectile.speed)
-    }
+    fireAtNearest()
 
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i]
@@ -441,11 +545,16 @@ export function createCombatEngine(canvas, hudCanvas) {
         const dx = e.mesh.position.x - p.mesh.position.x
         const dy = e.mesh.position.y - p.mesh.position.y
         const dz = e.mesh.position.z - p.mesh.position.z
-        if (dx * dx + dy * dy + dz * dz < (e.radius + 0.25) ** 2) {
+        const rad = e.radius + 0.25
+        if (dx * dx + dy * dy + dz * dz < rad * rad) {
           e.hp -= p.dmg
           floating.spawn(e.mesh.position.x, e.mesh.position.y + 0.8, e.mesh.position.z, `-${Math.round(p.dmg * 10)}`, '#f472b6')
           hit = true
           if (e.hp <= 0) {
+            if (cachedTargetId === e.id) {
+              cachedTarget = null
+              cachedTargetId = -1
+            }
             spawnSparks(e.mesh.position.x, e.mesh.position.y, e.mesh.position.z, eraById(state.eraId).palette.accent)
             spawnCoin(e.mesh.position.x, e.mesh.position.z)
             if (Math.random() < 0.35) spawnCoin(e.mesh.position.x + 0.4, e.mesh.position.z - 0.3)
@@ -466,14 +575,20 @@ export function createCombatEngine(canvas, hudCanvas) {
       }
     }
 
-    for (const e of enemies) {
+    const contactR = 0.55
+    for (let ei = 0; ei < enemies.length; ei++) {
+      const e = enemies[ei]
       const dx = player.x - e.mesh.position.x
       const dz = player.z - e.mesh.position.z
-      const d = Math.hypot(dx, dz) || 1
-      e.mesh.position.x += (dx / d) * e.speed * dt
-      e.mesh.position.z += (dz / d) * e.speed * dt
+      const d2 = dx * dx + dz * dz
+      const contact = e.radius + contactR
+      if (d2 > 0.0001) {
+        const inv = 1 / Math.sqrt(d2)
+        e.mesh.position.x += dx * inv * e.speed * dt
+        e.mesh.position.z += dz * inv * e.speed * dt
+      }
       e.mesh.rotation.y += dt * 2
-      if (d < e.radius + 0.55) {
+      if (d2 < contact * contact) {
         player.hp -= 18 * dt
         if (player.hp <= 0 && !player.downed) {
           player.downed = true
@@ -481,12 +596,13 @@ export function createCombatEngine(canvas, hudCanvas) {
           state.setMatch({ downed: true })
           multiplayerEngine.publishCombatState({
             x: player.x,
+            y: 0.2,
             z: player.z,
             vx: 0,
             vz: 0,
             downed: true,
             hp: 0,
-          })
+          }, { force: true })
           floating.spawn(player.x, 1.5, player.z, 'DOWNED', '#ef4444')
           state.toast('You are down — wait for revive or re-enter')
         }
@@ -494,18 +610,20 @@ export function createCombatEngine(canvas, hudCanvas) {
     }
 
     const magnet = 2.8 * mods.magnet
+    const magnetSq = magnet * magnet
     for (let i = coins.length - 1; i >= 0; i--) {
       const c = coins[i]
       c.spin += dt * 4
       c.mesh.rotation.z = c.spin
       const dx = player.x - c.mesh.position.x
       const dz = player.z - c.mesh.position.z
-      const d = Math.hypot(dx, dz) || 1
-      if (d < magnet) {
-        c.mesh.position.x += (dx / d) * 10 * dt
-        c.mesh.position.z += (dz / d) * 10 * dt
+      const d2 = dx * dx + dz * dz
+      if (d2 < magnetSq && d2 > 0.0001) {
+        const inv = 1 / Math.sqrt(d2)
+        c.mesh.position.x += dx * inv * 10 * dt
+        c.mesh.position.z += dz * inv * 10 * dt
       }
-      if (d < 0.55) {
+      if (d2 < 0.3025) {
         state.addCredits(c.value)
         floating.spawn(c.mesh.position.x, 1, c.mesh.position.z, `+${c.value}¤`, '#fbbf24')
         scene.remove(c.mesh)
@@ -514,30 +632,19 @@ export function createCombatEngine(canvas, hudCanvas) {
       }
     }
 
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const s = sparks[i]
-      s.life -= dt
-      s.vy -= 9 * dt
-      s.mesh.position.x += s.vx * dt
-      s.mesh.position.y += s.vy * dt
-      s.mesh.position.z += s.vz * dt
-      s.mesh.material.opacity = Math.max(0, s.life * 2)
-      if (s.life <= 0 || s.mesh.position.y < 0) {
-        scene.remove(s.mesh)
-        disposeObject(s.mesh)
-        sparks.splice(i, 1)
-      }
-    }
+    updateParticles(dt)
+    updateRemotePlayers(dt)
 
     ambientPulse.intensity = 0.35 + Math.sin(performance.now() * 0.004) * 0.15
     applyCamera()
 
     syncAccum += dt
-    if (syncAccum > 0.12) {
+    if (syncAccum > 0.1) {
       syncAccum = 0
       if (state.inMatch) {
         multiplayerEngine.publishCombatState({
           x: player.x,
+          y: 0.85,
           z: player.z,
           vx: mx,
           vz: mz,
@@ -547,6 +654,19 @@ export function createCombatEngine(canvas, hudCanvas) {
         })
       }
     }
+  }
+
+  function updateRemotePlayers(dt) {
+    const lerp = Math.min(1, 14 * dt)
+    remotePlayers.forEach((entry) => {
+      entry.mesh.position.x += (entry.targetX - entry.mesh.position.x) * lerp
+      entry.mesh.position.y += (entry.targetY - entry.mesh.position.y) * lerp
+      entry.mesh.position.z += (entry.targetZ - entry.mesh.position.z) * lerp
+      let yawDiff = entry.targetYaw - entry.mesh.rotation.y
+      while (yawDiff > Math.PI) yawDiff -= Math.PI * 2
+      while (yawDiff < -Math.PI) yawDiff += Math.PI * 2
+      entry.mesh.rotation.y += yawDiff * lerp
+    })
   }
 
   function upsertRemote(payload) {
@@ -559,17 +679,27 @@ export function createCombatEngine(canvas, hudCanvas) {
           color: 0xf59e0b,
           emissive: 0xb45309,
           emissiveIntensity: 0.3,
+          transparent: true,
         })
       )
       mesh.castShadow = true
       scene.add(mesh)
-      entry = { mesh, downed: false }
+      entry = {
+        mesh,
+        downed: false,
+        targetX: payload.x || 0,
+        targetY: payload.downed ? 0.2 : (payload.y ?? 0.85),
+        targetZ: payload.z || 0,
+        targetYaw: payload.aimYaw || 0,
+      }
+      mesh.position.set(entry.targetX, entry.targetY, entry.targetZ)
       remotePlayers.set(payload.seat, entry)
     }
-    entry.mesh.position.set(payload.x, payload.downed ? 0.2 : 0.85, payload.z)
-    entry.mesh.rotation.y = payload.aimYaw || 0
+    entry.targetX = payload.x
+    entry.targetZ = payload.z
+    entry.targetY = payload.downed ? 0.2 : (payload.y ?? 0.85)
+    entry.targetYaw = payload.aimYaw || 0
     entry.mesh.material.opacity = payload.downed ? 0.35 : 1
-    entry.mesh.material.transparent = true
     entry.downed = !!payload.downed
   }
 
@@ -629,11 +759,26 @@ export function createCombatEngine(canvas, hudCanvas) {
       player.hp = 100 * getState().skillMods().hp
       player.maxHp = player.hp
       multiplayerEngine.setInMatch(true)
+      ensureSparkPool()
+      raf = requestAnimationFrame(loop)
+    },
+    /** Freeze combat RAF so skyward constellation owns the frame budget. */
+    pauseLoop() {
+      running = false
+      cancelAnimationFrame(raf)
+      raf = 0
+    },
+    /** Resume combat RAF after skyward closes. */
+    resumeLoop() {
+      if (running) return
+      running = true
+      last = performance.now()
       raf = requestAnimationFrame(loop)
     },
     stop() {
       running = false
       cancelAnimationFrame(raf)
+      raf = 0
       multiplayerEngine.setInMatch(false)
       getState().setMatch({ inMatch: false })
     },
