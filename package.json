@@ -1,31 +1,27 @@
 {
-  "name": "voidline-galaxy-farm",
-  "version": "1.0.0",
+  "name": "syndicate-swarm",
+  "version": "2.0.0",
   "private": true,
-  "description": "Voidline Chronos — 3-player co-op timeline warband",
+  "description": "Syndicate Swarm — 3-player local co-op rogue-lite + slow-life outpost",
   "type": "module",
   "scripts": {
-    "dev": "vite --config legacy/react-build/vite.config.ts 2>nul || npx serve .",
+    "build:swarm": "node scripts/build-swarm.mjs",
     "build": "node scripts/copy-static.mjs",
-    "audit": "node scripts/e2e-chronos-smoke.mjs",
-    "smoke": "node scripts/e2e-chronos-smoke.mjs",
-    "preview": "npx serve dist"
+    "typecheck": "tsc -p tsconfig.swarm.json",
+    "dev": "node scripts/build-swarm.mjs && npx serve .",
+    "preview": "npx serve dist",
+    "smoke": "node scripts/e2e-swarm-smoke.mjs",
+    "smoke:chronos": "node scripts/e2e-chronos-smoke.mjs",
+    "audit": "npm run smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.4",
     "@types/node": "^22.15.3",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "^4.4.1",
+    "esbuild": "^0.25.4",
     "playwright": "^1.61.1",
-    "tailwindcss": "^4.1.4",
-    "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "typescript": "~5.8.3"
   }
 }

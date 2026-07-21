@@ -1,38 +1,26 @@
-# Voidline Chronos
+# Syndicate Swarm
 
-Private 3-player co-op warband — **Aden · Jamie · Edward**.
-
-Thrown into deep time. Stabilize eras. Merge relics. Spec the constellation. Hold the Chronolith. Raid planets for exotics.
-
-**Live:** https://rng-game-gules.vercel.app  
-**Repo:** https://github.com/Killshot2336/RNG-GAME
-
-## Play
-
-1. Open the app → pick who you are  
-2. Hub is art — tap **Tower / Forge / Tree / Gate / Eras**  
-3. Spec Bulwark / Rift / Warden · merge shards · push waves · extract exotics  
-4. Progress syncs per seat (phone ↔ PC via local save + optional cloud)
+3-player local co-op rogue-lite wave survival + slow-life outpost.
 
 ## Stack
+- HTML5 shell (`index.html`)
+- TypeScript (`src/`)
+- Zustand vanilla store
+- Canvas combat engine (rAF)
+- Outpost simulation interval
+- Tailwind CDN + custom AAA CSS (`src/index.css` → `assets/swarm.css`)
+- esbuild bundle (no React / no Vite app wrapper)
 
-| Layer | Tech |
-|-------|------|
-| Game | Vanilla JS (`chronos.js`) + cinematic CSS |
-| Auth / cloud | Supabase optional (`cloud-auth.js`) |
-| Hosting | Vercel → `dist` |
-
-## Scripts
-
+## Commands
 ```bash
-npm run build    # copy static → dist
-npm run preview  # serve dist
+npm run build:swarm   # bundle TS → assets/swarm.js
+npm run build         # swarm + copy dist (includes /chronos archive)
+npm run smoke         # Syndicate Swarm e2e
+npm run smoke:chronos # legacy Chronos at /chronos/
 ```
 
+## Tabs
+Combat · Outpost Farm · Shared Vault · Profiles
+
 ## Legacy
-
-Previous Galaxy Farm shell preserved under `legacy/galaxy-farm/`.
-
-## Design notes
-
-See `docs/CHRONOS.md`.
+Voidline Chronos preserved at `/chronos/`.

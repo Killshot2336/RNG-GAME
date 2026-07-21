@@ -4,19 +4,16 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/chronos.js", "destination": "/chronos.js" },
-    { "source": "/chronos-data.js", "destination": "/chronos-data.js" },
-    { "source": "/chronos.css", "destination": "/chronos.css" },
-    { "source": "/cloud-auth.js", "destination": "/cloud-auth.js" },
-    { "source": "/voidline-icon.svg", "destination": "/voidline-icon.svg" },
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/chronos/(.*)", "destination": "/chronos/$1" },
     { "source": "/public/(.*)", "destination": "/public/$1" },
     { "source": "/legacy/(.*)", "destination": "/legacy/$1" },
     { "source": "/api/chronos/(.*)", "destination": "/api/chronos/$1" },
-    { "source": "/((?!api/|chronos\\.js|chronos-data\\.js|chronos\\.css|cloud-auth\\.js|voidline-icon\\.svg|public/|legacy/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|chronos/|public/|legacy/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/chronos.js",
+      "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]

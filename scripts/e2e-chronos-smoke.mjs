@@ -30,7 +30,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
 try {
-  await page.goto(BASE + '/index.html', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(BASE + '/chronos/index.html', { waitUntil: 'domcontentloaded', timeout: 15000 });
 
   await page.waitForFunction(
     () => window.VoidlineChronos,
