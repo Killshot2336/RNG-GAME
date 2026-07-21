@@ -46,9 +46,11 @@ let swiping = false
 function setPanelByIndex(index, { syncStore = true } = {}) {
   panelIndex = Math.max(0, Math.min(2, index))
   track.dataset.index = String(panelIndex)
-  document.querySelectorAll('.tab-btn').forEach((btn) => {
+  document.querySelectorAll('nav [data-go]').forEach((btn) => {
     const go = btn.getAttribute('data-go')
-    btn.classList.toggle('tab-btn-active', go === PANEL_ORDER[panelIndex])
+    const on = go === PANEL_ORDER[panelIndex]
+    btn.classList.toggle('tactile--active', on)
+    btn.classList.toggle('tactile--ghost', !on)
   })
   if (syncStore) getState().setPanel(PANEL_ORDER[panelIndex])
   if (PANEL_ORDER[panelIndex] === 'hub') {
@@ -70,12 +72,13 @@ function paint() {
   renderInviteOverlay(inviteOverlay)
   renderToast(toastEl)
 
+  const authLabelEl = authBtn.querySelector('.tactile__label')
   if (s.displayName) {
     authLabel.textContent = s.displayName
-    authBtn.textContent = 'Sign Out'
+    if (authLabelEl) authLabelEl.textContent = 'Sign Out'
   } else {
     authLabel.textContent = s.uid ? 'Device' : 'Guest'
-    authBtn.textContent = 'Google Sign-In'
+    if (authLabelEl) authLabelEl.textContent = 'Google Sign-In'
   }
 
   if (s.skillViewOpen) {

@@ -3,61 +3,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-  <meta name="theme-color" content="#070b14" />
+  <meta name="theme-color" content="#030712" />
   <title>Syndicate Dungeon Grinder</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
-<body class="bg-void text-white font-display overflow-hidden select-none">
+<body class="text-white overflow-hidden select-none">
   <div id="app" class="h-[100dvh] w-screen flex flex-col">
-    <!-- Top auth / brand strip -->
-    <header class="shrink-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-4 py-2 border-b border-white/10 bg-[#0b1a33]/95 backdrop-blur">
+    <header class="glass-chrome shrink-0 z-30 flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 border-b">
       <div class="min-w-0">
         <p class="text-[9px] tracking-[0.28em] uppercase text-amber-300/90 font-black">Syndicate · Co-op Grinder</p>
-        <h1 class="text-sm sm:text-base font-black truncate">Isometric Dungeon</h1>
+        <h1 class="text-sm sm:text-base font-black truncate tracking-tight">Isometric Dungeon</h1>
       </div>
       <div class="flex items-center gap-2">
         <span id="auth-label" class="hidden sm:inline text-[10px] text-slate-400 font-mono max-w-[9rem] truncate">Guest</span>
-        <button type="button" id="btn-auth" class="px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-[10px] font-black uppercase tracking-wider hover:bg-white/20">
-          Google Sign-In
+        <button type="button" id="btn-auth" class="tactile tactile--sm tactile--ghost">
+          <span class="tactile__depth" aria-hidden="true"></span>
+          <span class="tactile__face">
+            <span class="tactile__sheen" aria-hidden="true"></span>
+            <span class="tactile__label">Google Sign-In</span>
+          </span>
         </button>
       </div>
     </header>
 
-    <!-- Clash Royale 3-panel swipe chassis -->
     <div id="chassis" class="flex-1 min-h-0 relative overflow-hidden">
       <div id="panel-track" class="panel-track h-full">
-        <!-- LEFT: Market -->
-        <section id="panel-market" class="panel-slide" data-panel="market" aria-label="Gacha Market"></section>
+        <section id="panel-market" class="panel-slide panel-slide--glass" data-panel="market" aria-label="Gacha Market"></section>
 
-        <!-- CENTER: Battle Hub -->
         <section id="panel-hub" class="panel-slide relative" data-panel="hub" aria-label="Battle Hub">
           <canvas id="combat-canvas" class="absolute inset-0 w-full h-full block"></canvas>
           <canvas id="combat-hud" class="absolute inset-0 w-full h-full block pointer-events-none"></canvas>
           <div id="hub-chrome" class="absolute inset-0 z-10"></div>
         </section>
 
-        <!-- RIGHT: Clan -->
-        <section id="panel-clan" class="panel-slide bg-[#081018]" data-panel="clan" aria-label="Clan Matrix"></section>
+        <section id="panel-clan" class="panel-slide panel-slide--glass" data-panel="clan" aria-label="Clan Matrix"></section>
       </div>
     </div>
 
-    <!-- Bottom tab dock -->
-    <nav class="shrink-0 z-30 grid grid-cols-3 gap-1 p-2 border-t border-white/10 bg-[#0b1a33]">
-      <button type="button" class="tab-btn" data-go="market">Market</button>
-      <button type="button" class="tab-btn tab-btn-active" data-go="hub">Battle</button>
-      <button type="button" class="tab-btn" data-go="clan">Clan</button>
+    <nav class="glass-chrome tab-dock shrink-0 z-30">
+      <button type="button" class="tactile tactile--md tactile--block tactile--ghost" data-go="market">
+        <span class="tactile__depth" aria-hidden="true"></span>
+        <span class="tactile__face">
+          <span class="tactile__sheen" aria-hidden="true"></span>
+          <span class="tactile__label">Market</span>
+        </span>
+      </button>
+      <button type="button" class="tactile tactile--md tactile--block tactile--active" data-go="hub">
+        <span class="tactile__depth" aria-hidden="true"></span>
+        <span class="tactile__face">
+          <span class="tactile__sheen" aria-hidden="true"></span>
+          <span class="tactile__label">Battle</span>
+        </span>
+      </button>
+      <button type="button" class="tactile tactile--md tactile--block tactile--ghost" data-go="clan">
+        <span class="tactile__depth" aria-hidden="true"></span>
+        <span class="tactile__face">
+          <span class="tactile__sheen" aria-hidden="true"></span>
+          <span class="tactile__label">Clan</span>
+        </span>
+      </button>
     </nav>
   </div>
 
-  <!-- Skill constellation overlay -->
   <div id="skill-overlay" class="hidden fixed inset-0 z-40 bg-[#02010a]">
     <canvas id="skill-canvas" class="absolute inset-0 w-full h-full"></canvas>
     <div class="absolute top-0 inset-x-0 p-4 flex items-center justify-between pointer-events-none">
-      <div class="pointer-events-none">
+      <div class="glass-panel px-4 py-3 pointer-events-none">
         <p class="text-[10px] tracking-[0.3em] uppercase text-amber-300 font-black">Skyward Constellation</p>
         <p class="text-xs text-slate-400">Pinch / scroll zoom · drag pan · tap star to unlock</p>
       </div>
-      <button type="button" id="btn-close-skills" class="pointer-events-auto px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-xs font-black uppercase tracking-wider">Descend</button>
+      <button type="button" id="btn-close-skills" class="tactile tactile--md tactile--ghost pointer-events-auto">
+        <span class="tactile__depth" aria-hidden="true"></span>
+        <span class="tactile__face">
+          <span class="tactile__sheen" aria-hidden="true"></span>
+          <span class="tactile__label">Descend</span>
+        </span>
+      </button>
     </div>
   </div>
 
